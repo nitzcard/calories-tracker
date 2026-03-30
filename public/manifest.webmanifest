@@ -1,0 +1,9 @@
+{
+  "name": "Local Calorie Tracker",
+  "short_name": "Calories",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f1de",
+  "theme_color": "#f6f1de",
+  "icons": []
+}

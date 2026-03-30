@@ -1,0 +1,278 @@
+:root {
+  color-scheme: light;
+  --bg: #c3beb2;
+  --panel: #d8d1c2;
+  --surface-1: #e7e1d2;
+  --surface-2: #cfc7b7;
+  --surface-3: #beb6a6;
+  --border: #6a6457;
+  --border-strong: #3f3a31;
+  --text-primary: #1e1b15;
+  --text-muted: #5f5a50;
+  --accent: #0a5666;
+  --accent-soft: rgba(10, 86, 102, 0.12);
+  --shadow: none;
+  --bevel-raised:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.65),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.22);
+  --bevel-sunken:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.18),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.16);
+  --radius: 0px;
+  --surface: var(--surface-2);
+  --input-bg: #efe9da;
+  --input-border: #7f7867;
+  --input-focus: #2f7d8f;
+  --pill: #cbc2af;
+  --pill-text: #2e281e;
+  --compact-control-inline-size: 11rem;
+  --text-control-inline-size: 18rem;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  /* ─── Spacing design system ───────────────────────────────
+     Change these three values to tune all spacing app-wide.
+     --field-gap   : label → input → helper within one FormField
+     --group-gap   : field-to-field inside a compact controls row
+     --panel-gap   : section-to-section inside a panel          */
+  --field-gap: 3px;
+  --group-gap: 6px;
+  --panel-gap: 10px;
+  background: #c3beb2;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14181c;
+  --panel: #252b31;
+  --surface-1: #313841;
+  --surface-2: #282f36;
+  --surface-3: #20262c;
+  --border: #6c757d;
+  --border-strong: #9aa3aa;
+  --text-primary: #f4efdc;
+  --text-muted: #aeb4bf;
+  --accent: #79cddd;
+  --accent-soft: rgba(105, 199, 219, 0.12);
+  --shadow: none;
+  --bevel-raised:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.08),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.34);
+  --bevel-sunken:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.34),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.06);
+  --surface: var(--surface-2);
+  --input-bg: #131920;
+  --input-border: #6a747c;
+  --input-focus: #8be5f4;
+  --pill: #29333b;
+  --pill-text: #dce7ea;
+  --compact-control-inline-size: 11rem;
+  --text-control-inline-size: 18rem;
+  background: #14181c;
+}
+
+:root[data-theme="purple-dark"] {
+  color-scheme: dark;
+  --bg: #17131f;
+  --panel: #261f31;
+  --surface-1: #332a41;
+  --surface-2: #2a2335;
+  --surface-3: #211a2a;
+  --border: #73698a;
+  --border-strong: #b1a7c6;
+  --text-primary: #f4eefc;
+  --text-muted: #b9b0ca;
+  --accent: #b78af0;
+  --accent-soft: rgba(183, 138, 240, 0.14);
+  --shadow: none;
+  --bevel-raised:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.08),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.34);
+  --bevel-sunken:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.34),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.06);
+  --surface: var(--surface-2);
+  --input-bg: #171320;
+  --input-border: #74698c;
+  --input-focus: #d1a6ff;
+  --pill: #32283f;
+  --pill-text: #ece2fb;
+  --compact-control-inline-size: 11rem;
+  --text-control-inline-size: 18rem;
+  background: #17131f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  margin: 0;
+  min-block-size: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: "Trebuchet MS", "Verdana", sans-serif;
+}
+
+body {
+  min-inline-size: 320px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  direction: inherit;
+  text-align: start;
+  padding: 0.42rem 0.55rem;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  box-shadow: var(--bevel-raised);
+}
+
+button:active {
+  box-shadow: var(--bevel-sunken);
+}
+
+textarea {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 140px;
+  resize: vertical;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+input,
+select {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: var(--text-control-inline-size);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  box-shadow: var(--bevel-sunken);
+}
+
+textarea {
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  box-shadow: var(--bevel-sunken);
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: color-mix(in srgb, var(--input-border) 74%, var(--accent));
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--input-focus) 55%, transparent);
+  outline-offset: 1px;
+  border-color: var(--input-focus);
+}
+
+@media (min-width: 961px) {
+  input[type="number"],
+  input[type="date"],
+  select {
+    max-inline-size: var(--compact-control-inline-size);
+  }
+}
+
+@media (max-width: 960px) {
+  input,
+  select {
+    max-inline-size: none;
+  }
+}
+
+table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.55rem;
+  text-align: start;
+  vertical-align: top;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--bevel-raised);
+}
+
+small,
+.muted {
+  color: var(--text-muted);
+}
+
+.compact-stat {
+  border: 1px solid var(--border-strong);
+  padding: var(--space-2);
+  background: var(--surface-2);
+  display: grid;
+  gap: 2px;
+  box-shadow: var(--bevel-raised);
+}
+
+.readonly-metric {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.36rem 0.45rem;
+  box-shadow: var(--bevel-sunken);
+}
+
+.secondary-action {
+  padding: 0.36rem 0.56rem;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--bevel-raised);
+}
+
+.secondary-action:hover {
+  background: var(--surface-1);
+}
+
+ul {
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.2rem;
+}
