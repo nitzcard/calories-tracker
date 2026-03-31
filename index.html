@@ -6,6 +6,12 @@
     <meta name="theme-color" content="#f6f1de" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Local Calorie Tracker</title>
+    <!-- Canonical origin guard: always use 127.0.0.1 so IndexedDB is one database across all browsers -->
+    <script>
+      if (location.hostname === "127.0.0.1") {
+        location.replace(location.href.replace("127.0.0.1", "localhost"));
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
