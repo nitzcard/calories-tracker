@@ -7,3 +7,4 @@
 7. make it optimal for mobile.
 7.5. do u need sw.js?
 8. fix github not showing green mark.
+9. ensure the sum of calories is not AI?
