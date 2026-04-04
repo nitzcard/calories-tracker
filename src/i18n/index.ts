@@ -21,9 +21,3 @@ export const i18n = createI18n({
 export function syncI18nLocale(locale: AppLocale) {
   i18n.global.locale.value = locale;
 }
-
-// Compatibility wrapper during migration. Existing call sites can keep
-// using t(locale, key) while the app runtime moves onto vue-i18n.
-export function t(locale: AppLocale, key: string): string {
-  return translations[locale][key] ?? key;
-}

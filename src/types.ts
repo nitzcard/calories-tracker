@@ -2,6 +2,12 @@ export type ThemeMode = "system" | "light" | "dark" | "purple-dark";
 export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
+export type TdeeEquation =
+  | "formulaAverage"
+  | "mifflinStJeor"
+  | "harrisBenedict"
+  | "cunningham"
+  | "observedTdee";
 
 export interface AiProviderOption {
   id: string;
@@ -17,6 +23,7 @@ export interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   bodyFat: number | null;
+  tdeeEquation: TdeeEquation;
   activityPrompt: string;
   foodInstructions: string;
   aiModel: string;
@@ -164,12 +171,18 @@ export interface TdeeSnapshot {
   observedToDate: string | null;
   formulaTdeeAverage: number | null;
   formulaBreakdown: Record<string, number>;
+  formulaWeight: number | null;
+  formulaWeightSource: "estimated" | "deduced" | "logged" | null;
+  activityMultiplier: number | null;
+  selectedEquation: TdeeEquation;
+  selectedValue: number | null;
   lastComputedAt: string;
 }
 
 export interface FormulaTdeeResult {
   average: number | null;
   breakdown: Record<string, number>;
+  activityMultiplier: number | null;
 }
 
 export type InsightStatus = "likely_low" | "borderline" | "covered" | "insufficient_data";

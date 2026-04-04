@@ -36,6 +36,7 @@ const {
   isSavingFoodLog,
   isSavingFoodInstructions,
   isSavingActivityPrompt,
+  isSavingTdeeEquation,
   isSavingLocale,
   isSavingTheme,
   isSavingProvider,
@@ -59,6 +60,7 @@ const {
   analyzeCurrentDay,
   saveProfileDraft,
   saveActivityPrompt,
+  saveTdeeEquation,
   saveFoodInstructions,
   saveAiKey,
   saveFoodCorrection,
@@ -224,8 +226,14 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
         <TdeeSummaryPanel
           :locale="locale"
           :tdee="tdee"
+          :selected-equation="profile.tdeeEquation"
           :highlight-token="tdeeHighlightToken"
-          :is-updating="isSavingActivityPrompt"
+          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
+          :is-saving-equation="isSavingTdeeEquation"
+          @select-equation="
+            saveTdeeEquation($event);
+            tdeeHighlightToken += 1;
+          "
         />
 
       </div>
@@ -288,7 +296,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :y-unit="t('unitKcal')"
           :reference-line="{
             label: t('tdeeSummary'),
-            value: tdee.observedTdee ?? tdee.formulaTdeeAverage,
+            value: tdee.selectedValue,
             color: '#9a7b24',
           }"
         />
@@ -303,7 +311,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :locale="locale"
           :entries="entries"
           :saving-calories="savingHistoryCalories"
-          :tdee-reference="tdee.formulaTdeeAverage"
+          :tdee-reference="tdee.selectedValue"
           @save-calories="saveHistoryCalories"
         />
       </div>
@@ -313,13 +321,13 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 
 <style scoped>
 .app-shell {
-  padding: 14px;
+  padding: var(--space-4);
   max-inline-size: 1400px;
   margin: 0 auto;
 }
 
 .constant-data-panel {
-  margin-block-end: 12px;
+  margin-block-end: var(--space-3);
 }
 
 .constant-data-summary {
@@ -378,7 +386,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 .content-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
   align-items: stretch;
 }
 
@@ -400,7 +408,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 }
 
 .notice-banner {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
   padding: 0.55rem 0.75rem;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
@@ -419,7 +427,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 .constant-data-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
   align-items: stretch;
   padding: 2px 12px 12px 12px;
 }
@@ -450,6 +458,10 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 }
 
 @media (max-width: 960px) {
+  .app-shell {
+    padding: 10px;
+  }
+
   .content-grid,
   .constant-data-grid {
     grid-template-columns: 1fr;

@@ -704,4 +704,26 @@ const proteinPerLeanBodyWeight = computed(() => {
     inline-size: min(100%, 5.5rem);
   }
 }
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meal-table {
+    min-inline-size: 680px;
+  }
+
+  .food-cell {
+    min-inline-size: 150px;
+  }
+
+  .amount-cell {
+    min-inline-size: 100px;
+  }
+
+  .action-cell .secondary-action {
+    padding-inline: 0.4rem;
+  }
+}
 </style>

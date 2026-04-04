@@ -1,20 +1,27 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
-import type { AppLocale, TdeeSnapshot } from "../../types";
+import FieldControl from "../base/FieldControl.vue";
+import FormField from "../base/FormField.vue";
+import type { AppLocale, TdeeEquation, TdeeSnapshot } from "../../types";
 import { formatEntryDate } from "../../domain/entries";
 
 const props = defineProps<{
   locale: AppLocale;
   tdee: TdeeSnapshot;
+  selectedEquation: TdeeEquation;
   highlightToken?: number;
   isUpdating?: boolean;
+  isSavingEquation?: boolean;
 }>();
 
 const isHighlighted = ref(false);
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null;
 const { t } = useI18n();
+const emit = defineEmits<{
+  "select-equation": [value: TdeeEquation];
+}>();
 
 watch(
   () => props.highlightToken,
@@ -65,7 +72,7 @@ function formulaLabel(name: string) {
     mifflinStJeor: "Mifflin-St Jeor",
     harrisBenedict: "Harris-Benedict",
     cunningham: "Cunningham",
-  };``
+  };
 
   return labels[name] ?? name;
 }
@@ -84,6 +91,30 @@ function formulaHref(name: string) {
 
   return urls[name] ?? "#";
 }
+
+function weightSourceText(source: "estimated" | "deduced" | "logged" | null) {
+  if (source === "estimated") {
+    return t("weightSourceEstimated");
+  }
+
+  if (source === "deduced") {
+    return t("weightSourceDeduced");
+  }
+
+  return t("weightSourceLogged");
+}
+
+const selectedEquationText = computed(() => {
+  if (props.selectedEquation === "formulaAverage") {
+    return t("formulaAverage");
+  }
+
+  if (props.selectedEquation === "observedTdee") {
+    return t("observedTdee");
+  }
+
+  return formulaLabel(props.selectedEquation);
+});
 </script>
 
 <template>
@@ -92,6 +123,27 @@ function formulaHref(name: string) {
     :title="t('tdeeSummary')"
     :helper="t('tdeeHelper')"
   >
+    <div class="tdee-controls">
+      <FormField :label="t('tdeeEquation')">
+        <FieldControl as="select" :is-saving="isSavingEquation">
+          <select
+            :value="selectedEquation"
+            @change="emit('select-equation', ($event.target as HTMLSelectElement).value as TdeeEquation)"
+          >
+            <option value="formulaAverage">{{ t("formulaAverage") }}</option>
+            <option value="mifflinStJeor">Mifflin-St Jeor</option>
+            <option value="harrisBenedict">Harris-Benedict</option>
+            <option value="cunningham">Cunningham</option>
+            <option value="observedTdee">{{ t("observedTdee") }}</option>
+          </select>
+        </FieldControl>
+      </FormField>
+      <p class="tdee-reference-helper">
+        {{ t("tdeeEquationHelper") }}:
+        <strong>{{ selectedEquationText }}</strong>
+      </p>
+    </div>
+
     <div class="tdee-explainer">
       <strong>{{ t("tdeePartsTitle") }}</strong>
       <div class="tdee-parts-list">
@@ -135,7 +187,21 @@ function formulaHref(name: string) {
           <tr>
             <td><strong>{{ t("formulasTdee") }}</strong></td>
             <td class="calorie-cell">{{ tdee.formulaTdeeAverage ?? "-" }}</td>
-            <td>{{ t("formulasTdeeExplain") }}</td>
+            <td>
+              {{ t("formulasTdeeExplain") }}
+              <span v-if="tdee.formulaWeight !== null">
+                <br />
+                {{ t("formulaWeightUsed") }}:
+                {{ tdee.formulaWeight }}
+                {{ t("unitKg") }}
+                ({{ weightSourceText(tdee.formulaWeightSource) }})
+              </span>
+              <span v-if="tdee.activityMultiplier !== null">
+                <br />
+                {{ t("activityMultiplierLabel") }}:
+                {{ tdee.activityMultiplier }}
+              </span>
+            </td>
           </tr>
           <tr v-for="(value, name) in tdee.formulaBreakdown" :key="name">
             <td>
@@ -153,6 +219,16 @@ function formulaHref(name: string) {
 </template>
 
 <style scoped>
+.tdee-controls {
+  display: grid;
+  gap: var(--group-gap);
+  margin-block-end: 10px;
+}
+
+.tdee-reference-helper {
+  color: var(--text-muted);
+}
+
 .tdee-explainer {
   display: grid;
   gap: 6px;

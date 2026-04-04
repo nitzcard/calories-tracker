@@ -24,6 +24,7 @@ const DEFAULT_PROFILE: Profile = {
   height: null,
   estimatedWeight: null,
   bodyFat: null,
+  tdeeEquation: "formulaAverage",
   activityPrompt: "",
   foodInstructions: "",
   aiModel: "gemini-2.5-flash",
@@ -44,6 +45,7 @@ export async function ensureDefaultProfile(
       estimatedWeight:
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
+      tdeeEquation: existing.tdeeEquation ?? DEFAULT_PROFILE.tdeeEquation,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
       await db.profile.put(merged);

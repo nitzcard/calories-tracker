@@ -86,20 +86,20 @@ const { t } = useI18n();
 .header-shell {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--panel-gap);
   align-items: start;
-  margin-block-end: 12px;
+  margin-block-end: var(--space-3);
 }
 
 .copy {
   display: grid;
-  gap: 6px;
+  gap: var(--field-gap);
   max-inline-size: 42rem;
 }
 
 .toolbar {
   display: grid;
-  gap: 8px;
+  gap: var(--group-gap);
   justify-items: end;
   inline-size: fit-content;
   max-inline-size: 100%;
@@ -107,8 +107,8 @@ const { t } = useI18n();
 
 .controls-grid {
   display: grid;
-  grid-template-columns: minmax(130px, 160px) minmax(130px, 160px) minmax(220px, 280px);
-  gap: 6px;
+  grid-template-columns: minmax(130px, 150px) minmax(130px, 150px) minmax(220px, 260px);
+  gap: var(--controls-gap);
   align-items: start;
   inline-size: auto;
   justify-content: end;
@@ -145,6 +145,10 @@ const { t } = useI18n();
 
   .provider-field {
     min-inline-size: 0;
+  }
+
+  .copy {
+    max-inline-size: none;
   }
 }
 </style>

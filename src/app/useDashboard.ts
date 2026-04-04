@@ -31,7 +31,7 @@ import {
 import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
 import { applyTheme, detectThemeMode } from "../theme";
-import type { AiProviderOption, AppLocale, DailyEntry, Profile, ThemeMode } from "../types";
+import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation, ThemeMode } from "../types";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -75,12 +75,17 @@ export function useDashboard() {
   const tdee = computed(() =>
     profile.value
       ? buildTdeeSnapshot(displayEntries.value, profile.value)
-      : {
+        : {
           observedTdee: null,
           observedFromDate: null,
           observedToDate: null,
           formulaTdeeAverage: null,
           formulaBreakdown: {},
+          formulaWeight: null,
+          formulaWeightSource: null,
+          activityMultiplier: null,
+          selectedEquation: "formulaAverage" as const,
+          selectedValue: null,
           lastComputedAt: "",
         },
   );
@@ -239,6 +244,14 @@ export function useDashboard() {
     }, "constants.profile.activityPrompt");
   }
 
+  async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
+    if (!profile.value) return;
+    await autoSave.runAutoSave(async () => {
+      profile.value = { ...profile.value!, tdeeEquation };
+      await saveProfile(profile.value);
+    }, "constants.profile.tdeeEquation");
+  }
+
   async function saveFoodInstructions(foodInstructions: string) {
     if (!profile.value) return;
     await autoSave.runAutoSave(async () => {
@@ -331,6 +344,7 @@ export function useDashboard() {
     isSavingFoodLog: autoSave.isSavingFoodLog,
     isSavingFoodInstructions: autoSave.isSavingFoodInstructions,
     isSavingActivityPrompt: autoSave.isSavingActivityPrompt,
+    isSavingTdeeEquation: autoSave.isSavingTdeeEquation,
     isSavingLocale: autoSave.isSavingLocale,
     isSavingTheme: autoSave.isSavingTheme,
     isSavingProvider: autoSave.isSavingProvider,
@@ -358,6 +372,7 @@ export function useDashboard() {
     analyzeCurrentDay: analysis.analyzeCurrentDay,
     saveProfileDraft,
     saveActivityPrompt,
+    saveTdeeEquation,
     saveFoodInstructions,
     saveAiKey,
     saveFoodCorrection: corrections.saveFoodCorrection,

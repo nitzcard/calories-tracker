@@ -8,9 +8,9 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "lint": "oxlint -c oxlint.json --vue-plugin src public/sw.js vite.config.ts capacitor.config.ts",
-    "format": "oxfmt -c oxfmt.json --write src public/sw.js vite.config.ts capacitor.config.ts",
-    "format:check": "oxfmt -c oxfmt.json --check src public/sw.js vite.config.ts capacitor.config.ts",
+    "lint": "oxlint -c oxlint.json --vue-plugin src vite.config.ts capacitor.config.ts",
+    "format": "oxfmt -c oxfmt.json --write src vite.config.ts capacitor.config.ts",
+    "format:check": "oxfmt -c oxfmt.json --check src vite.config.ts capacitor.config.ts",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios"

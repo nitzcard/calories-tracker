@@ -15,8 +15,11 @@ const props = defineProps<{
 }>();
 
 const chartRef = ref<HTMLDivElement | null>(null);
+const hoverIndex = ref<number | null>(null);
+const hoverPosition = ref({ x: 0, y: 0 });
 let chart: uPlot | undefined;
 let resizeObserver: ResizeObserver | undefined;
+
 const dateFormatter = computed(
   () =>
     new Intl.DateTimeFormat(props.locale === "he" ? "he-IL" : "en-US", {
@@ -25,17 +28,35 @@ const dateFormatter = computed(
       day: "numeric",
     }),
 );
+const numberFormatter = computed(
+  () =>
+    new Intl.NumberFormat(props.locale === "he" ? "he-IL" : "en-US", {
+      maximumFractionDigits: 1,
+    }),
+);
 const hasReferenceLine = computed(
   () => props.referenceLine?.value !== null && props.referenceLine?.value !== undefined,
+);
+const normalizedPoints = computed(() =>
+  props.points.map((point) => ({
+    x: normalizeTimestamp(point.x),
+    y: point.y,
+  })),
+);
+const hoveredPoint = computed(() =>
+  hoverIndex.value === null ? null : normalizedPoints.value[hoverIndex.value] ?? null,
 );
 
 function renderChart() {
   if (!chartRef.value || props.points.length === 0) {
+    hoverIndex.value = null;
+    chart?.destroy();
+    chart = undefined;
     return;
   }
 
-  const xValues = props.points.map((point) => normalizeTimestamp(point.x));
-  const yValues = props.points.map((point) => point.y ?? null);
+  const xValues = normalizedPoints.value.map((point) => point.x);
+  const yValues = normalizedPoints.value.map((point) => point.y ?? null);
   const xSplits = uniqueSorted(xValues);
   const referenceValues = hasReferenceLine.value
     ? xValues.map(() => props.referenceLine?.value ?? null)
@@ -53,9 +74,9 @@ function renderChart() {
         },
         {
           label: props.label,
-          stroke: "#005f73",
+          stroke: "#0a88a3",
           width: 2,
-          points: { size: 14, stroke: "#0a88a3", fill: "rgba(0,0,0,0)", width: 2.5 },
+          points: { size: 8, stroke: "#0a88a3", fill: "#0a88a3", width: 2 },
         },
         ...(hasReferenceLine.value
           ? [
@@ -92,59 +113,48 @@ function renderChart() {
         },
       ],
       hooks: {
-        draw: [
+        setCursor: [
           (u) => {
-            const ctx = u.ctx;
-            const { left, top, width } = u.bbox;
-            const dpr = window.devicePixelRatio || 1;
-
-            ctx.save();
-
-            const fontSize = Math.round(11 * dpr);
-            ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
-            ctx.textAlign = "center";
-
-            const pad = Math.round(8 * dpr);
-            const bgPadX = Math.round(3 * dpr);
-            const bgPadY = Math.round(2 * dpr);
-
-            for (let i = 0; i < xValues.length; i++) {
-              const yVal = yValues[i];
-              if (yVal === null) continue;
-
-              const label = formatYAxisValue(yVal);
-              const textW = ctx.measureText(label).width;
-              const textH = fontSize;
-
-              const rawPx = u.valToPos(xValues[i], "x", true);
-              const py = u.valToPos(yVal, "y", true);
-
-              // Clamp x so label stays inside plot area
-              const clampedPx = Math.max(
-                left + textW / 2 + bgPadX,
-                Math.min(left + width - textW / 2 - bgPadX, rawPx),
-              );
-
-              const abovePoint = py - top > pad + textH + bgPadY * 2;
-              const textY = abovePoint ? py - pad : py + pad;
-              ctx.textBaseline = abovePoint ? "bottom" : "top";
-
-              const bgX = clampedPx - textW / 2 - bgPadX;
-              const bgY = abovePoint ? textY - textH - bgPadY : textY - bgPadY;
-              const bgW = textW + bgPadX * 2;
-              const bgH = textH + bgPadY * 2;
-
-              // Background pill for legibility
-              ctx.fillStyle = "rgba(15, 20, 30, 0.72)";
-              ctx.beginPath();
-              ctx.roundRect(bgX, bgY, bgW, bgH, Math.round(3 * dpr));
-              ctx.fill();
-
-              ctx.fillStyle = "#7ecfe0";
-              ctx.fillText(label, clampedPx, textY);
+            const idx = u.cursor.idx;
+            if (idx === null || idx === undefined) {
+              hoverIndex.value = null;
+              return;
             }
 
-            ctx.restore();
+            const yValue = yValues[idx];
+            if (yValue === null) {
+              hoverIndex.value = null;
+              return;
+            }
+
+            const pointX = u.valToPos(xValues[idx], "x", true);
+            const pointY = u.valToPos(yValue, "y", true);
+            const cursorLeft = u.cursor.left;
+            const cursorTop = u.cursor.top;
+            if (cursorLeft == null || cursorTop == null) {
+              hoverIndex.value = null;
+              return;
+            }
+
+            const cursorX = cursorLeft + u.bbox.left;
+            const cursorY = cursorTop + u.bbox.top;
+            const distance = Math.hypot(pointX - cursorX, pointY - cursorY);
+
+            if (distance > 18) {
+              hoverIndex.value = null;
+              return;
+            }
+
+            hoverIndex.value = idx;
+            hoverPosition.value = {
+              x: Math.min(Math.max(pointX + 10, 8), u.bbox.left + u.bbox.width - 150),
+              y: Math.max(pointY - 54, 8),
+            };
+          },
+        ],
+        setSelect: [
+          () => {
+            hoverIndex.value = null;
           },
         ],
       },
@@ -163,8 +173,18 @@ function formatDay(value: number) {
 }
 
 function formatYAxisValue(value: number) {
-  const rounded = Number.isInteger(value) ? String(value) : value.toFixed(1);
-  return rounded;
+  return Number.isInteger(value)
+    ? numberFormatter.value.format(value)
+    : numberFormatter.value.format(Number(value.toFixed(1)));
+}
+
+function formatHoverValue(value: number | null | undefined) {
+  if (value == null) {
+    return "-";
+  }
+
+  const formatted = formatYAxisValue(value);
+  return props.yUnit ? `${formatted} ${props.yUnit}` : formatted;
 }
 
 function uniqueSorted(values: number[]) {
@@ -212,6 +232,24 @@ onBeforeUnmount(() => {
     <div class="chart-stage">
       <span v-if="yUnit" class="axis-unit">{{ yUnit }}</span>
       <div ref="chartRef" class="chart"></div>
+      <div
+        v-if="hoveredPoint"
+        class="hover-readout"
+        :style="{
+          insetInlineStart: `${hoverPosition.x}px`,
+          insetBlockStart: `${hoverPosition.y}px`,
+        }"
+      >
+        <div class="hover-date">{{ formatDay(hoveredPoint.x) }}</div>
+        <div class="hover-line">{{ formatHoverValue(hoveredPoint.y) }}</div>
+        <div
+          v-if="hasReferenceLine"
+          class="hover-reference"
+          :style="{ color: props.referenceLine?.color ?? '#9a7b24' }"
+        >
+          {{ formatHoverValue(props.referenceLine?.value ?? null) }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -228,8 +266,8 @@ onBeforeUnmount(() => {
 
 .axis-unit {
   position: absolute;
-  inset-inline-start: 8px;
-  inset-block-start: 6px;
+  inset-inline-start: 4px;
+  inset-block-start: 34px;
   color: var(--text-muted);
   white-space: nowrap;
   z-index: 2;
@@ -243,13 +281,38 @@ onBeforeUnmount(() => {
   min-block-size: 210px;
 }
 
+.hover-readout {
+  position: absolute;
+  z-index: 3;
+  min-inline-size: 96px;
+  max-inline-size: 170px;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--panel) 96%, black 4%);
+  box-shadow: var(--bevel-raised);
+  pointer-events: none;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.hover-date {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.hover-line,
+.hover-reference {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .chart :deep(.u-legend) {
   display: none;
 }
 
 @media (max-width: 640px) {
   .hover-readout {
-    max-inline-size: min(180px, calc(100% - 12px));
+    max-inline-size: min(160px, calc(100% - 12px));
   }
 }
 </style>

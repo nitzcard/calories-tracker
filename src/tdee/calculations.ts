@@ -1,5 +1,5 @@
-import { resolvedDailyCalories } from "../domain/entries";
-import type { DailyEntry, FormulaTdeeResult, Profile, TdeeSnapshot } from "../types";
+import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
+import type { DailyEntry, FormulaTdeeResult, Profile, TdeeEquation, TdeeSnapshot } from "../types";
 
 const MIN_OBSERVED_TDEE_DAYS = 7;
 const MIN_OBSERVED_TDEE_ENTRIES = 4;
@@ -51,7 +51,7 @@ function parseWeeklyWorkouts(text: string) {
   ]);
 }
 
-function activityMultiplier(prompt: string): number {
+export function activityMultiplier(prompt: string): number {
   const text = prompt.toLowerCase();
 
   const veryActiveSignals = [
@@ -137,7 +137,7 @@ export function calculateFormulaTdee(
   latestWeight: number | null,
 ): FormulaTdeeResult {
   if (!profile.age || !profile.height || !latestWeight) {
-    return { average: null, breakdown: {} };
+    return { average: null, breakdown: {}, activityMultiplier: null };
   }
 
   const kg = latestWeight;
@@ -171,7 +171,7 @@ export function calculateFormulaTdee(
   const average = Math.round(
     (breakdown.mifflinStJeor + breakdown.harrisBenedict + breakdown.cunningham) / 3,
   );
-  return { average, breakdown };
+  return { average, breakdown, activityMultiplier: activity };
 }
 
 export function calculateObservedTdee(entries: DailyEntry[]): number | null {
@@ -235,11 +235,55 @@ function latestLoggedWeight(entries: DailyEntry[]): number | null {
   return withWeight.at(-1)?.weight ?? null;
 }
 
+function resolveFormulaWeight(entries: DailyEntry[], profile: Profile) {
+  if (profile.estimatedWeight != null && profile.estimatedWeight > 0) {
+    return {
+      value: profile.estimatedWeight,
+      source: "estimated" as const,
+    };
+  }
+
+  const deducedWeight = deducedWeightFromEntries(entries);
+  if (deducedWeight != null && deducedWeight > 0) {
+    return {
+      value: deducedWeight,
+      source: "deduced" as const,
+    };
+  }
+
+  const latestWeight = latestLoggedWeight(entries);
+  if (latestWeight != null && latestWeight > 0) {
+    return {
+      value: latestWeight,
+      source: "logged" as const,
+    };
+  }
+
+  return {
+    value: null,
+    source: null,
+  };
+}
+
+function selectedTdeeValue(
+  selectedEquation: TdeeEquation,
+  formulas: FormulaTdeeResult,
+  observedTdee: number | null,
+) {
+  if (selectedEquation === "observedTdee") {
+    return observedTdee;
+  }
+
+  if (selectedEquation === "formulaAverage") {
+    return formulas.average;
+  }
+
+  return formulas.breakdown[selectedEquation] ?? null;
+}
+
 export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): TdeeSnapshot {
-  const formulas = calculateFormulaTdee(
-    profile,
-    latestLoggedWeight(entries) ?? profile.estimatedWeight,
-  );
+  const formulaWeight = resolveFormulaWeight(entries, profile);
+  const formulas = calculateFormulaTdee(profile, formulaWeight.value);
   const observed = calculateObservedTdeeRange(entries);
   return {
     observedTdee: observed.value,
@@ -247,6 +291,11 @@ export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): Tdee
     observedToDate: observed.toDate,
     formulaTdeeAverage: formulas.average,
     formulaBreakdown: formulas.breakdown,
+    formulaWeight: formulaWeight.value,
+    formulaWeightSource: formulaWeight.source,
+    activityMultiplier: formulas.activityMultiplier,
+    selectedEquation: profile.tdeeEquation,
+    selectedValue: selectedTdeeValue(profile.tdeeEquation, formulas, observed.value),
     lastComputedAt: new Date().toISOString(),
   };
 }

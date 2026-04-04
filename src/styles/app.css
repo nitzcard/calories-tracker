@@ -39,6 +39,8 @@
   --field-gap: 3px;
   --group-gap: 6px;
   --panel-gap: 8px;
+  --controls-gap: 6px;
+  --controls-min: 180px;
   background: #c3beb2;
 }
 
@@ -70,6 +72,8 @@
   --pill-text: #dce7ea;
   --compact-control-inline-size: 11rem;
   --text-control-inline-size: 18rem;
+  --controls-gap: 6px;
+  --controls-min: 180px;
   background: #14181c;
 }
 
@@ -101,6 +105,8 @@
   --pill-text: #ece2fb;
   --compact-control-inline-size: 11rem;
   --text-control-inline-size: 18rem;
+  --controls-gap: 6px;
+  --controls-min: 180px;
   background: #17131f;
 }
 
@@ -222,6 +228,13 @@ textarea:focus {
   input,
   select {
     max-inline-size: none;
+  }
+
+  :root {
+    --group-gap: 8px;
+    --panel-gap: 10px;
+    --controls-gap: 8px;
+    --controls-min: 140px;
   }
 }
 

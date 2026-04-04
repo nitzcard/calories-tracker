@@ -149,8 +149,8 @@ function missingKeyText(provider: string) {
 
 .controls-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--group-gap);
+  grid-template-columns: repeat(auto-fit, minmax(var(--controls-min, 180px), 1fr));
+  gap: var(--controls-gap, var(--group-gap));
   align-items: start;
 }
 

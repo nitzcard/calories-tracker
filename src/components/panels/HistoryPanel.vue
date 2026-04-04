@@ -105,47 +105,53 @@ function rolling7dDeficitOrSurplus() {
 
 <template>
   <BasePanel class="history-panel" :title="t('history')" :helper="t('historyHelper')">
-    <table>
-      <thead>
-        <tr>
-          <th>{{ t("date") }}</th>
-          <th>{{ t("weight") }}</th>
-          <th>{{ t("calories") }}</th>
-          <th class="numeric-pair">{{ t("caloriesVsTdee") }}</th>
-          <th>{{ t("deficitSurplus") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr class="summary-row">
-          <td colspan="4">{{ t("allTimeDeficitSurplus") }}</td>
-          <td>{{ cumulativeDeficitOrSurplus() }}</td>
-        </tr>
-        <tr class="summary-row summary-row--recent">
-          <td colspan="4">{{ t("last7dDeficitSurplus") }}</td>
-          <td>{{ rolling7dDeficitOrSurplus() }}</td>
-        </tr>
-        <tr v-for="entry in sortedEntries" :key="entry.date">
-          <td>{{ formatEntryDate(entry.date, locale) }}</td>
-          <td>{{ entry.weight ?? "-" }}</td>
-          <td>
-            <HistoryCaloriesCell
-              :value="entry.manualCalories"
-              :fallback-value="resolvedDailyCalories(entry)"
-              :is-saving="Boolean(savingCalories[entry.date])"
-              @save="emit('save-calories', entry.date, $event)"
-            />
-          </td>
-          <td class="numeric-pair">{{ caloriesVsTdee(entry) }}</td>
-          <td>{{ deficitOrSurplus(entry) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="history-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t("date") }}</th>
+            <th>{{ t("weightWithUnit") }}</th>
+            <th class="calories-column">{{ t("calories") }}</th>
+            <th class="numeric-pair">{{ t("caloriesVsTdee") }}</th>
+            <th>{{ t("deficitSurplus") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="summary-row">
+            <td colspan="4">{{ t("allTimeDeficitSurplus") }}</td>
+            <td>{{ cumulativeDeficitOrSurplus() }}</td>
+          </tr>
+          <tr class="summary-row summary-row--recent">
+            <td colspan="4">{{ t("last7dDeficitSurplus") }}</td>
+            <td>{{ rolling7dDeficitOrSurplus() }}</td>
+          </tr>
+          <tr v-for="entry in sortedEntries" :key="entry.date">
+            <td>{{ formatEntryDate(entry.date, locale) }}</td>
+            <td>{{ entry.weight ?? "-" }}</td>
+            <td class="calories-column">
+              <HistoryCaloriesCell
+                :value="entry.manualCalories"
+                :fallback-value="resolvedDailyCalories(entry)"
+                :is-saving="Boolean(savingCalories[entry.date])"
+                @save="emit('save-calories', entry.date, $event)"
+              />
+            </td>
+            <td class="numeric-pair">{{ caloriesVsTdee(entry) }}</td>
+            <td>{{ deficitOrSurplus(entry) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </BasePanel>
 </template>
 
 <style scoped>
 .history-panel {
   grid-column: 1 / -1;
+}
+
+.history-table-wrap {
+  overflow-x: auto;
 }
 
 .numeric-pair {
@@ -165,5 +171,15 @@ function rolling7dDeficitOrSurplus() {
 
 .summary-row--recent {
   background: color-mix(in srgb, #3a5f7a 14%, var(--surface));
+}
+
+.calories-column {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+@media (max-width: 640px) {
+  .history-table-wrap table {
+    min-inline-size: 640px;
+  }
 }
 </style>

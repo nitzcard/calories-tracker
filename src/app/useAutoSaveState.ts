@@ -14,6 +14,9 @@ export function useAutoSaveState() {
   const isSavingActivityPrompt = computed(() =>
     Boolean(savingFields.value["constants.profile.activityPrompt"]),
   );
+  const isSavingTdeeEquation = computed(() =>
+    Boolean(savingFields.value["constants.profile.tdeeEquation"]),
+  );
   const isSavingLocale = computed(() => Boolean(savingFields.value["settings.locale"]));
   const isSavingTheme = computed(() => Boolean(savingFields.value["settings.theme"]));
   const isSavingProvider = computed(() => Boolean(savingFields.value["settings.provider"]));
@@ -55,6 +58,7 @@ export function useAutoSaveState() {
     isSavingFoodLog,
     isSavingFoodInstructions,
     isSavingActivityPrompt,
+    isSavingTdeeEquation,
     isSavingLocale,
     isSavingTheme,
     isSavingProvider,

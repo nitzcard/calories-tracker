@@ -76,19 +76,26 @@ function saveImmediateProfile(profile: Profile) {
         />
       </FormField>
       <FormField :label="t('height')">
-        <input
-          :class="{ 'is-missing': profile.height == null }"
-          :value="profile.height ?? ''"
-          type="number"
-          @input="saveNullableNumber('height', $event)"
-        />
+        <div class="unit-field">
+          <input
+            :class="{ 'is-missing': profile.height == null }"
+            :value="profile.height ?? ''"
+            type="number"
+            @input="saveNullableNumber('height', $event)"
+          />
+          <span class="field-unit">{{ t("unitCm") }}</span>
+        </div>
       </FormField>
       <FormField :label="t('estimatedWeight')">
-        <input
-          :value="profile.estimatedWeight ?? ''"
-          type="number"
-          @input="saveNullableNumber('estimatedWeight', $event)"
-        />
+        <div class="unit-field">
+          <input
+            :value="profile.estimatedWeight ?? ''"
+            type="number"
+            step="0.1"
+            @input="saveNullableNumber('estimatedWeight', $event)"
+          />
+          <span class="field-unit">{{ t("unitKg") }}</span>
+        </div>
       </FormField>
       <FormField>
         <template #label>
@@ -118,22 +125,28 @@ function saveImmediateProfile(profile: Profile) {
         </template>
       </FormField>
       <FormField :label="t('deducedWeight')" :helper="t('deducedWeightHelper')">
-        <input
-          class="deduced-input"
-          :value="props.deducedWeight ?? ''"
-          type="number"
-          disabled
-          readonly
-        />
+        <div class="unit-field">
+          <input
+            class="deduced-input"
+            :value="props.deducedWeight ?? ''"
+            type="number"
+            disabled
+            readonly
+          />
+          <span class="field-unit">{{ t("unitKg") }}</span>
+        </div>
       </FormField>
       <FormField :label="t('estimatedLeanWeight')" :helper="t('estimatedLeanWeightHelper')">
-        <input
-          class="deduced-input"
-          :value="props.estimatedLeanWeight ?? ''"
-          type="number"
-          disabled
-          readonly
-        />
+        <div class="unit-field">
+          <input
+            class="deduced-input"
+            :value="props.estimatedLeanWeight ?? ''"
+            type="number"
+            disabled
+            readonly
+          />
+          <span class="field-unit">{{ t("unitKg") }}</span>
+        </div>
       </FormField>
     </div>
       <FormField
@@ -166,8 +179,8 @@ function saveImmediateProfile(profile: Profile) {
 
 .controls-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--group-gap);
+  grid-template-columns: repeat(auto-fit, minmax(var(--controls-min, 160px), 1fr));
+  gap: var(--controls-gap, var(--group-gap));
   align-items: start;
 }
 
@@ -178,6 +191,23 @@ function saveImmediateProfile(profile: Profile) {
 .constant-textarea {
   block-size: 12rem;
   min-block-size: 12rem;
+}
+
+.unit-field {
+  display: inline-flex;
+  gap: var(--field-gap);
+  align-items: center;
+  inline-size: min(100%, max-content);
+  max-inline-size: 100%;
+}
+
+.field-unit {
+  padding: 0.26rem 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: var(--bevel-raised);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .deduced-input {
