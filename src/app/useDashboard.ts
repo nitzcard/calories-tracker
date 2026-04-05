@@ -203,9 +203,12 @@ export function useDashboard() {
   async function saveWeightDraft() {
     const rawWeight = currentWeight.value;
     await autoSave.runAutoSave(async () => {
+      const parsed = rawWeight.trim() ? Number(rawWeight) : null;
+      const normalizedWeight =
+        parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
       await upsertDailyEntry({
         date: selectedDate.value,
-        weight: currentWeight.value ? Number(currentWeight.value) : null,
+        weight: normalizedWeight,
       });
       await refreshState();
       currentWeight.value = rawWeight;
@@ -299,6 +302,20 @@ export function useDashboard() {
 
   const dataTransfer = useDataTransferState(refreshState);
 
+  function autoExportFilename(date: string) {
+    const day = new Date().toISOString().slice(0, 10);
+    return `calorie-tracker-backup-${day}-after-${date}.json`;
+  }
+
+  async function analyzeCurrentDay() {
+    await analysis.analyzeCurrentDay();
+    const finished = findEntryByDate(entries.value, selectedDate.value);
+    if (finished?.aiStatus === "done" && finished.nutritionSnapshot) {
+      // Best-effort: some browsers may block non-user-gesture downloads.
+      await dataTransfer.exportData({ filename: autoExportFilename(selectedDate.value) });
+    }
+  }
+
   watch(selectedDate, loadSelectedEntry);
   watch(locale, syncChrome);
   watch(themeMode, syncChrome);
@@ -374,7 +391,7 @@ export function useDashboard() {
     saveWeightDraft,
     saveFoodDraft,
     saveHistoryCalories,
-    analyzeCurrentDay: analysis.analyzeCurrentDay,
+    analyzeCurrentDay,
     saveProfileDraft,
     saveActivityPrompt,
     saveTdeeEquation,

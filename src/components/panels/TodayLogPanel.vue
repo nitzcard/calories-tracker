@@ -85,16 +85,17 @@ function missingKeyText(provider: string) {
 	          </FormField>
 	          <FormField :label="t('todayWeight')">
 	            <div class="unit-field">
-	              <FieldControl class="weight-control" :is-saving="isSavingWeight">
-	                <input
-	                  class="weight-input"
-	                  type="number"
-	                  step="0.1"
-	                  dir="ltr"
-	                  :value="currentWeight"
-	                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
-	                  @blur="emit('save-weight')"
-	                />
+		              <FieldControl class="weight-control" :is-saving="isSavingWeight">
+		                <input
+		                  class="weight-input"
+		                  type="number"
+		                  step="0.1"
+		                  min="0"
+		                  dir="ltr"
+		                  :value="currentWeight"
+		                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
+		                  @blur="emit('save-weight')"
+		                />
 	              </FieldControl>
 	              <span class="field-unit">{{ t("unitKg") }}</span>
 	            </div>
@@ -157,6 +158,7 @@ function missingKeyText(provider: string) {
 	                class="weight-input"
 	                type="number"
 	                step="0.1"
+	                min="0"
 	                dir="ltr"
 	                :value="currentWeight"
 	                @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"

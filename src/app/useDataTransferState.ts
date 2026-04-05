@@ -5,7 +5,7 @@ export function useDataTransferState(refreshState: () => Promise<void>) {
   const dataTransferStatus = ref<"idle" | "exported" | "imported" | "failed">("idle");
   const isTransferringData = ref(false);
 
-  async function exportData() {
+  async function exportData(options?: { filename?: string }) {
     isTransferringData.value = true;
     dataTransferStatus.value = "idle";
     try {
@@ -14,7 +14,8 @@ export function useDataTransferState(refreshState: () => Promise<void>) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `calorie-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download =
+        options?.filename ?? `calorie-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
       dataTransferStatus.value = "exported";

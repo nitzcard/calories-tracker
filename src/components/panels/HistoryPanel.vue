@@ -133,7 +133,10 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
           </tr>
         <tr v-for="entry in sortedEntries" :key="entry.date">
           <td>{{ formatEntryDate(entry.date, locale) }}</td>
-          <td>{{ entry.weight ?? "-" }}</td>
+          <td class="weight-cell">
+            <span v-if="entry.weight != null" class="weight-num" dir="ltr">{{ entry.weight }}</span>
+            <span v-else>-</span>
+          </td>
           <td class="calories-column">
             <HistoryCaloriesCell
               :value="entry.manualCalories"
@@ -204,7 +207,10 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("weightWithUnit") }}</div>
-          <div class="v">{{ entry.weight ?? "-" }}</div>
+          <div class="v">
+            <span v-if="entry.weight != null" class="weight-num" dir="ltr">{{ entry.weight }}</span>
+            <span v-else>-</span>
+          </div>
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("calories") }}</div>
@@ -262,6 +268,12 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   text-align: left;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.weight-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
 }
 
 .delta-inline {
