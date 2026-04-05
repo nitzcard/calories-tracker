@@ -3,8 +3,10 @@ import type { AppLocale } from "../types";
 export const translations: Record<AppLocale, Record<string, string>> = {
   en: {
     appTitle: "Local Nutrition Desk",
+    beta: "beta",
     appSubtitle: "Offline-first calorie, weight, and TDEE tracker",
     headerHelper: "Save everything locally first, then analyze food entries when you want.",
+    feedbackLabel: "Feedback 💬",
     apiKeys: "API keys",
     apiKeysHelper: "Bring your own key. These keys stay stored only on this device and are used in the browser at runtime.",
     appSetup: "App setup",
@@ -40,6 +42,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     todayLogMeta: "Pick which day you're logging and record your scale weight for that day. Both are saved to your history.",
     whatIAte: "What I ate today",
     foodHelper: "Paste the full day as free text. It is saved locally immediately.",
+    dailyDesk: "Today log",
+    dailyDeskHelper: "Log your day, then keep a small note with your personal food rules.",
     foodPlaceholder:
       "Breakfast: yogurt, granola, banana\nLunch: rice, chicken, salad\nSnack: coffee and two cookies",
     analyzeFood: "Save and analyze this day",
@@ -114,7 +118,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     carbs: "Carbs",
     fat: "Fat",
     saveFix: "Save fix as instruction",
-    saveFixAndReanalyze: "Save fix + re-analyze",
+    saveFixAndReanalyze: "Fix + re-run",
     estimatedValue: "Estimated",
     kcalPer100g: "kcal/100g",
     unitKcal: "kcal",
@@ -160,6 +164,12 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     tdeeNotes: "Notes",
     observedTdeeExplain:
       "Estimated from your logged calories and how your weight changed from the first valid logged day to the latest one.",
+    observedTdeeEmptyInsufficientEntries:
+      "Blank until there are at least {minEntries} days with both calories and weight (currently {count}).",
+    observedTdeeEmptyInsufficientSpan:
+      "Need at least {minDays} days between first and last valid day (currently {spanDays}d).",
+    observedTdeeEmptyOutOfRange:
+      "Hidden because the estimate looked unrealistic. Check logged calories and daily weights.",
     observedTdeeRange: "Range used",
     formulasTdeeExplain:
       "Average of standard formulas using your profile, estimated weight, and activity prompt.",
@@ -220,6 +230,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     deducedWeightHelper: "Smoothed from logged weights to reduce day-to-day water noise.",
     estimatedLeanWeight: "Estimated lean weight",
     estimatedLeanWeightHelper: "Calculated from estimated weight and body fat percentage.",
+    inferredDataTitle: "Inferred data",
     sex: "Sex",
     male: "Male",
     female: "Female",
@@ -252,8 +263,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
   },
   he: {
     appTitle: "יומן תזונה מקומי",
+    beta: "בטא",
     appSubtitle: "מעקב מקומי אחר קלוריות, משקל ו־TDEE",
     headerHelper: "הכול נשמר מקומית קודם, ואז אפשר לנתח את ימי האכילה מתי שרוצים.",
+    feedbackLabel: "משוב 💬",
     apiKeys: "מפתחות API",
     apiKeysHelper: "הבא מפתח משלך. המפתחות נשמרים רק על המכשיר הזה ומשמשים את הדפדפן בזמן ריצה.",
     appSetup: "הגדרות אפליקציה",
@@ -288,6 +301,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     todayLogMeta: "בחר לאיזה יום מתעד ורשום את המשקל מהמאזניים. שניהם נשמרים בהיסטוריה.",
     whatIAte: "מה אכלתי היום",
     foodHelper: "הדבק את כל היום כטקסט חופשי. המידע נשמר מקומית מיד.",
+    dailyDesk: "יומן יומי",
+    dailyDeskHelper: "תעד את היום, ושמור הערה קצרה עם חוקי מזון אישיים.",
     foodPlaceholder: "בוקר: יוגורט, גרנולה, בננה\nצהריים: אורז, עוף, סלט\nנשנוש: קפה ושתי עוגיות",
     analyzeFood: "שמור ונתח את היום",
     saveOnly: "שמור בלבד",
@@ -360,7 +375,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     carbs: "פחמימות",
     fat: "שומן",
     saveFix: "שמור תיקון כהנחיה",
-    saveFixAndReanalyze: "שמור תיקון + נתח מחדש",
+    saveFixAndReanalyze: "תקן + נתח",
     estimatedValue: "מוערך",
     kcalPer100g: "קלוריות ל-100 גרם",
     unitKcal: "קלוריות",
@@ -402,6 +417,12 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     tdeeFrom: "ממה זה מחושב",
     tdeeNotes: "הערות",
     observedTdeeExplain: "מחושב מהקלוריות שרשמת ומהשינוי במשקל מהיום התקף הראשון שנשמר ועד היום התקף האחרון.",
+    observedTdeeEmptyInsufficientEntries:
+      "יישאר ריק עד שיש לפחות {minEntries} ימים עם גם קלוריות וגם משקל (כרגע {count}).",
+    observedTdeeEmptyInsufficientSpan:
+      "צריך לפחות {minDays} ימים בין היום התקף הראשון לאחרון (כרגע {spanDays} ימים).",
+    observedTdeeEmptyOutOfRange:
+      "הוסתר כי התוצאה יצאה לא סבירה. בדוק קלוריות/משקלים יומיים ששמרת.",
     observedTdeeRange: "טווח ששימש לחישוב",
     formulasTdeeExplain: "ממוצע של נוסחאות סטנדרטיות לפי הפרופיל, המשקל המשוער ותיאור הפעילות.",
     tdeeEquation: "נוסחת TDEE יומית",
@@ -461,6 +482,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     deducedWeightHelper: "מחושב מהמגמה של משקלים קודמים כדי לרכך רעש יומי של נוזלים.",
     estimatedLeanWeight: "מסת גוף רזה משוערת",
     estimatedLeanWeightHelper: "מחושבת מהמשקל המשוער ומאחוז השומן.",
+    inferredDataTitle: "נתונים מוסקים",
     sex: "מין",
     male: "זכר",
     female: "נקבה",

@@ -123,52 +123,59 @@ function saveImmediateProfile(profile: Profile) {
             </a>
           </small>
         </template>
-      </FormField>
-      <FormField :label="t('deducedWeight')" :helper="t('deducedWeightHelper')">
-        <div class="unit-field">
-          <input
-            class="deduced-input"
-            :value="props.deducedWeight ?? ''"
-            type="number"
-            disabled
-            readonly
-          />
-          <span class="field-unit">{{ t("unitKg") }}</span>
-        </div>
-      </FormField>
-      <FormField :label="t('estimatedLeanWeight')" :helper="t('estimatedLeanWeightHelper')">
-        <div class="unit-field">
-          <input
-            class="deduced-input"
-            :value="props.estimatedLeanWeight ?? ''"
-            type="number"
-            disabled
-            readonly
-          />
-          <span class="field-unit">{{ t("unitKg") }}</span>
-        </div>
-      </FormField>
-    </div>
-      <FormField
-        :label="t('activityPrompt')"
-        :helper="t('profileTdeeAutosave')"
-        stacked
-        class="stacked"
-      >
-      <FieldControl as="textarea" :is-saving="isSavingActivity">
-        <textarea
-          class="constant-textarea"
-          :class="{ 'is-missing': !activityDraft.trim() }"
-          :value="activityDraft"
-          :placeholder="t('activityPlaceholder')"
-          @input="activityDraft = ($event.target as HTMLTextAreaElement).value"
-          @blur="emit('save-activity', activityDraft)"
-        ></textarea>
-      </FieldControl>
-    </FormField>
-    <p class="status-line">{{ t("profileTdeeAutosave") }}</p>
-  </BasePanel>
-</template>
+	      </FormField>
+	    </div>
+
+	    <div class="inferred-block">
+	      <div class="inferred-title">{{ t("inferredDataTitle") }}</div>
+	      <div class="inferred-row">
+	        <FormField :label="t('deducedWeight')" :helper="t('deducedWeightHelper')">
+	          <div class="unit-field">
+	            <input
+	              class="deduced-input"
+	              :value="props.deducedWeight ?? ''"
+	              type="number"
+	              disabled
+	              readonly
+	            />
+	            <span class="field-unit">{{ t("unitKg") }}</span>
+	          </div>
+	        </FormField>
+	        <FormField :label="t('estimatedLeanWeight')" :helper="t('estimatedLeanWeightHelper')">
+	          <div class="unit-field">
+	            <input
+	              class="deduced-input"
+	              :value="props.estimatedLeanWeight ?? ''"
+	              type="number"
+	              disabled
+	              readonly
+	            />
+	            <span class="field-unit">{{ t("unitKg") }}</span>
+	          </div>
+	        </FormField>
+	      </div>
+	    </div>
+
+	    <FormField
+	      :label="t('activityPrompt')"
+	      :helper="t('profileTdeeAutosave')"
+	      stacked
+	      class="stacked"
+	    >
+	      <FieldControl as="textarea" :is-saving="isSavingActivity">
+	        <textarea
+	          class="constant-textarea"
+	          :class="{ 'is-missing': !activityDraft.trim() }"
+	          :value="activityDraft"
+	          :placeholder="t('activityPlaceholder')"
+	          @input="activityDraft = ($event.target as HTMLTextAreaElement).value"
+	          @blur="emit('save-activity', activityDraft)"
+	        ></textarea>
+	      </FieldControl>
+	    </FormField>
+	    <p class="status-line">{{ t("profileTdeeAutosave") }}</p>
+	  </BasePanel>
+	</template>
 
 <style scoped>
 .helper-text,
@@ -178,10 +185,37 @@ function saveImmediateProfile(profile: Profile) {
 }
 
 .controls-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--controls-min, 160px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--controls-gap, var(--group-gap));
   align-items: start;
+}
+
+.controls-grid :deep(.field) {
+  inline-size: var(--compact-control-inline-size);
+  max-inline-size: 100%;
+}
+
+.inferred-block {
+  display: grid;
+  gap: var(--field-gap);
+}
+
+.inferred-title {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.inferred-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--controls-gap, var(--group-gap));
+  align-items: start;
+}
+
+.inferred-row :deep(.field) {
+  inline-size: var(--compact-control-inline-size);
+  max-inline-size: 100%;
 }
 
 .stacked {
@@ -250,5 +284,25 @@ input.is-missing,
 textarea.is-missing {
   border-color: #8f3333;
   box-shadow: 0 0 0 1px rgba(143, 51, 51, 0.35);
+}
+
+@media (max-width: 640px) {
+  .controls-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .controls-grid :deep(.field) {
+    inline-size: 100%;
+  }
+
+  .inferred-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inferred-row :deep(.field) {
+    inline-size: 100%;
+  }
 }
 </style>

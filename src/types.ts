@@ -3,7 +3,6 @@ export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type TdeeEquation =
-  | "formulaAverage"
   | "mifflinStJeor"
   | "harrisBenedict"
   | "cunningham"
@@ -169,6 +168,11 @@ export interface TdeeSnapshot {
   observedTdee: number | null;
   observedFromDate: string | null;
   observedToDate: string | null;
+  observedValidEntryCount: number;
+  observedDaySpanDays: number | null;
+  observedReason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
+  observedMinEntries: number;
+  observedMinDays: number;
   formulaTdeeAverage: number | null;
   formulaBreakdown: Record<string, number>;
   formulaWeight: number | null;

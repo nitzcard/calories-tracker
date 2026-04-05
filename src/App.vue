@@ -6,17 +6,39 @@ import MetricChart from "./components/charts/MetricChart.vue";
 import AppHeader from "./components/header/AppHeader.vue";
 import ApiKeysPanel from "./components/panels/ApiKeysPanel.vue";
 import DataTransferPanel from "./components/panels/DataTransferPanel.vue";
-import FoodRulesPanel from "./components/panels/FoodRulesPanel.vue";
 import HistoryPanel from "./components/panels/HistoryPanel.vue";
 import InsightsPanel from "./components/panels/InsightsPanel.vue";
 import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
 import ProfilePanel from "./components/panels/ProfilePanel.vue";
 import TdeeSummaryPanel from "./components/panels/TdeeSummaryPanel.vue";
-import TodayLogPanel from "./components/panels/TodayLogPanel.vue";
+import DailyDeskPanel from "./components/panels/DailyDeskPanel.vue";
 import { useDashboard } from "./app/useDashboard";
 
 const dashboard = useDashboard();
 const { t } = useI18n();
+
+function readStoredOpen(key: string): boolean | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === "0" || raw === "1") return raw === "1";
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function writeStoredOpen(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
+const PANEL_OPEN_KEYS = {
+  appSetup: "panel.open.appSetup",
+  constantData: "panel.open.constantData",
+} as const;
 
 const {
   locale,
@@ -70,8 +92,8 @@ const {
   clearNotice,
 } = dashboard;
 
-const appSetupOpen = ref(false);
-const constantDataOpen = ref(false);
+const appSetupOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.appSetup) ?? false);
+const constantDataOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.constantData) ?? false);
 const didInitializePanels = ref(false);
 const tdeeHighlightToken = ref(0);
 const correctionNoticeToken = ref(0);
@@ -84,11 +106,13 @@ const isProfileReady = computed(
     ),
 );
 const hasConfiguredGeminiKey = computed(() => Boolean(aiKeys.value.gemini.trim()));
+const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
+const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 
 watch(
   locale,
-  (nextLocale) => {
-    document.title = t("appTitle", 0, { locale: nextLocale });
+  () => {
+    document.title = `${t("appTitle")} (${t("beta")})`;
   },
   { immediate: true },
 );
@@ -100,8 +124,10 @@ watch(
       return;
     }
 
-    appSetupOpen.value = !geminiReady;
-    constantDataOpen.value = !profileReady;
+    const savedAppSetup = readStoredOpen(PANEL_OPEN_KEYS.appSetup);
+    const savedConstant = readStoredOpen(PANEL_OPEN_KEYS.constantData);
+    appSetupOpen.value = savedAppSetup ?? !geminiReady;
+    constantDataOpen.value = savedConstant ?? !profileReady;
     didInitializePanels.value = true;
   },
   { immediate: true },
@@ -109,12 +135,26 @@ watch(
 
 function onAppSetupToggle(event: Event) {
   const details = event.target as HTMLDetailsElement;
+  // If required, keep it open (no collapsing).
+  if (!hasConfiguredGeminiKey.value) {
+    appSetupOpen.value = true;
+    writeStoredOpen(PANEL_OPEN_KEYS.appSetup, true);
+    return;
+  }
   appSetupOpen.value = details.open;
+  writeStoredOpen(PANEL_OPEN_KEYS.appSetup, appSetupOpen.value);
 }
 
 function onConstantDataToggle(event: Event) {
   const details = event.target as HTMLDetailsElement;
+  // If required, keep it open (no collapsing).
+  if (!isProfileReady.value) {
+    constantDataOpen.value = true;
+    writeStoredOpen(PANEL_OPEN_KEYS.constantData, true);
+    return;
+  }
   constantDataOpen.value = details.open;
+  writeStoredOpen(PANEL_OPEN_KEYS.constantData, constantDataOpen.value);
 }
 
 async function saveFoodCorrectionAndRefresh(
@@ -162,7 +202,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
     <details
       v-if="profile"
       class="panel constant-data-panel"
-      :open="appSetupOpen"
+      :open="appSetupEffectiveOpen"
+      :class="{ 'is-locked-open': !hasConfiguredGeminiKey }"
       @toggle="onAppSetupToggle"
     >
       <summary class="constant-data-summary">
@@ -198,7 +239,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
     <details
       v-if="profile"
       class="panel constant-data-panel"
-      :open="constantDataOpen"
+      :open="constantDataEffectiveOpen"
+      :class="{ 'is-locked-open': !isProfileReady }"
       @toggle="onConstantDataToggle"
     >
       <summary class="constant-data-summary">
@@ -229,7 +271,6 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :selected-equation="profile.tdeeEquation"
           :highlight-token="tdeeHighlightToken"
           :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
-          :is-saving-equation="isSavingTdeeEquation"
           @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;
@@ -240,8 +281,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
     </details>
 
     <section v-if="profile" class="content-grid">
-      <div class="grid-cell span-6">
-        <TodayLogPanel
+      <div class="grid-cell span-12">
+        <DailyDeskPanel
           :locale="locale"
           :selected-date="selectedDate"
           :current-weight="currentWeight"
@@ -253,20 +294,14 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :analyze-issue="analyzeIssue"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
+          :food-instructions="profile.foodInstructions"
+          :is-saving-food-instructions="isSavingFoodInstructions"
           @update:selected-date="selectedDate = $event"
           @update:current-weight="currentWeight = $event"
           @update:food-log="currentFoodLog = $event"
           @save-weight="saveWeightDraft"
           @save-draft="saveFoodDraft"
           @analyze="analyzeCurrentDay"
-        />
-      </div>
-
-      <div class="grid-cell span-6">
-        <FoodRulesPanel
-          :locale="locale"
-          :instructions="profile.foodInstructions"
-          :is-saving="isSavingFoodInstructions"
           @save-instructions="saveFoodInstructions"
         />
       </div>
@@ -288,7 +323,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
         <InsightsPanel :locale="locale" :insights="nutritionInsights" />
       </div>
 
-      <BasePanel class="grid-cell span-6" :title="t('graphCalories')">
+      <BasePanel id="graphCaloriesPanel" class="grid-cell span-6" :title="t('graphCalories')" collapsible>
         <MetricChart
           :locale="locale"
           :points="caloriePoints"
@@ -302,7 +337,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
         />
       </BasePanel>
 
-      <BasePanel class="grid-cell span-6" :title="t('graphWeight')">
+      <BasePanel id="graphWeightPanel" class="grid-cell span-6" :title="t('graphWeight')" collapsible>
         <MetricChart :locale="locale" :points="weightPoints" :label="t('graphWeight')" :y-unit="t('unitKg')" />
       </BasePanel>
 
@@ -328,6 +363,15 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 
 .constant-data-panel {
   margin-block-end: var(--space-3);
+}
+
+.constant-data-panel.is-locked-open .constant-data-summary {
+  cursor: default;
+  pointer-events: none;
+}
+
+.constant-data-panel.is-locked-open .constant-data-summary::before {
+  display: none;
 }
 
 .constant-data-summary {
@@ -387,16 +431,12 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-3);
-  align-items: stretch;
+  align-items: start;
 }
 
 .grid-cell {
   min-inline-size: 0;
-  display: grid;
-}
-
-.grid-cell > :deep(.panel) {
-  block-size: 100%;
+  display: block;
 }
 
 .span-12 {
@@ -428,13 +468,12 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-3);
-  align-items: stretch;
+  align-items: start;
   padding: 2px 12px 12px 12px;
 }
 
 .constant-data-grid > :deep(.panel) {
   grid-column: span 6;
-  block-size: 100%;
 }
 
 .constant-data-full {
@@ -443,14 +482,9 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 }
 
 .constant-data-full > :deep(.panel) {
-  block-size: 100%;
 }
 
 @media (min-width: 961px) {
-  .constant-data-grid > :deep(.base-panel) {
-    grid-template-rows: auto auto 1fr auto;
-  }
-
   .constant-data-grid > :deep(textarea) {
     min-block-size: 12rem;
     block-size: 12rem;

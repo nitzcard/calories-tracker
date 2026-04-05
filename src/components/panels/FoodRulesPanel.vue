@@ -10,6 +10,7 @@ const props = defineProps<{
   locale: AppLocale;
   instructions: string;
   isSaving: boolean;
+  embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -33,10 +34,33 @@ function updateDraft(event: Event) {
 
 <template>
   <BasePanel
+    v-if="!embedded"
     id="foodRulesPanel"
     :title="t('foodRules')"
     :helper="t('foodRulesHelper')"
+    collapsible
   >
+    <div class="food-rules-content">
+      <FormField
+        :label="t('ruleInstruction')"
+        :helper="t('fieldAutosaveOnBlur')"
+        stacked
+        class="field-spacing"
+      >
+        <FieldControl as="textarea" :is-saving="isSaving">
+          <textarea
+            class="constant-textarea"
+            :value="draftInstructions"
+            @input="updateDraft"
+            @blur="emit('save-instructions', draftInstructions)"
+          ></textarea>
+        </FieldControl>
+      </FormField>
+      <p class="helper-text helper-text--after">{{ t("addRuleHelper") }}</p>
+    </div>
+  </BasePanel>
+
+  <div v-else class="food-rules-content">
     <FormField
       :label="t('ruleInstruction')"
       :helper="t('fieldAutosaveOnBlur')"
@@ -53,7 +77,7 @@ function updateDraft(event: Event) {
       </FieldControl>
     </FormField>
     <p class="helper-text helper-text--after">{{ t("addRuleHelper") }}</p>
-  </BasePanel>
+  </div>
 </template>
 
 <style scoped>
@@ -68,6 +92,11 @@ function updateDraft(event: Event) {
 
 .field-spacing {
   margin-block-start: 10px;
+}
+
+.food-rules-content {
+  display: grid;
+  gap: var(--panel-gap);
 }
 
 .constant-textarea {

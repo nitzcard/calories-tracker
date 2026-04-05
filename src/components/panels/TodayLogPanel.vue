@@ -18,6 +18,7 @@ const props = defineProps<{
   analyzeIssue: string;
   isSavingWeight: boolean;
   isSavingFoodLog: boolean;
+  embedded?: boolean;
 }>();
 
 const { t } = useI18n();
@@ -64,7 +65,80 @@ function missingKeyText(provider: string) {
 </script>
 
 <template>
-  <BasePanel :title="t('whatIAte')" :helper="t('foodHelper')">
+  <BasePanel
+    v-if="!embedded"
+    id="todayLogPanel"
+    :title="t('whatIAte')"
+    :helper="t('foodHelper')"
+    collapsible
+  >
+    <div class="today-log-content">
+      <div class="log-intro">
+        <p class="controls-meta">{{ t('todayLogMeta') }}</p>
+        <div class="controls-grid">
+          <FormField :label="t('date')">
+            <input
+              type="date"
+              :value="selectedDate"
+              @input="emit('update:selectedDate', ($event.target as HTMLInputElement).value)"
+            />
+	          </FormField>
+	          <FormField :label="t('todayWeight')">
+	            <div class="unit-field">
+	              <FieldControl class="weight-control" :is-saving="isSavingWeight">
+	                <input
+	                  class="weight-input"
+	                  type="number"
+	                  step="0.1"
+	                  dir="ltr"
+	                  :value="currentWeight"
+	                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
+	                  @blur="emit('save-weight')"
+	                />
+	              </FieldControl>
+	              <span class="field-unit">{{ t("unitKg") }}</span>
+	            </div>
+	          </FormField>
+	        </div>
+	      </div>
+
+      <FormField
+        :label="t('whatIAte')"
+        :helper="t('fieldAutosaveOnBlur')"
+        stacked
+      >
+        <FieldControl as="textarea" :is-saving="isSavingFoodLog">
+          <textarea
+            :value="foodLog"
+            :placeholder="t('foodPlaceholder')"
+            @input="emit('update:foodLog', ($event.target as HTMLTextAreaElement).value)"
+            @blur="emit('save-draft')"
+          ></textarea>
+        </FieldControl>
+      </FormField>
+
+      <div class="actions">
+        <p class="helper-text">{{ t("analyzeHelper") }}</p>
+        <div class="form-row">
+          <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
+            {{ t("saveOnly") }}
+          </button>
+          <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
+            <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
+            {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}
+          </button>
+          <a v-if="hasResults && !isAnalyzing" class="results-link" href="#nutritionSummaryPanel">
+            {{ t("jumpToResults") }}
+          </a>
+        </div>
+        <p v-if="analyzeIssue" class="analyze-issue">
+          {{ issueText }}
+        </p>
+      </div>
+    </div>
+  </BasePanel>
+
+  <div v-else class="today-log-content">
 
     <div class="log-intro">
       <p class="controls-meta">{{ t('todayLogMeta') }}</p>
@@ -75,24 +149,25 @@ function missingKeyText(provider: string) {
             :value="selectedDate"
             @input="emit('update:selectedDate', ($event.target as HTMLInputElement).value)"
           />
-        </FormField>
-        <FormField :label="t('todayWeight')">
-          <div class="weight-inline">
-            <FieldControl :is-saving="isSavingWeight">
-              <input
-                class="weight-input"
-                type="number"
-                step="0.1"
-                :value="currentWeight"
-                @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
-                @blur="emit('save-weight')"
-              />
-            </FieldControl>
-            <span class="unit">{{ t("unitKg") }}</span>
-          </div>
-        </FormField>
-      </div>
-    </div>
+	        </FormField>
+	        <FormField :label="t('todayWeight')">
+	          <div class="unit-field">
+	            <FieldControl class="weight-control" :is-saving="isSavingWeight">
+	              <input
+	                class="weight-input"
+	                type="number"
+	                step="0.1"
+	                dir="ltr"
+	                :value="currentWeight"
+	                @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
+	                @blur="emit('save-weight')"
+	              />
+	            </FieldControl>
+	            <span class="field-unit">{{ t("unitKg") }}</span>
+	          </div>
+	        </FormField>
+	      </div>
+	    </div>
 
     <FormField
       :label="t('whatIAte')"
@@ -127,7 +202,7 @@ function missingKeyText(provider: string) {
         {{ issueText }}
       </p>
     </div>
-  </BasePanel>
+  </div>
 </template>
 
 <style scoped>
@@ -142,37 +217,57 @@ function missingKeyText(provider: string) {
   font-size: 0.875rem;
 }
 
+.today-log-content {
+  display: grid;
+  gap: var(--panel-gap);
+}
+
 .log-intro {
   display: grid;
   gap: var(--group-gap);
 }
 
 .controls-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--controls-min, 180px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--controls-gap, var(--group-gap));
   align-items: start;
+}
+
+.controls-grid :deep(.field) {
+  inline-size: var(--compact-control-inline-size);
+  max-inline-size: 100%;
 }
 
 .actions {
   display: grid;
   gap: var(--group-gap);
 }
-.weight-inline {
+.unit-field {
   display: inline-flex;
-  gap: 8px;
+  gap: var(--field-gap);
   align-items: center;
-  inline-size: fit-content;
+  inline-size: min(100%, max-content);
   max-inline-size: 100%;
 }
 
-.unit {
+.weight-control {
+  flex: 0 0 auto;
+}
+
+.weight-control :deep(input) {
+  inline-size: 8rem;
+  max-inline-size: 8rem;
+}
+
+.field-unit {
   padding: 0.26rem 0.45rem;
   border: 1px solid var(--border);
   border-radius: 0;
   background: var(--surface-2);
   box-shadow: var(--bevel-raised);
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .weight-input {
@@ -226,6 +321,17 @@ function missingKeyText(provider: string) {
   background: #7a3d36;
   border: 1px solid #4e221d;
   box-shadow: var(--bevel-raised);
+}
+
+@media (max-width: 640px) {
+  .controls-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .controls-grid :deep(.field) {
+    inline-size: 100%;
+  }
 }
 
 @keyframes spin {

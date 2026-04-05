@@ -42,7 +42,7 @@ withDefaults(
 .field-control--input :deep(input),
 .field-control--select :deep(select),
 .field-control--textarea :deep(textarea) {
-  padding-inline-end: 2rem;
+  /* Padding is now standardized globally in app.css */
 }
 
 .field-control--input .field-spinner,

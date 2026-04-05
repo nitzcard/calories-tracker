@@ -182,24 +182,48 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   value: number | null;
   fromDate: string | null;
   toDate: string | null;
+  validEntryCount: number;
+  daySpanDays: number | null;
+  reason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
 } {
   const valid = entries
     .filter((entry) => entry.weight !== null && resolvedDailyCalories(entry) !== null)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (valid.length < MIN_OBSERVED_TDEE_ENTRIES) {
-    return { value: null, fromDate: null, toDate: null };
+    return {
+      value: null,
+      fromDate: null,
+      toDate: null,
+      validEntryCount: valid.length,
+      daySpanDays: null,
+      reason: "insufficient_entries",
+    };
   }
 
   const first = valid[0];
   const last = valid[valid.length - 1];
   if (first.weight === null || last.weight === null) {
-    return { value: null, fromDate: null, toDate: null };
+    return {
+      value: null,
+      fromDate: null,
+      toDate: null,
+      validEntryCount: valid.length,
+      daySpanDays: null,
+      reason: "insufficient_entries",
+    };
   }
 
   const daySpan = Math.max(1, (Date.parse(last.date) - Date.parse(first.date)) / 86400000);
   if (daySpan < MIN_OBSERVED_TDEE_DAYS) {
-    return { value: null, fromDate: first.date, toDate: last.date };
+    return {
+      value: null,
+      fromDate: first.date,
+      toDate: last.date,
+      validEntryCount: valid.length,
+      daySpanDays: Math.round(daySpan),
+      reason: "insufficient_span",
+    };
   }
 
   const avgCalories =
@@ -218,13 +242,23 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   const observedTdee = Math.round(avgCalories - dailyWeightEnergy);
 
   if (observedTdee < OBSERVED_TDEE_MIN || observedTdee > OBSERVED_TDEE_MAX) {
-    return { value: null, fromDate: first.date, toDate: last.date };
+    return {
+      value: null,
+      fromDate: first.date,
+      toDate: last.date,
+      validEntryCount: valid.length,
+      daySpanDays: Math.round(daySpan),
+      reason: "out_of_range",
+    };
   }
 
   return {
     value: observedTdee,
     fromDate: first.date,
     toDate: last.date,
+    validEntryCount: valid.length,
+    daySpanDays: Math.round(daySpan),
+    reason: null,
   };
 }
 
@@ -274,10 +308,6 @@ function selectedTdeeValue(
     return observedTdee;
   }
 
-  if (selectedEquation === "formulaAverage") {
-    return formulas.average;
-  }
-
   return formulas.breakdown[selectedEquation] ?? null;
 }
 
@@ -289,6 +319,11 @@ export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): Tdee
     observedTdee: observed.value,
     observedFromDate: observed.fromDate,
     observedToDate: observed.toDate,
+    observedValidEntryCount: observed.validEntryCount,
+    observedDaySpanDays: observed.daySpanDays,
+    observedReason: observed.reason,
+    observedMinEntries: MIN_OBSERVED_TDEE_ENTRIES,
+    observedMinDays: MIN_OBSERVED_TDEE_DAYS,
     formulaTdeeAverage: formulas.average,
     formulaBreakdown: formulas.breakdown,
     formulaWeight: formulaWeight.value,

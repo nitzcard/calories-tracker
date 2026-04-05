@@ -75,16 +75,21 @@ export function useDashboard() {
   const tdee = computed(() =>
     profile.value
       ? buildTdeeSnapshot(displayEntries.value, profile.value)
-        : {
-          observedTdee: null,
-          observedFromDate: null,
-          observedToDate: null,
-          formulaTdeeAverage: null,
-          formulaBreakdown: {},
-          formulaWeight: null,
-          formulaWeightSource: null,
-          activityMultiplier: null,
-          selectedEquation: "formulaAverage" as const,
+	        : {
+	          observedTdee: null,
+	          observedFromDate: null,
+	          observedToDate: null,
+	          observedValidEntryCount: 0,
+	          observedDaySpanDays: null,
+	          observedReason: "insufficient_entries" as const,
+	          observedMinEntries: 4,
+	          observedMinDays: 7,
+	          formulaTdeeAverage: null,
+	          formulaBreakdown: {},
+	          formulaWeight: null,
+	          formulaWeightSource: null,
+	          activityMultiplier: null,
+          selectedEquation: "mifflinStJeor" as const,
           selectedValue: null,
           lastComputedAt: "",
         },

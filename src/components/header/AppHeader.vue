@@ -31,7 +31,18 @@ const { t } = useI18n();
 <template>
   <header class="header-shell panel">
     <div class="copy">
-      <h1>{{ t("appTitle") }}</h1>
+      <h1 class="title">
+        <span>{{ t("appTitle") }}</span>
+        <span class="beta-pill">{{ t("beta") }}</span>
+        <a
+          class="feedback-pill"
+          href="https://github.com/nitzcard/calories-tracker/issues"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {{ t("feedbackLabel") }}
+        </a>
+      </h1>
       <p>{{ t("appSubtitle") }}</p>
       <p class="helper-text">{{ t("headerHelper") }}</p>
     </div>
@@ -105,21 +116,57 @@ const { t } = useI18n();
   max-inline-size: 100%;
 }
 
+.title {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.beta-pill {
+  padding: 0 0.28rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: var(--bevel-raised);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.feedback-pill {
+  padding: 0 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
+  box-shadow: var(--bevel-raised);
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.feedback-pill:hover {
+  text-decoration: underline;
+}
+
 .controls-grid {
-  display: grid;
-  grid-template-columns: minmax(130px, 150px) minmax(130px, 150px) minmax(220px, 260px);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--controls-gap);
   align-items: start;
-  inline-size: auto;
-  justify-content: end;
+  justify-content: flex-end;
 }
 
-.provider-field {
-  min-inline-size: 220px;
-}
-
-.provider-field :deep(select) {
+.controls-grid :deep(.field) {
+  inline-size: var(--compact-control-inline-size);
   max-inline-size: 100%;
+}
+
+.controls-grid :deep(select) {
+  /* Keep the header controls readable even when option labels are long. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .helper-text {
@@ -140,15 +187,21 @@ const { t } = useI18n();
   }
 
   .controls-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .provider-field {
-    min-inline-size: 0;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
   }
 
   .copy {
     max-inline-size: none;
+  }
+
+  .controls-grid :deep(select) {
+    max-inline-size: none;
+  }
+
+  .controls-grid :deep(.field) {
+    inline-size: 100%;
   }
 }
 </style>

@@ -74,7 +74,13 @@ function formatSigned(value: number | null, unit: string) {
 </script>
 
 <template>
-  <BasePanel :title="t('insightsTitle')" :helper="t('insightsHelper')">
+  <BasePanel
+    id="insightsPanel"
+    :title="t('insightsTitle')"
+    :helper="t('insightsHelper')"
+    collapsible
+    :default-open="false"
+  >
     <div class="stats-grid">
       <div class="compact-stat">
         <strong>{{ t("insightsAnalyzedDays7d") }}</strong>

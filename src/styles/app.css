@@ -142,14 +142,39 @@ body {
 }
 
 button,
-input,
 select,
 textarea {
   font: inherit;
   color: inherit;
   direction: inherit;
   text-align: start;
-  padding: 0.42rem 0.55rem;
+  padding-block: 0.42rem;
+  padding-inline-start: 0.55rem;
+  /* Reserve consistent space for decorations (spinner, native arrows) */
+  padding-inline-end: 2rem;
+  min-block-size: 2.25rem;
+}
+
+/* Keep radios/checkboxes native-sized (do not inherit "text control" paddings). */
+input[type="radio"],
+input[type="checkbox"] {
+  padding: 0;
+  min-block-size: auto;
+  min-inline-size: auto;
+  inline-size: auto;
+  block-size: auto;
+}
+
+/* Text-like inputs share the unified control sizing. */
+input:not([type="radio"]):not([type="checkbox"]) {
+  font: inherit;
+  color: inherit;
+  direction: inherit;
+  text-align: start;
+  padding-block: 0.42rem;
+  padding-inline-start: 0.55rem;
+  padding-inline-end: 2rem;
+  min-block-size: 2.25rem;
 }
 
 input[type="number"] {
@@ -182,9 +207,11 @@ textarea {
   resize: vertical;
   background: var(--input-bg);
   color: var(--text-primary);
+  /* Textareas need their own height rules; keep paddings consistent. */
+  min-block-size: 140px;
 }
 
-input,
+input:not([type="radio"]):not([type="checkbox"]),
 select {
   inline-size: 100%;
   min-inline-size: 0;
@@ -202,18 +229,33 @@ textarea {
   box-shadow: var(--bevel-sunken);
 }
 
-input:hover,
+input:not([type="radio"]):not([type="checkbox"]):hover,
 select:hover,
 textarea:hover {
   border-color: color-mix(in srgb, var(--input-border) 74%, var(--accent));
 }
 
-input:focus,
+input:not([type="radio"]):not([type="checkbox"]):focus,
 select:focus,
 textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--input-focus) 55%, transparent);
   outline-offset: 1px;
   border-color: var(--input-focus);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: color-mix(in srgb, var(--surface-2) 55%, var(--input-bg));
+  color: var(--text-muted);
+  border-color: color-mix(in srgb, var(--input-border) 85%, var(--surface-2));
+  filter: grayscale(1);
+  opacity: 0.92;
+}
+
+button:disabled {
+  filter: grayscale(1);
+  opacity: 0.85;
 }
 
 @media (min-width: 961px) {

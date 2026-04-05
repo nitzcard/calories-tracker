@@ -28,14 +28,6 @@ const editableMeals = ref<MealBreakdownItem[]>([]);
 const showCorrectionCue = ref(false);
 let correctionCueTimeout: ReturnType<typeof setTimeout> | null = null;
 const { t } = useI18n();
-const visibleNotes = computed(() => {
-  const assumptions = props.entry?.nutritionSnapshot?.assumptions ?? [];
-  const warnings = props.entry?.nutritionSnapshot?.warnings ?? [];
-  return [...assumptions.map((text) => ({ key: `a-${text}`, text })), ...warnings.map((text) => ({ key: `w-${text}`, text }))].filter(
-    (item) => props.locale === "he" || !containsHebrew(item.text),
-  );
-});
-
 const visibleUnmatchedItems = computed(() =>
   (props.entry?.nutritionSnapshot?.unmatchedItems ?? []).filter(
     (item) => props.locale === "he" || !containsHebrew(item),
@@ -265,6 +257,7 @@ const proteinPerLeanBodyWeight = computed(() => {
     id="nutritionSummaryPanel"
     :title="t('nutritionSummary')"
     :helper="t('nutritionHelper')"
+    collapsible
     :loading="isAnalyzing"
     :loading-title="t('analyzingNow')"
     :loading-helper="t('nutritionLoadingHelper')"
@@ -334,18 +327,12 @@ const proteinPerLeanBodyWeight = computed(() => {
         </div>
       </div>
 
-      <details v-if="visibleNotes.length || visibleUnmatchedItems.length" class="notes-panel">
-        <summary class="notes-summary">{{ t("aiNotes") }}</summary>
+      <details v-if="visibleUnmatchedItems.length" class="notes-panel">
+        <summary class="notes-summary">{{ t("unmatchedItems") }}</summary>
         <div class="notes">
-          <ul v-if="visibleNotes.length">
-            <li v-for="item in visibleNotes" :key="item.key">{{ item.text }}</li>
+          <ul>
+            <li v-for="item in visibleUnmatchedItems" :key="item">{{ item }}</li>
           </ul>
-          <div v-if="visibleUnmatchedItems.length" class="unmatched">
-            <strong>{{ t("unmatchedItems") }}</strong>
-            <ul>
-              <li v-for="item in visibleUnmatchedItems" :key="item">{{ item }}</li>
-            </ul>
-          </div>
         </div>
       </details>
 
@@ -440,6 +427,94 @@ const proteinPerLeanBodyWeight = computed(() => {
                 </tr>
               </tbody>
             </table>
+
+            <div class="meal-cards" aria-label="Meal foods">
+              <div v-for="food in meal.foods" :key="`card-${food.id}`" class="food-card">
+                <div class="food-card__head">
+                  <div class="food-name">{{ primaryFoodName(food) }}</div>
+                  <div v-if="secondaryFoodName(food)" class="food-alt-name">
+                    {{ secondaryFoodName(food) }}
+                  </div>
+                  <small v-if="food.needsReview || food.assumptions.length" class="food-meta">
+                    {{ foodMetaText(food) }}
+                  </small>
+                </div>
+
+                <div class="food-card__grid">
+                  <div class="kv">
+                    <div class="k">{{ t("amount") }}</div>
+                    <div class="v">{{ displayAmountText(food) }}</div>
+                  </div>
+
+                  <label class="kv">
+                    <div class="k">{{ t("grams") }}</div>
+                    <div class="v">
+                      <input
+                        :class="{ 'is-estimated': food.gramsEstimated }"
+                        type="number"
+                        :value="food.grams ?? ''"
+                        @input="updateFood(food.id, 'grams', ($event.target as HTMLInputElement).value)"
+                      />
+                      <small v-if="food.gramsEstimated" class="estimated-cue">
+                        {{ t("estimatedValue") }}
+                      </small>
+                    </div>
+                  </label>
+
+                  <label class="kv">
+                    <div class="k">{{ t("calories") }}</div>
+                    <div class="v">
+                      <input
+                        :class="{ 'is-estimated': food.caloriesEstimated }"
+                        type="number"
+                        :value="food.calories ?? ''"
+                        @input="updateFood(food.id, 'calories', ($event.target as HTMLInputElement).value)"
+                      />
+                      <small v-if="food.caloriesEstimated" class="estimated-cue">
+                        {{ t("estimatedValue") }}
+                      </small>
+                    </div>
+                  </label>
+
+                  <label class="kv">
+                    <div class="k">{{ t("kcalPer100g") }}</div>
+                    <div class="v">
+                      <input
+                        class="per100-input"
+                        type="number"
+                        :value="food.caloriesPer100g ?? ''"
+                        @input="
+                          updateFood(food.id, 'caloriesPer100g', ($event.target as HTMLInputElement).value)
+                        "
+                      />
+                    </div>
+                  </label>
+
+                  <div class="kv">
+                    <div class="k">{{ t("protein") }}</div>
+                    <div class="v">{{ food.protein ?? "-" }}</div>
+                  </div>
+                  <div class="kv">
+                    <div class="k">{{ t("carbs") }}</div>
+                    <div class="v">{{ food.carbs ?? "-" }}</div>
+                  </div>
+                  <div class="kv">
+                    <div class="k">{{ t("fat") }}</div>
+                    <div class="v">{{ food.fat ?? "-" }}</div>
+                  </div>
+                  <div class="kv">
+                    <div class="k">{{ t("fiber") }}</div>
+                    <div class="v">{{ food.fiber ?? "-" }}</div>
+                  </div>
+                </div>
+
+                <div class="food-card__actions">
+                  <button class="secondary-action" @click="emitSaveCorrection(food)">
+                    {{ t("saveFixAndReanalyze") }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -604,6 +679,10 @@ const proteinPerLeanBodyWeight = computed(() => {
   min-inline-size: 920px;
 }
 
+.meal-cards {
+  display: none;
+}
+
 .meal-table th {
   white-space: nowrap;
 }
@@ -711,7 +790,59 @@ const proteinPerLeanBodyWeight = computed(() => {
   }
 
   .meal-table {
-    min-inline-size: 680px;
+    display: none;
+  }
+
+  .meal-table-wrap {
+    overflow: visible;
+  }
+
+  .meal-cards {
+    display: grid;
+    gap: 8px;
+  }
+
+  .food-card {
+    border: 1px solid var(--meal-border, var(--border));
+    background: var(--meal-bg, var(--surface));
+    box-shadow: var(--bevel-raised);
+    padding: 8px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .food-card__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .kv {
+    display: grid;
+    gap: 2px;
+  }
+
+  .k {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .v {
+    min-inline-size: 0;
+  }
+
+  .food-card :is(input[type="number"], input[type="date"], select) {
+    inline-size: min(100%, 6.5rem);
+    max-inline-size: 100%;
+  }
+
+  .food-card .per100-input {
+    inline-size: min(100%, 6rem);
+  }
+
+  .food-card__actions {
+    display: flex;
+    justify-content: flex-end;
   }
 
   .food-cell {

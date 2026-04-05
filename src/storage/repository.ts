@@ -24,7 +24,7 @@ const DEFAULT_PROFILE: Profile = {
   height: null,
   estimatedWeight: null,
   bodyFat: null,
-  tdeeEquation: "formulaAverage",
+  tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
   foodInstructions: "",
   aiModel: "gemini-2.5-flash",
@@ -39,13 +39,21 @@ export async function ensureDefaultProfile(
   const existing = await db.profile.get("default");
   if (existing) {
     const legacyExisting = existing as Profile & { targetWeight?: number | null };
+    const legacyEquation = (existing as Profile & { tdeeEquation?: unknown }).tdeeEquation;
+    const normalizedEquation =
+      legacyEquation === "mifflinStJeor" ||
+      legacyEquation === "harrisBenedict" ||
+      legacyEquation === "cunningham" ||
+      legacyEquation === "observedTdee"
+        ? legacyEquation
+        : DEFAULT_PROFILE.tdeeEquation;
     const merged = {
       ...DEFAULT_PROFILE,
       ...existing,
       estimatedWeight:
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
-      tdeeEquation: existing.tdeeEquation ?? DEFAULT_PROFILE.tdeeEquation,
+      tdeeEquation: normalizedEquation,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
       await db.profile.put(merged);
