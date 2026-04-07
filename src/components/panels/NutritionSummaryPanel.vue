@@ -277,7 +277,7 @@ const proteinPerLeanBodyWeight = computed(() => {
     :title="t('nutritionSummary')"
     :helper="t('nutritionHelper')"
     collapsible
-    :loading="isAnalyzing"
+    :loading="isAnalyzing && !entry?.aiError"
     :loading-title="t('analyzingNow')"
     :loading-helper="t('nutritionLoadingHelper')"
   >
@@ -543,9 +543,9 @@ const proteinPerLeanBodyWeight = computed(() => {
       </div>
     </template>
 
-    <div v-else-if="entry?.aiError" class="error-box">
+    <div v-else-if="entry?.aiError" class="error-box error-box--center">
       <strong>{{ t("aiError") }}</strong>
-      <p>{{ entry.aiError }}</p>
+      <p dir="ltr">{{ entry.aiError }}</p>
     </div>
 
     <p v-else>{{ t("noNutritionYet") }}</p>
@@ -669,6 +669,12 @@ const proteinPerLeanBodyWeight = computed(() => {
   padding: 8px;
   border: 1px solid #8a434d;
   background: color-mix(in srgb, #8a434d 14%, var(--surface));
+}
+
+.error-box--center {
+  min-block-size: 16rem;
+  place-content: center;
+  text-align: center;
 }
 
 .error-box p {

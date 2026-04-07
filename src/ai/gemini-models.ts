@@ -1,4 +1,5 @@
-import type { AiProviderOption } from "../types";
+import { translations } from "../i18n/translations";
+import type { AiProviderOption, AppLocale } from "../types";
 
 type GeminiModel = {
   name?: string; // "models/gemini-2.5-flash"
@@ -13,7 +14,7 @@ type GeminiModelsListResponse = {
   nextPageToken?: string;
 };
 
-export async function fetchGeminiModelOptions(apiKey: string): Promise<AiProviderOption[]> {
+export async function fetchGeminiModelOptions(apiKey: string, locale: AppLocale): Promise<AiProviderOption[]> {
   const baseUrl =
     import.meta.env.VITE_GEMINI_API_BASE_URL?.replace(/\/$/, "") ??
     "https://generativelanguage.googleapis.com/v1beta";
@@ -32,26 +33,20 @@ export async function fetchGeminiModelOptions(apiKey: string): Promise<AiProvide
     .map((m) => normalizeModelId(m.name ?? ""))
     .filter((id) => Boolean(id) && id.startsWith("gemini-"));
 
-  // Keep a small, stable set first for UX; then add the rest.
-  const preferredOrder = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-  ];
+  const latestOnly = usable.filter((id) => id.includes("latest"));
+  const visibleIds = latestOnly.length ? latestOnly : usable;
 
-  const unique = Array.from(new Set(usable));
+  const unique = Array.from(new Set(visibleIds));
   unique.sort((a, b) => {
-    const ia = preferredOrder.indexOf(a);
-    const ib = preferredOrder.indexOf(b);
-    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    return a.localeCompare(b);
+    return compareModelPreference(a, b);
   });
 
   return unique.map((id) => ({
     id,
     label: friendlyGeminiLabel(id),
-    helper: "Gemini model detected from your API key (models.list).",
+    helper: translations[locale].providerHelperDetected,
     experimental: id.includes("preview") || id.includes("experimental"),
+    source: "detected",
   }));
 }
 
@@ -73,3 +68,21 @@ function friendlyGeminiLabel(id: string) {
   return `Gemini ${version} ${suffix}`.trim();
 }
 
+function compareModelPreference(a: string, b: string) {
+  const rank = (id: string) => {
+    const isLatest = id.includes("latest") ? 0 : 1;
+    const isFlash = id.includes("-flash") ? 0 : 1;
+    const isLite = id.includes("lite") ? 1 : 0;
+    const isPreview = id.includes("preview") || id.includes("experimental") ? 1 : 0;
+    return [isLatest, isFlash, isLite, isPreview, id];
+  };
+
+  const ra = rank(a);
+  const rb = rank(b);
+  for (let i = 0; i < ra.length - 1; i += 1) {
+    if (ra[i] !== rb[i]) {
+      return Number(ra[i]) - Number(rb[i]);
+    }
+  }
+  return String(ra[ra.length - 1]).localeCompare(String(rb[rb.length - 1]));
+}

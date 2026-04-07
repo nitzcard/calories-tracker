@@ -13,6 +13,7 @@ const props = defineProps<{
   isSavingLocale: boolean;
   isSavingTheme: boolean;
   isSavingProvider: boolean;
+  canSelectProvider: boolean;
   cloudMode: "offline" | "cloud";
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
@@ -33,7 +34,7 @@ const { t } = useI18n();
 const syncIndicator = computed(() => {
   const normalized = props.cloudConfirmedUsername.trim();
   if (props.cloudMode === "cloud") {
-    if (normalized) return t("syncIndicatorCloud", { username: normalized });
+    if (normalized) return t("syncIndicatorCloud");
     return t("syncIndicatorCloudPending");
   }
   return t("syncIndicatorLocal");
@@ -43,6 +44,10 @@ const showCloudIndicator = computed(() => props.cloudMode === "cloud" && Boolean
 const showCloudPending = computed(
   () => props.cloudMode === "cloud" && !Boolean(props.cloudConfirmedUsername.trim()),
 );
+const confirmedUserTag = computed(() => {
+  const user = props.cloudConfirmedUsername.trim();
+  return user ? `${user}` : "";
+});
 </script>
 
 <template>
@@ -54,13 +59,14 @@ const showCloudPending = computed(
         <span class="sync-pill" :class="{ cloud: showCloudIndicator, pending: showCloudPending }">
           <span
             class="live-dot"
-            :class="{ blinking: isCloudBusy }"
+            :class="{ busy: isCloudBusy }"
             aria-hidden="true"
             title="sync status"
           >
             ●
           </span>
           {{ syncIndicator }}
+          <span v-if="confirmedUserTag" class="sync-user" dir="ltr">{{ confirmedUserTag }}</span>
         </span>
         <a
           class="feedback-pill"
@@ -104,10 +110,15 @@ const showCloudPending = computed(
             </select>
           </FieldControl>
         </FormField>
-        <FormField class="provider-field" :label="t('provider')" :helper="activeProvider?.helper">
+        <FormField
+          class="provider-field"
+          :label="t('provider')"
+          :helper="canSelectProvider ? activeProvider?.helper : t('providerNeedsKey')"
+        >
           <FieldControl as="select" :is-saving="isSavingProvider">
             <select
               :value="provider"
+              :disabled="!canSelectProvider"
               @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
             >
               <option v-for="option in providerOptions" :key="option.id" :value="option.id">
@@ -192,6 +203,13 @@ const showCloudPending = computed(
   align-items: center;
 }
 
+.sync-user {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.82em;
+  opacity: 0.95;
+}
+
 .sync-pill.cloud {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
@@ -218,23 +236,30 @@ const showCloudPending = computed(
   color: #eab308;
 }
 
-.live-dot.blinking {
-  animation: liveBlink 850ms ease-in-out infinite;
+.live-dot.busy {
+  animation-duration: 520ms;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .live-dot.blinking {
-    animation: none;
-  }
+/* Radar-like blip when cloud is connected. */
+.sync-pill.cloud .live-dot {
+  animation: liveBlink 980ms ease-in-out infinite;
 }
 
 @keyframes liveBlink {
-  0%,
-  100% {
-    opacity: 0.2;
+  0% {
+    opacity: 0.12;
+    text-shadow: none;
+    transform: scale(0.9);
   }
-  50% {
+  55% {
     opacity: 1;
+    text-shadow: 0 0 6px rgba(74, 222, 128, 0.75);
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 0.18;
+    text-shadow: none;
+    transform: scale(0.95);
   }
 }
 

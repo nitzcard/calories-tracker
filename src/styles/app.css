@@ -23,6 +23,9 @@
   --input-bg: #efe9da;
   --input-border: #7f7867;
   --input-focus: #2f7d8f;
+  --input-disabled-bg: color-mix(in srgb, var(--surface-3) 55%, var(--input-bg));
+  --input-disabled-border: color-mix(in srgb, var(--input-border) 70%, var(--surface-3));
+  --input-disabled-stripe: rgba(30, 27, 21, 0.06);
   --pill: #cbc2af;
   --pill-text: #2e281e;
   --compact-control-inline-size: 11rem;
@@ -41,6 +44,9 @@
   --panel-gap: 8px;
   --controls-gap: 6px;
   --controls-min: 180px;
+  --required-pane-bg: color-mix(in srgb, #8f3333 18%, var(--panel));
+  --required-pane-border: color-mix(in srgb, #8f3333 55%, var(--border-strong));
+  --required-outline: #8f3333;
   background: #c3beb2;
 }
 
@@ -68,12 +74,18 @@
   --input-bg: #131920;
   --input-border: #6a747c;
   --input-focus: #8be5f4;
+  --input-disabled-bg: color-mix(in srgb, var(--surface-3) 70%, var(--input-bg));
+  --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
+  --input-disabled-stripe: rgba(244, 239, 220, 0.07);
   --pill: #29333b;
   --pill-text: #dce7ea;
   --compact-control-inline-size: 11rem;
   --text-control-inline-size: 18rem;
   --controls-gap: 6px;
   --controls-min: 180px;
+  --required-pane-bg: color-mix(in srgb, #b45353 16%, var(--panel));
+  --required-pane-border: color-mix(in srgb, #b45353 55%, var(--border-strong));
+  --required-outline: #b45353;
   background: #14181c;
 }
 
@@ -101,12 +113,18 @@
   --input-bg: #171320;
   --input-border: #74698c;
   --input-focus: #d1a6ff;
+  --input-disabled-bg: color-mix(in srgb, var(--surface-3) 72%, var(--input-bg));
+  --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
+  --input-disabled-stripe: rgba(244, 238, 252, 0.07);
   --pill: #32283f;
   --pill-text: #ece2fb;
   --compact-control-inline-size: 11rem;
   --text-control-inline-size: 18rem;
   --controls-gap: 6px;
   --controls-min: 180px;
+  --required-pane-bg: color-mix(in srgb, #ef4444 14%, var(--panel));
+  --required-pane-border: color-mix(in srgb, #ef4444 55%, var(--border-strong));
+  --required-outline: #ef4444;
   background: #17131f;
 }
 
@@ -246,16 +264,32 @@ textarea:focus {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background: color-mix(in srgb, var(--surface-2) 55%, var(--input-bg));
+  background: var(--input-disabled-bg);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    var(--input-disabled-stripe) 5px,
+    var(--input-disabled-stripe) 7px
+  );
   color: var(--text-muted);
-  border-color: color-mix(in srgb, var(--input-border) 85%, var(--surface-2));
-  filter: grayscale(1);
-  opacity: 0.92;
+  border-color: var(--input-disabled-border);
+  opacity: 1;
+}
+
+input.is-missing,
+select.is-missing,
+textarea.is-missing {
+  border-color: var(--required-outline);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--required-outline) 42%, transparent);
 }
 
 button:disabled {
   filter: grayscale(1);
-  opacity: 0.85;
+  opacity: 0.65;
+  cursor: not-allowed;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--surface-2) 75%, var(--surface-1));
 }
 
 @media (min-width: 961px) {
@@ -299,6 +333,11 @@ td {
   border-radius: var(--radius);
   padding: var(--space-3);
   box-shadow: var(--bevel-raised);
+}
+
+.panel.is-required-pane {
+  background: var(--required-pane-bg);
+  border-color: var(--required-pane-border);
 }
 
 small,

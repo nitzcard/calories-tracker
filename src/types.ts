@@ -13,6 +13,7 @@ export interface AiProviderOption {
   label: string;
   helper: string;
   experimental: boolean;
+  source?: "builtin" | "detected" | "saved";
 }
 
 export interface Profile {
@@ -28,6 +29,7 @@ export interface Profile {
   aiModel: string;
   locale: AppLocale;
   themeMode: ThemeMode;
+  updatedAt?: string;
 }
 
 export interface FoodRule {
@@ -36,6 +38,7 @@ export interface FoodRule {
   instructionText: string;
   active: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface NutrientMap {

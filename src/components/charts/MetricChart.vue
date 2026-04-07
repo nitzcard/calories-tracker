@@ -7,6 +7,11 @@ const props = defineProps<{
   points: Array<{ x: number; y: number | null }>;
   label: string;
   yUnit?: string;
+  referenceLines?: Array<{
+    label: string;
+    value: number | null;
+    color?: string;
+  }>;
   referenceLine?: {
     label: string;
     value: number | null;
@@ -34,9 +39,13 @@ const numberFormatter = computed(
       maximumFractionDigits: 1,
     }),
 );
-const hasReferenceLine = computed(
-  () => props.referenceLine?.value !== null && props.referenceLine?.value !== undefined,
-);
+const activeReferenceLines = computed(() => {
+  const fromNew = (props.referenceLines ?? []).filter((line) => line.value !== null && line.value !== undefined);
+  if (fromNew.length) return fromNew;
+  const legacy = props.referenceLine?.value !== null && props.referenceLine?.value !== undefined ? [props.referenceLine] : [];
+  return legacy.filter(Boolean) as Array<{ label: string; value: number; color?: string }>;
+});
+const hasReferenceLines = computed(() => activeReferenceLines.value.length > 0);
 const normalizedPoints = computed(() =>
   props.points.map((point) => ({
     x: normalizeTimestamp(point.x),
@@ -58,10 +67,10 @@ function renderChart() {
   const xValues = normalizedPoints.value.map((point) => point.x);
   const yValues = normalizedPoints.value.map((point) => point.y ?? null);
   const xSplits = uniqueSorted(xValues);
-  const referenceValues = hasReferenceLine.value
-    ? xValues.map(() => props.referenceLine?.value ?? null)
-    : [];
-  const allYValues = hasReferenceLine.value ? [...yValues, ...(referenceValues as number[])] : yValues;
+  const referenceValuesList = activeReferenceLines.value.map((line) => xValues.map(() => line.value ?? null));
+  const allYValues = hasReferenceLines.value
+    ? [...yValues, ...referenceValuesList.flatMap((values) => values as Array<number | null>)]
+    : yValues;
 
   chart?.destroy();
   chart = new uPlot(
@@ -78,17 +87,13 @@ function renderChart() {
           width: 2,
           points: { size: 8, stroke: "#0a88a3", fill: "#0a88a3", width: 2 },
         },
-        ...(hasReferenceLine.value
-          ? [
-              {
-                label: props.referenceLine?.label ?? "Reference",
-                stroke: props.referenceLine?.color ?? "#9a7b24",
-                width: 2,
-                dash: [8, 4],
-                points: { show: false },
-              },
-            ]
-          : []),
+        ...activeReferenceLines.value.map((line) => ({
+          label: line.label,
+          stroke: line.color ?? "#9a7b24",
+          width: 2,
+          dash: [8, 4],
+          points: { show: false },
+        })),
       ],
       scales: {
         x: {
@@ -159,7 +164,7 @@ function renderChart() {
         ],
       },
     },
-    hasReferenceLine.value ? [xValues, yValues, referenceValues] : [xValues, yValues],
+    [xValues, yValues, ...referenceValuesList],
     chartRef.value,
   );
 }
@@ -221,6 +226,7 @@ watch(() => props.label, renderChart);
 watch(() => props.locale, renderChart);
 watch(() => props.yUnit, renderChart);
 watch(() => props.referenceLine, renderChart, { deep: true });
+watch(() => props.referenceLines, renderChart, { deep: true });
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   chart?.destroy();
@@ -228,8 +234,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="chart-shell" dir="ltr">
-    <div class="chart-stage">
+  <div class="chart-shell">
+    <div class="chart-stage" dir="ltr">
       <span v-if="yUnit" class="axis-unit">{{ yUnit }}</span>
       <div ref="chartRef" class="chart"></div>
       <div
@@ -243,12 +249,28 @@ onBeforeUnmount(() => {
         <div class="hover-date">{{ formatDay(hoveredPoint.x) }}</div>
         <div class="hover-line">{{ formatHoverValue(hoveredPoint.y) }}</div>
         <div
-          v-if="hasReferenceLine"
+          v-for="line in activeReferenceLines"
+          :key="line.label"
           class="hover-reference"
-          :style="{ color: props.referenceLine?.color ?? '#9a7b24' }"
+          :style="{ color: line.color ?? '#9a7b24' }"
         >
-          {{ formatHoverValue(props.referenceLine?.value ?? null) }}
+          {{ line.label }}: {{ formatHoverValue(line.value ?? null) }}
         </div>
+      </div>
+    </div>
+
+    <div class="chart-legend" aria-label="chart legend">
+      <div class="legend-row">
+        <span class="legend-swatch legend-swatch--solid" aria-hidden="true"></span>
+        <span class="legend-label">{{ label }}</span>
+      </div>
+      <div v-for="line in activeReferenceLines" :key="line.label" class="legend-row">
+        <span
+          class="legend-swatch legend-swatch--dash"
+          :style="{ '--swatch-color': line.color ?? '#9a7b24' }"
+          aria-hidden="true"
+        ></span>
+        <span class="legend-label">{{ line.label }}</span>
       </div>
     </div>
   </div>
@@ -308,6 +330,47 @@ onBeforeUnmount(() => {
 
 .chart :deep(.u-legend) {
   display: none;
+}
+
+.chart-legend {
+  margin-block-start: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-2) 92%, black 8%);
+  box-shadow: var(--bevel-sunken);
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.legend-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.legend-swatch {
+  inline-size: 18px;
+  block-size: 0;
+  border-top: 2px solid currentColor;
+}
+
+.legend-swatch--solid {
+  color: #0a88a3;
+}
+
+.legend-swatch--dash {
+  color: var(--swatch-color);
+  border-top-style: dashed;
+}
+
+.legend-label {
+  color: var(--text-primary);
+  opacity: 0.95;
 }
 
 @media (max-width: 640px) {

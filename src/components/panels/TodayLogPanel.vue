@@ -201,7 +201,7 @@ function missingKeyText(provider: string) {
           {{ t("jumpToResults") }}
         </a>
       </div>
-      <p v-if="analysisError" class="analyze-error">
+      <p v-if="analysisError" class="analyze-error" dir="ltr">
         {{ analysisError }}
       </p>
       <p v-else-if="analyzeIssue" class="analyze-issue">

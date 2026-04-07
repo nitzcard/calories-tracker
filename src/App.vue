@@ -5,6 +5,7 @@ import BasePanel from "./components/base/BasePanel.vue";
 import MetricChart from "./components/charts/MetricChart.vue";
 import AppHeader from "./components/header/AppHeader.vue";
 import ApiKeysPanel from "./components/panels/ApiKeysPanel.vue";
+import CloudSyncPanel from "./components/panels/CloudSyncPanel.vue";
 import DataTransferPanel from "./components/panels/DataTransferPanel.vue";
 import HistoryPanel from "./components/panels/HistoryPanel.vue";
 import InsightsPanel from "./components/panels/InsightsPanel.vue";
@@ -91,7 +92,6 @@ const {
 	  cloudMode,
 	  cloudUsername,
 	  cloudConfirmedUsername,
-    cloudPassphrase,
 	  isCloudBusy,
     isCloudSyncing,
 	  cloudStatus,
@@ -100,7 +100,7 @@ const {
 	  supabaseConfigured,
 	  setCloudMode,
 	  setCloudUsername,
-    setCloudPassphrase,
+    cloudLogout,
 	  cloudSyncNow,
 	  notice,
 	  clearNotice,
@@ -120,8 +120,19 @@ const isProfileReady = computed(
     ),
 );
 const hasConfiguredGeminiKey = computed(() => Boolean(aiKeys.value.gemini.trim()));
+const hasEffectiveGeminiKey = computed(() =>
+  Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim()),
+);
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
+const averageCalories = computed(() => {
+  const ys = (caloriePoints.value ?? [])
+    .map((point) => point.y)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!ys.length) return null;
+  const sum = ys.reduce((acc, value) => acc + value, 0);
+  return Math.round(sum / ys.length);
+});
 
 watch(
   locale,
@@ -203,6 +214,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       :is-saving-locale="isSavingLocale"
       :is-saving-theme="isSavingTheme"
       :is-saving-provider="isSavingProvider"
+      :can-select-provider="hasEffectiveGeminiKey"
       :cloud-mode="cloudMode"
       :cloud-confirmed-username="cloudConfirmedUsername"
       :is-cloud-busy="isCloudSyncing"
@@ -220,7 +232,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       v-if="profile"
       class="panel constant-data-panel"
       :open="appSetupEffectiveOpen"
-      :class="{ 'is-locked-open': !hasConfiguredGeminiKey }"
+      :class="{ 'is-locked-open': !hasConfiguredGeminiKey, 'is-required-pane': !hasConfiguredGeminiKey }"
       @toggle="onAppSetupToggle"
     >
       <summary class="constant-data-summary">
@@ -234,6 +246,22 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       </summary>
 
       <div class="constant-data-grid">
+        <CloudSyncPanel
+          :locale="locale"
+          :cloud-mode="cloudMode"
+          :cloud-username="cloudUsername"
+          :cloud-confirmed-username="cloudConfirmedUsername"
+          :is-cloud-busy="isCloudBusy"
+          :cloud-status="cloudStatus"
+          :cloud-last-synced-at="cloudLastSyncedAt"
+          :cloud-error="cloudError"
+          :supabase-configured="supabaseConfigured"
+          @update:cloud-mode="setCloudMode"
+          @update:cloud-username="setCloudUsername"
+          @sync="cloudSyncNow($event)"
+          @logout="cloudLogout"
+        />
+
         <ApiKeysPanel
           :locale="locale"
           :keys="aiKeys"
@@ -246,21 +274,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
             :locale="locale"
             :is-busy="isTransferringData"
             :status="dataTransferStatus"
-            :cloud-mode="cloudMode"
-            :cloud-username="cloudUsername"
-            :cloud-confirmed-username="cloudConfirmedUsername"
-            :cloud-passphrase="cloudPassphrase"
-            :is-cloud-busy="isCloudBusy"
-            :cloud-status="cloudStatus"
-            :cloud-last-synced-at="cloudLastSyncedAt"
-            :cloud-error="cloudError"
-            :supabase-configured="supabaseConfigured"
             @export-data="exportData"
             @import-data="importData"
-            @update:cloud-mode="setCloudMode"
-            @update:cloud-username="setCloudUsername"
-            @update:cloud-passphrase="setCloudPassphrase"
-            @cloud-sync="cloudSyncNow($event)"
           />
         </div>
       </div>
@@ -270,7 +285,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       v-if="profile"
       class="panel constant-data-panel"
       :open="constantDataEffectiveOpen"
-      :class="{ 'is-locked-open': !isProfileReady }"
+      :class="{ 'is-locked-open': !isProfileReady, 'is-required-pane': !isProfileReady }"
       @toggle="onConstantDataToggle"
     >
       <summary class="constant-data-summary">
@@ -360,11 +375,10 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :points="caloriePoints"
           :label="t('graphCalories')"
           :y-unit="t('unitKcal')"
-          :reference-line="{
-            label: t('tdeeSummary'),
-            value: tdee.selectedValue,
-            color: '#9a7b24',
-          }"
+          :reference-lines="[
+            { label: t('tdeeSummary'), value: tdee.selectedValue, color: '#9a7b24' },
+            { label: t('avgCaloriesLine'), value: averageCalories, color: '#6a6a6a' },
+          ]"
         />
       </BasePanel>
 

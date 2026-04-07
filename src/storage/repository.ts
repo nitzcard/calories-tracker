@@ -8,6 +8,7 @@ import type {
   SyncQueueItem,
 } from "../types";
 import type { EncryptedSecretBoxV1 } from "../cloud/crypto";
+import type { StoredAiKeys } from "../ai/credentials";
 
 export interface ExportedAppData {
   schemaVersion: "1";
@@ -34,6 +35,7 @@ const DEFAULT_PROFILE: Profile = {
   aiModel: "gemini-2.5-flash",
   locale: "en",
   themeMode: "system",
+  updatedAt: new Date().toISOString(),
 };
 
 export async function ensureDefaultProfile(
@@ -58,6 +60,7 @@ export async function ensureDefaultProfile(
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       tdeeEquation: normalizedEquation,
+      updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
       await db.profile.put(merged);
@@ -65,13 +68,18 @@ export async function ensureDefaultProfile(
     return merged;
   }
 
-  const profile = { ...DEFAULT_PROFILE, locale, themeMode };
+  const profile = { ...DEFAULT_PROFILE, locale, themeMode, updatedAt: new Date().toISOString() };
   await db.profile.put(profile);
   return profile;
 }
 
 export async function saveProfile(profile: Profile): Promise<void> {
-  await db.profile.put(toPlain(profile));
+  await db.profile.put(
+    toPlain({
+      ...profile,
+      updatedAt: new Date().toISOString(),
+    }),
+  );
 }
 
 export async function getProfile(): Promise<Profile | undefined> {
@@ -222,7 +230,12 @@ export async function listFoodRules(): Promise<FoodRule[]> {
 }
 
 export async function saveFoodRule(rule: FoodRule): Promise<void> {
-  await db.foodRules.put(toPlain(rule));
+  await db.foodRules.put(
+    toPlain({
+      ...rule,
+      updatedAt: new Date().toISOString(),
+    }),
+  );
 }
 
 export async function deleteFoodRule(id: string): Promise<void> {
@@ -291,6 +304,19 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
       await db.syncQueue.bulkPut(toPlain(data.syncQueue));
     }
   });
+}
+
+const SETTINGS_ID = {
+  aiKeys: "aiKeys",
+} as const;
+
+export async function getStoredAiKeysFromDb(): Promise<StoredAiKeys | null> {
+  const row = await db.settings.get(SETTINGS_ID.aiKeys);
+  return (row?.aiKeys as StoredAiKeys | undefined) ?? null;
+}
+
+export async function saveStoredAiKeysToDb(nextKeys: StoredAiKeys): Promise<void> {
+  await db.settings.put({ id: SETTINGS_ID.aiKeys, aiKeys: toPlain(nextKeys) });
 }
 
 function toPlain<T>(value: T): T {

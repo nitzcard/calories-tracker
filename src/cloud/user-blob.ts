@@ -1,13 +1,12 @@
-import type { ExportedAppData } from "../storage/repository";
 import { supabaseClient } from "./supabase";
 
 export type CloudBlobResult =
-  | { ok: true; data: { payload: ExportedAppData; updatedAt: string } | null }
+  | { ok: true; data: { raw: unknown; updatedAt: string } | null }
   | { ok: false; error: string };
 
 type UserBlobRow = {
   username: string;
-  data: ExportedAppData;
+  data: unknown;
   updated_at: string;
 };
 
@@ -31,7 +30,7 @@ export async function fetchUserBlob(username: string): Promise<CloudBlobResult> 
     return {
       ok: true,
       data: {
-        payload: data.data,
+        raw: data.data,
         updatedAt: data.updated_at,
       },
     };
@@ -42,7 +41,7 @@ export async function fetchUserBlob(username: string): Promise<CloudBlobResult> 
 
 export async function upsertUserBlob(
   username: string,
-  payload: ExportedAppData,
+  raw: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const client = supabaseClient();
@@ -51,7 +50,7 @@ export async function upsertUserBlob(
       .upsert(
         {
           username,
-          data: payload,
+          data: raw,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "username" },
@@ -66,4 +65,3 @@ export async function upsertUserBlob(
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
-

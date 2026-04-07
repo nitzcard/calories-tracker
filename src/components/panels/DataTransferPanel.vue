@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import type { AppLocale } from "../../types";
@@ -8,62 +8,15 @@ const props = defineProps<{
   locale: AppLocale;
   isBusy: boolean;
   status: "idle" | "exported" | "imported" | "failed";
-  cloudMode: "offline" | "cloud";
-  cloudUsername: string;
-  cloudConfirmedUsername?: string;
-  cloudPassphrase?: string;
-  isCloudBusy: boolean;
-  cloudStatus: "idle" | "synced" | "failed";
-  cloudLastSyncedAt: string;
-  cloudError: string;
-  supabaseConfigured: boolean;
 }>();
 
 const emit = defineEmits<{
   "export-data": [];
   "import-data": [payload: string];
-  "update:cloudMode": [value: "offline" | "cloud"];
-  "update:cloudUsername": [value: string];
-  "update:cloudPassphrase": [value: string];
-  "cloud-sync": [payload?: { passphrase?: string }];
 }>();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const { t } = useI18n();
-const isOnline = ref(typeof navigator === "undefined" ? true : navigator.onLine);
-const draftUsername = ref(props.cloudUsername);
-const draftPassphrase = ref(props.cloudPassphrase ?? "");
-
-watch(
-  () => props.cloudUsername,
-  (value) => {
-    draftUsername.value = value;
-  },
-);
-watch(
-  () => props.cloudPassphrase,
-  (value) => {
-    draftPassphrase.value = value ?? "";
-  },
-);
-
-function onOnline() {
-  isOnline.value = true;
-}
-
-function onOffline() {
-  isOnline.value = false;
-}
-
-onMounted(() => {
-  window.addEventListener("online", onOnline);
-  window.addEventListener("offline", onOffline);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("online", onOnline);
-  window.removeEventListener("offline", onOffline);
-});
 
 const statusText = computed(() => {
   switch (props.status) {
@@ -78,25 +31,6 @@ const statusText = computed(() => {
   }
 });
 
-const cloudStatusText = computed(() => {
-  if (props.cloudStatus === "synced") return t("cloudSyncSuccess");
-  if (props.cloudStatus === "failed") return t("cloudSyncFailed");
-  return "";
-});
-
-const cloudUsernameNormalized = computed(() => draftUsername.value.trim().toLowerCase());
-const cloudUsernameTooShort = computed(
-  () => props.cloudMode === "cloud" && cloudUsernameNormalized.value.length > 0 && cloudUsernameNormalized.value.length < 3,
-);
-const cloudConfirmedNormalized = computed(() => (props.cloudConfirmedUsername ?? "").trim().toLowerCase());
-const cloudHasConfirmedUser = computed(() => Boolean(cloudConfirmedNormalized.value));
-const cloudDraftDiffersFromConfirmed = computed(
-  () =>
-    cloudHasConfirmedUser.value &&
-    cloudUsernameNormalized.value.length > 0 &&
-    cloudConfirmedNormalized.value !== cloudUsernameNormalized.value,
-);
-
 const importFormat = `interface ExportedAppData {
   schemaVersion: "1";
   exportedAt: string;
@@ -104,19 +38,7 @@ const importFormat = `interface ExportedAppData {
   dailyEntries: DailyEntry[];
   foodRules: FoodRule[];
   syncQueue: SyncQueueItem[];
-  encryptedSecrets?: {
-    aiKeys?: EncryptedSecretBoxV1;
-  };
-}
-
-interface EncryptedSecretBoxV1 {
-  v: 1;
-  alg: "AES-GCM";
-  kdf: "PBKDF2";
-  iter: number;
-  saltB64: string;
-  ivB64: string;
-  ciphertextB64: string;
+  encryptedSecrets?: object;
 }
 
 interface Profile {
@@ -177,13 +99,6 @@ async function handleFilePick(event: Event) {
   emit("import-data", await file.text());
   (event.target as HTMLInputElement).value = "";
 }
-
-function syncToCloud() {
-  // Only commit the username when user explicitly approves sync.
-  emit("update:cloudUsername", draftUsername.value);
-  emit("update:cloudPassphrase", draftPassphrase.value);
-  emit("cloud-sync", { passphrase: draftPassphrase.value });
-}
 </script>
 
 <template>
@@ -192,87 +107,6 @@ function syncToCloud() {
       <summary class="transfer-summary">{{ t("dataToolsToggle") }}</summary>
 
       <div class="transfer-body">
-        <div class="cloud-block">
-          <strong>{{ t("cloudSyncTitle") }}</strong>
-          <p class="helper-text">{{ t("cloudSyncHelper") }}</p>
-          <div class="cloud-controls">
-            <label class="cloud-field">
-              <span class="cloud-label">{{ t("cloudMode") }}</span>
-              <select
-                :value="cloudMode"
-                @change="
-                  emit(
-                    'update:cloudMode',
-                    ($event.target as HTMLSelectElement).value as 'offline' | 'cloud',
-                  )
-                "
-              >
-                <option value="offline">{{ t("cloudModeOffline") }}</option>
-                <option value="cloud">{{ t("cloudModeCloud") }}</option>
-              </select>
-            </label>
-
-            <label class="cloud-field">
-              <span class="cloud-label">{{ t("cloudUsername") }}</span>
-              <input
-                :value="draftUsername"
-                :disabled="cloudMode !== 'cloud'"
-                @input="draftUsername = ($event.target as HTMLInputElement).value"
-              />
-            </label>
-
-            <label class="cloud-field cloud-passphrase">
-              <span class="cloud-label">{{ t("cloudPassphrase") }}</span>
-              <input
-                type="password"
-                autocomplete="off"
-                :value="draftPassphrase"
-                :disabled="cloudMode !== 'cloud'"
-                :placeholder="t('cloudPassphrasePlaceholder')"
-                @input="
-                  draftPassphrase = ($event.target as HTMLInputElement).value;
-                  emit('update:cloudPassphrase', draftPassphrase);
-                "
-              />
-            </label>
-
-            <button
-              class="secondary-action"
-              :disabled="
-                isCloudBusy ||
-                cloudMode !== 'cloud' ||
-                cloudUsernameNormalized.length < 3 ||
-                !supabaseConfigured ||
-                !isOnline
-              "
-              @click="syncToCloud"
-            >
-              <span v-if="isCloudBusy" class="button-feedback" aria-hidden="true"></span>
-              {{ t("cloudSyncNow") }}
-            </button>
-          </div>
-          <p v-if="cloudStatusText" class="status-line">
-            {{ cloudStatusText }}
-            <span v-if="cloudLastSyncedAt" class="muted">({{ cloudLastSyncedAt }})</span>
-          </p>
-          <p v-if="cloudMode === 'cloud' && !draftPassphrase.trim()" class="status-line">
-            {{ t("cloudPassphraseHint") }}
-          </p>
-          <p v-if="cloudError" class="status-line">{{ cloudError }}</p>
-          <p v-if="cloudDraftDiffersFromConfirmed" class="status-line">
-            {{ t("cloudUsernameNeedsSync") }}
-          </p>
-          <p v-if="cloudMode === 'cloud' && !draftUsername.trim()" class="status-line">
-            {{ t("cloudUsernameMissing") }}
-          </p>
-          <p v-else-if="cloudUsernameTooShort" class="status-line">
-            {{ t("cloudUsernameTooShort", { min: 3 }) }}
-          </p>
-          <p v-if="cloudMode === 'cloud' && !supabaseConfigured" class="status-line">
-            {{ t("cloudSupabaseMissing") }}
-          </p>
-        </div>
-
         <div class="actions-row">
           <button class="secondary-action" :disabled="isBusy" @click="emit('export-data')">
             {{ t("exportData") }}
@@ -315,50 +149,18 @@ function syncToCloud() {
   font-weight: 600;
 }
 
-	.transfer-body {
-	  display: grid;
-	  gap: 0;
-	  padding: 0 8px 8px;
-	}
+.transfer-body {
+  display: grid;
+  gap: 0;
+  padding: 0 8px 8px;
+}
 
-	.cloud-block {
-	  display: grid;
-	  gap: 6px;
-	  padding: 8px;
-	  border: 1px solid var(--border);
-	  background: var(--surface-2);
-	  box-shadow: var(--bevel-sunken);
-	  margin-block-start: 10px;
-	}
-
-	.cloud-controls {
-	  display: flex;
-	  flex-wrap: wrap;
-	  align-items: end;
-	  gap: 8px;
-	}
-
-	.cloud-field {
-	  display: grid;
-	  gap: 3px;
-	}
-
-  .cloud-passphrase {
-    min-inline-size: 16rem;
-    flex: 1;
-  }
-
-	.cloud-label {
-	  color: var(--text-muted);
-	  font-size: 0.85rem;
-	}
-
-	.actions-row {
-	  display: flex;
-	  gap: 8px;
-	  flex-wrap: wrap;
-	  margin-block-start: 10px;
-	}
+.actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-block-start: 10px;
+}
 
 .hidden-input {
   display: none;
