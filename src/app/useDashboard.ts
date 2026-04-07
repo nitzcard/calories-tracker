@@ -1,6 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { getStoredAiKeys, saveStoredAiKeys, type StoredAiKeys } from "../ai/credentials";
-import { listProviderOptions } from "../ai/registry";
 import { detectLocale, localeDirection, syncI18nLocale } from "../i18n";
 import {
   DASHBOARD_STORAGE_KEYS,
@@ -18,6 +17,8 @@ import {
   ensureDefaultProfile,
   getProfile,
   listEntries,
+  exportAppData,
+  importAppData,
   saveProfile,
   upsertDailyEntry,
 } from "../storage/repository";
@@ -32,6 +33,12 @@ import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
 import { applyTheme, detectThemeMode } from "../theme";
 import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation, ThemeMode } from "../types";
+import { fetchUserBlob, upsertUserBlob } from "../cloud/user-blob";
+import { isSupabaseConfigured } from "../cloud/supabase";
+import { decryptJsonWithPassphrase, encryptJsonWithPassphrase } from "../cloud/crypto";
+import { listProviderOptions, syncGeminiProviderOptions } from "../ai/registry";
+import { fetchGeminiModelOptions } from "../ai/gemini-models";
+import { mergeExportedAppData } from "../cloud/merge";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -48,6 +55,31 @@ export function useDashboard() {
   const aiKeys = ref<StoredAiKeys>(getStoredAiKeys());
   const notice = ref("");
   const autoSave = useAutoSaveState();
+  const cloudMode = ref<"offline" | "cloud">(
+    (localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudMode) as "offline" | "cloud" | null) ??
+      "offline",
+  );
+  const cloudUsername = ref(localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudUsername) ?? "");
+  const cloudConfirmedUsername = ref(
+    localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername) ?? "",
+  );
+  const isCloudBusy = ref(false);
+  const cloudStatus = ref<"idle" | "synced" | "failed">("idle");
+  const cloudLastSyncedAt = ref("");
+  const cloudError = ref("");
+  const supabaseConfigured = computed(() => isSupabaseConfigured());
+  const cloudPassphrase = ref("");
+  const cloudIsSyncing = ref(false);
+  let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
+  let cloudPushPending = false;
+
+  function normalizeUsername(value: string) {
+    return value.trim().toLowerCase();
+  }
+
+  function isUsernameValid(value: string) {
+    return normalizeUsername(value).length >= 3;
+  }
 
   const savedCurrentEntry = computed(() =>
     findEntryByDate(entries.value, selectedDate.value),
@@ -213,6 +245,7 @@ export function useDashboard() {
       await refreshState();
       currentWeight.value = rawWeight;
     }, "today.weight");
+    scheduleCloudPush("today.weight");
   }
 
   async function saveFoodDraft() {
@@ -223,6 +256,7 @@ export function useDashboard() {
       });
       await refreshState();
     }, "today.foodLog");
+    scheduleCloudPush("today.foodLog");
   }
 
   async function saveHistoryCalories(date: string, calories: number | null) {
@@ -233,6 +267,7 @@ export function useDashboard() {
       });
       await refreshState();
     }, `history.calories.${date}`);
+    scheduleCloudPush(`history.calories.${date}`);
   }
 
   async function saveProfileDraft(nextProfile?: Profile) {
@@ -242,6 +277,7 @@ export function useDashboard() {
       profile.value = profileToSave;
       await saveProfile(profileToSave);
     }, "constants.profile");
+    scheduleCloudPush("constants.profile");
   }
 
   async function saveActivityPrompt(activityPrompt: string) {
@@ -250,6 +286,7 @@ export function useDashboard() {
       profile.value = { ...profile.value!, activityPrompt };
       await saveProfile(profile.value);
     }, "constants.profile.activityPrompt");
+    scheduleCloudPush("constants.profile.activityPrompt");
   }
 
   async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
@@ -258,6 +295,7 @@ export function useDashboard() {
       profile.value = { ...profile.value!, tdeeEquation };
       await saveProfile(profile.value);
     }, "constants.profile.tdeeEquation");
+    scheduleCloudPush("constants.profile.tdeeEquation");
   }
 
   async function saveFoodInstructions(foodInstructions: string) {
@@ -266,6 +304,7 @@ export function useDashboard() {
       profile.value = { ...profile.value!, foodInstructions };
       await saveProfile(profile.value);
     }, "constants.foodInstructions");
+    scheduleCloudPush("constants.foodInstructions");
   }
 
   async function saveAiKey(providerKey: keyof StoredAiKeys, value: string) {
@@ -273,6 +312,9 @@ export function useDashboard() {
       aiKeys.value = { ...aiKeys.value, [providerKey]: value };
       saveStoredAiKeys(aiKeys.value);
     }, `credentials.${providerKey}`);
+    // Keys are stored separately from the IndexedDB backup; cloud sync can encrypt them
+    // only when a passphrase is provided.
+    scheduleCloudPush(`credentials.${providerKey}`);
   }
 
   function clearNotice() {
@@ -307,18 +349,250 @@ export function useDashboard() {
     return `calorie-tracker-backup-${day}-after-${date}.json`;
   }
 
+  async function cloudSyncNow(options?: { backupBeforePull?: boolean; username?: string; passphrase?: string }) {
+    if (cloudMode.value !== "cloud") {
+      cloudStatus.value = "idle";
+      cloudLastSyncedAt.value = "";
+      cloudError.value = "";
+      return;
+    }
+
+    const username = normalizeUsername(options?.username ?? cloudUsername.value);
+    if (!username) {
+      cloudStatus.value = "failed";
+      cloudError.value = "";
+      return;
+    }
+    if (!isUsernameValid(username)) {
+      cloudStatus.value = "failed";
+      cloudError.value = "";
+      return;
+    }
+
+    if (!supabaseConfigured.value) {
+      cloudStatus.value = "failed";
+      cloudError.value = "";
+      return;
+    }
+
+    isCloudBusy.value = true;
+    cloudIsSyncing.value = true;
+    cloudStatus.value = "idle";
+    cloudError.value = "";
+    try {
+      const localBefore = await exportAppData();
+      const remote = await fetchUserBlob(username);
+      if (!remote.ok) {
+        throw new Error(remote.error);
+      }
+
+      const remotePayload = remote.data?.payload ?? null;
+
+      // Decrypt keys (best-effort) from remote if present and passphrase is provided.
+      if (remotePayload?.encryptedSecrets?.aiKeys) {
+        const passphrase = (options?.passphrase ?? cloudPassphrase.value).trim();
+        if (passphrase) {
+          try {
+            const decrypted = await decryptJsonWithPassphrase<StoredAiKeys>(
+              remotePayload.encryptedSecrets.aiKeys,
+              passphrase,
+            );
+            aiKeys.value = {
+              gemini: decrypted.gemini ?? "",
+              deepseek: decrypted.deepseek ?? "",
+              kimi: decrypted.kimi ?? "",
+              groq: decrypted.groq ?? "",
+            };
+            saveStoredAiKeys(aiKeys.value);
+          } catch {
+            // Ignore bad passphrase: keep local keys.
+          }
+        }
+      }
+
+      // Two-way merge: keep newer daily entries on either side.
+      const merged = mergeExportedAppData(localBefore, remotePayload);
+
+      const passphrase = (options?.passphrase ?? cloudPassphrase.value).trim();
+      if (passphrase) {
+        merged.encryptedSecrets = {
+          ...(merged.encryptedSecrets ?? {}),
+          aiKeys: await encryptJsonWithPassphrase(aiKeys.value, passphrase),
+        };
+      }
+
+      if (remotePayload && options?.backupBeforePull !== false) {
+        // Backup the local copy before we replace local state with a merged copy.
+        await dataTransfer.exportData({
+          filename: `calorie-tracker-backup-${new Date().toISOString().slice(0, 10)}-before-cloud-merge-${username}.json`,
+        });
+      }
+
+      await importAppData(merged);
+      await refreshState();
+
+      const pushed = await upsertUserBlob(username, merged);
+      if (!pushed.ok) {
+        throw new Error(pushed.error);
+      }
+
+      cloudStatus.value = "synced";
+      cloudLastSyncedAt.value = new Date().toLocaleString();
+      cloudConfirmedUsername.value = username;
+      localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername, username);
+      cloudUsername.value = username;
+      localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, username);
+    } catch (err) {
+      cloudStatus.value = "failed";
+      cloudError.value = err instanceof Error ? err.message : String(err);
+    } finally {
+      isCloudBusy.value = false;
+      cloudIsSyncing.value = false;
+    }
+  }
+
+  function canAutoCloudSync() {
+    if (cloudMode.value !== "cloud") return false;
+    if (!supabaseConfigured.value) return false;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+    const normalized = normalizeUsername(cloudUsername.value);
+    return cloudConfirmedUsername.value === normalized && isUsernameValid(normalized);
+  }
+
+  function scheduleCloudPush(_reason: string) {
+    if (!canAutoCloudSync()) return;
+    cloudPushPending = true;
+    if (cloudPushTimer) clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(() => {
+      void runCloudPush();
+    }, 900);
+  }
+
+  async function runCloudPush() {
+    if (!canAutoCloudSync()) {
+      cloudPushPending = false;
+      return;
+    }
+    if (!cloudPushPending) return;
+    if (isCloudBusy.value) {
+      // Try again after the current sync finishes.
+      cloudPushTimer = setTimeout(() => void runCloudPush(), 1000);
+      return;
+    }
+
+    try {
+      cloudPushPending = false;
+      const normalized = normalizeUsername(cloudUsername.value);
+      isCloudBusy.value = true;
+      cloudIsSyncing.value = true;
+      cloudError.value = "";
+
+      const local = await exportAppData();
+      const remote = await fetchUserBlob(normalized);
+      const remotePayload = remote.ok ? remote.data?.payload ?? null : null;
+      const merged = mergeExportedAppData(local, remotePayload);
+
+      const passphrase = cloudPassphrase.value.trim();
+      if (passphrase) {
+        merged.encryptedSecrets = {
+          ...(merged.encryptedSecrets ?? {}),
+          aiKeys: await encryptJsonWithPassphrase(aiKeys.value, passphrase),
+        };
+      }
+
+      const pushed = await upsertUserBlob(normalized, merged);
+      if (!pushed.ok) throw new Error(pushed.error);
+      cloudStatus.value = "synced";
+      cloudLastSyncedAt.value = new Date().toLocaleString();
+    } catch (err) {
+      cloudStatus.value = "failed";
+      cloudError.value = err instanceof Error ? err.message : String(err);
+    } finally {
+      isCloudBusy.value = false;
+      cloudIsSyncing.value = false;
+    }
+  }
+
+  function setCloudMode(next: "offline" | "cloud") {
+    cloudMode.value = next;
+    localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudMode, next);
+  }
+
+  function setCloudUsername(next: string) {
+    cloudUsername.value = next;
+    localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, next);
+    const normalized = normalizeUsername(next);
+    if (cloudConfirmedUsername.value && cloudConfirmedUsername.value !== normalized) {
+      cloudStatus.value = "idle";
+      cloudLastSyncedAt.value = "";
+      cloudError.value = "";
+    }
+  }
+
+  function setCloudPassphrase(next: string) {
+    cloudPassphrase.value = next;
+  }
+
   async function analyzeCurrentDay() {
     await analysis.analyzeCurrentDay();
     const finished = findEntryByDate(entries.value, selectedDate.value);
     if (finished?.aiStatus === "done" && finished.nutritionSnapshot) {
       // Best-effort: some browsers may block non-user-gesture downloads.
       await dataTransfer.exportData({ filename: autoExportFilename(selectedDate.value) });
+      const normalized = normalizeUsername(cloudUsername.value);
+      if (
+        cloudMode.value === "cloud" &&
+        supabaseConfigured.value &&
+        cloudConfirmedUsername.value === normalized &&
+        isUsernameValid(normalized)
+      ) {
+        const local = await exportAppData();
+        const pushed = await upsertUserBlob(normalized, local);
+        if (pushed.ok) {
+          cloudStatus.value = "synced";
+          cloudLastSyncedAt.value = new Date().toLocaleString();
+          cloudError.value = "";
+        }
+      }
     }
   }
 
   watch(selectedDate, loadSelectedEntry);
   watch(locale, syncChrome);
   watch(themeMode, syncChrome);
+
+  watch(
+    () => aiKeys.value.gemini,
+    async (key) => {
+      const effectiveKey = (key || import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+      if (!effectiveKey) {
+        providerOptions.value = listProviderOptions();
+        return;
+      }
+      try {
+        const geminiOptions = await fetchGeminiModelOptions(effectiveKey);
+        syncGeminiProviderOptions(geminiOptions);
+        providerOptions.value = listProviderOptions();
+      } catch {
+        providerOptions.value = listProviderOptions();
+      }
+    },
+    { immediate: true },
+  );
+
+  const didInitCloudSync = ref(false);
+
+  async function maybeInitCloudSync() {
+    if (didInitCloudSync.value) return;
+    if (cloudMode.value !== "cloud") return;
+    if (!supabaseConfigured.value) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const username = normalizeUsername(cloudConfirmedUsername.value);
+    if (!isUsernameValid(username)) return;
+
+    didInitCloudSync.value = true;
+    await cloudSyncNow({ username, backupBeforePull: false });
+  }
 
   onMounted(async () => {
     profile.value = await ensureDefaultProfile(locale.value, themeMode.value);
@@ -334,6 +608,7 @@ export function useDashboard() {
     await saveProfile(profile.value);
     syncChrome();
     await refreshState();
+    await maybeInitCloudSync();
     void analysis.flushPendingAnalysis(false);
   });
 
@@ -381,6 +656,16 @@ export function useDashboard() {
     caloriePoints,
     savingHistoryCalories: autoSave.savingHistoryCalories,
     notice,
+    cloudMode,
+    cloudUsername,
+    cloudConfirmedUsername,
+    cloudPassphrase,
+    isCloudBusy,
+    isCloudSyncing: cloudIsSyncing,
+    cloudStatus,
+    cloudLastSyncedAt,
+    cloudError,
+    supabaseConfigured,
     dataTransferStatus: dataTransfer.dataTransferStatus,
     isTransferringData: dataTransfer.isTransferringData,
     statusLabel,
@@ -397,9 +682,22 @@ export function useDashboard() {
     saveTdeeEquation,
     saveFoodInstructions,
     saveAiKey,
-    saveFoodCorrection: corrections.saveFoodCorrection,
+    saveFoodCorrection: async (
+      foodId: string,
+      foodName: string,
+      grams: number | null,
+      calories: number | null,
+      caloriesPer100g: number | null,
+    ) => {
+      await corrections.saveFoodCorrection(foodId, foodName, grams, calories, caloriesPer100g);
+      scheduleCloudPush("nutrition.correction");
+    },
     exportData: dataTransfer.exportData,
     importData: dataTransfer.importData,
+    setCloudMode,
+    setCloudUsername,
+    setCloudPassphrase,
+    cloudSyncNow,
     clearNotice,
   };
 }

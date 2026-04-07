@@ -12,7 +12,7 @@ const providers = new Map<string, AIProvider>([
   ],
 ]);
 
-const providerOptions: AiProviderOption[] = [
+let providerOptions: AiProviderOption[] = [
   {
     id: "gemini-2.5-flash",
     label: "Gemini 2.5 Flash",
@@ -51,4 +51,25 @@ export function isSupportedProviderOption(id: string): boolean {
 
 export function providerHasKey(id: string): boolean {
   return Boolean(readApiKeyForProvider(id));
+}
+
+export function syncGeminiProviderOptions(models: AiProviderOption[]) {
+  // Merge dynamic Gemini options (from models.list) into the registry.
+  const byId = new Map(providerOptions.map((o) => [o.id, o]));
+  for (const option of models) {
+    if (!option.id.startsWith("gemini-")) continue;
+    byId.set(option.id, option);
+    if (!providers.has(option.id)) {
+      providers.set(option.id, new GeminiProvider(option.id, option.label));
+    }
+  }
+
+  providerOptions = Array.from(byId.values());
+  // Keep a stable sort: non-experimental first, then label.
+  providerOptions.sort((a, b) => {
+    const ea = a.experimental ? 1 : 0;
+    const eb = b.experimental ? 1 : 0;
+    if (ea !== eb) return ea - eb;
+    return a.label.localeCompare(b.label);
+  });
 }

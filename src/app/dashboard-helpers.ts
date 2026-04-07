@@ -5,6 +5,9 @@ export const DASHBOARD_STORAGE_KEYS = {
   locale: "calorie-tracker.locale",
   themeMode: "calorie-tracker.theme-mode",
   aiModel: "calorie-tracker.ai-model",
+  cloudMode: "calorie-tracker.cloud-mode",
+  cloudUsername: "calorie-tracker.cloud-username",
+  cloudConfirmedUsername: "calorie-tracker.cloud-confirmed-username",
 } as const;
 
 export function normalizeProvider(value: string | null): string {

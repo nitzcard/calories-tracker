@@ -26,7 +26,9 @@ const emit = defineEmits<{
 
 const editableMeals = ref<MealBreakdownItem[]>([]);
 const showCorrectionCue = ref(false);
+const showNewResultsCue = ref(false);
 let correctionCueTimeout: ReturnType<typeof setTimeout> | null = null;
+let newResultsCueTimeout: ReturnType<typeof setTimeout> | null = null;
 const { t } = useI18n();
 const visibleUnmatchedItems = computed(() =>
   (props.entry?.nutritionSnapshot?.unmatchedItems ?? []).filter(
@@ -62,6 +64,22 @@ watch(
     correctionCueTimeout = setTimeout(() => {
       showCorrectionCue.value = false;
     }, 2600);
+  },
+);
+
+watch(
+  () => props.entry?.nutritionSnapshot?.updatedAt ?? null,
+  (next, previous) => {
+    // Flash only when results appear for the first time.
+    if (next && !previous) {
+      showNewResultsCue.value = true;
+      if (newResultsCueTimeout) {
+        clearTimeout(newResultsCueTimeout);
+      }
+      newResultsCueTimeout = setTimeout(() => {
+        showNewResultsCue.value = false;
+      }, 1350);
+    }
   },
 );
 
@@ -254,6 +272,7 @@ const proteinPerLeanBodyWeight = computed(() => {
 <template>
   <BasePanel
     class="summary-panel"
+    :class="{ 'results-flash': showNewResultsCue }"
     id="nutritionSummaryPanel"
     :title="t('nutritionSummary')"
     :helper="t('nutritionHelper')"
@@ -345,11 +364,6 @@ const proteinPerLeanBodyWeight = computed(() => {
         >
           <div class="meal-header">
             <strong>{{ displayMealLabel(meal.mealKey, meal.mealLabel) }}</strong>
-            <span class="meal-total">
-              {{ t("mealTotal") }}: {{ meal.totals.calories ?? "-" }} {{ t("unitKcal") }} /
-              {{ t("protein") }} {{ meal.totals.protein ?? "-" }} / {{ t("carbs") }}
-              {{ meal.totals.carbs ?? "-" }} / {{ t("fat") }} {{ meal.totals.fat ?? "-" }}
-            </span>
           </div>
 
           <div class="meal-table-wrap">
@@ -516,6 +530,15 @@ const proteinPerLeanBodyWeight = computed(() => {
               </div>
             </div>
           </div>
+
+          <div class="meal-footer">
+            <span class="meal-total">
+              {{ t("mealTotal") }}: {{ meal.totals.calories ?? "-" }} {{ t("unitKcal") }} /
+              {{ t("protein") }} {{ meal.totals.protein ?? "-" }} / {{ t("carbs") }}
+              {{ meal.totals.carbs ?? "-" }} / {{ t("fat") }} {{ meal.totals.fat ?? "-" }} /
+              {{ t("fiber") }} {{ meal.totals.fiber ?? "-" }}
+            </span>
+          </div>
         </div>
       </div>
     </template>
@@ -532,6 +555,25 @@ const proteinPerLeanBodyWeight = computed(() => {
 <style scoped>
 .summary-panel {
   align-self: start;
+}
+
+.results-flash :deep(.panel__body) {
+  animation: resultsFlash 1350ms ease-out 1;
+}
+
+@keyframes resultsFlash {
+  0% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+    filter: brightness(1.08);
+  }
+  60% {
+    box-shadow: 0 0 0 2px transparent;
+    filter: brightness(1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    filter: brightness(1);
+  }
 }
 
 .status-pill {
@@ -668,6 +710,15 @@ const proteinPerLeanBodyWeight = computed(() => {
 .meal-total,
 .food-meta {
   color: var(--text-muted);
+}
+
+.meal-footer {
+  display: flex;
+  justify-content: flex-end;
+  justify-content: end;
+  padding-block-start: 4px;
+  border-block-start: 1px solid var(--meal-border, var(--border));
+  text-align: end;
 }
 
 .meal-table-wrap {

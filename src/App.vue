@@ -86,11 +86,25 @@ const {
   saveFoodInstructions,
   saveAiKey,
   saveFoodCorrection,
-  exportData,
-  importData,
-  notice,
-  clearNotice,
-} = dashboard;
+	  exportData,
+	  importData,
+	  cloudMode,
+	  cloudUsername,
+	  cloudConfirmedUsername,
+    cloudPassphrase,
+	  isCloudBusy,
+    isCloudSyncing,
+	  cloudStatus,
+	  cloudLastSyncedAt,
+	  cloudError,
+	  supabaseConfigured,
+	  setCloudMode,
+	  setCloudUsername,
+    setCloudPassphrase,
+	  cloudSyncNow,
+	  notice,
+	  clearNotice,
+	} = dashboard;
 
 const appSetupOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.appSetup) ?? false);
 const constantDataOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.constantData) ?? false);
@@ -189,6 +203,9 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       :is-saving-locale="isSavingLocale"
       :is-saving-theme="isSavingTheme"
       :is-saving-provider="isSavingProvider"
+      :cloud-mode="cloudMode"
+      :cloud-confirmed-username="cloudConfirmedUsername"
+      :is-cloud-busy="isCloudSyncing"
       @locale-change="onLocaleChange"
       @theme-change="onThemeChange"
       @provider-change="onProviderChange"
@@ -229,8 +246,21 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
             :locale="locale"
             :is-busy="isTransferringData"
             :status="dataTransferStatus"
+            :cloud-mode="cloudMode"
+            :cloud-username="cloudUsername"
+            :cloud-confirmed-username="cloudConfirmedUsername"
+            :cloud-passphrase="cloudPassphrase"
+            :is-cloud-busy="isCloudBusy"
+            :cloud-status="cloudStatus"
+            :cloud-last-synced-at="cloudLastSyncedAt"
+            :cloud-error="cloudError"
+            :supabase-configured="supabaseConfigured"
             @export-data="exportData"
             @import-data="importData"
+            @update:cloud-mode="setCloudMode"
+            @update:cloud-username="setCloudUsername"
+            @update:cloud-passphrase="setCloudPassphrase"
+            @cloud-sync="cloudSyncNow($event)"
           />
         </div>
       </div>
@@ -292,6 +322,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :is-profile-ready="isProfileReady"
           :provider="provider"
           :analyze-issue="analyzeIssue"
+          :analysis-error="currentEntry?.aiError ?? null"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
           :food-instructions="profile.foodInstructions"

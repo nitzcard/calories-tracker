@@ -13,6 +13,9 @@ const props = defineProps<{
   isSavingLocale: boolean;
   isSavingTheme: boolean;
   isSavingProvider: boolean;
+  cloudMode: "offline" | "cloud";
+  cloudConfirmedUsername: string;
+  isCloudBusy: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -26,6 +29,20 @@ const activeProvider = computed(() =>
 );
 
 const { t } = useI18n();
+
+const syncIndicator = computed(() => {
+  const normalized = props.cloudConfirmedUsername.trim();
+  if (props.cloudMode === "cloud") {
+    if (normalized) return t("syncIndicatorCloud", { username: normalized });
+    return t("syncIndicatorCloudPending");
+  }
+  return t("syncIndicatorLocal");
+});
+
+const showCloudIndicator = computed(() => props.cloudMode === "cloud" && Boolean(props.cloudConfirmedUsername.trim()));
+const showCloudPending = computed(
+  () => props.cloudMode === "cloud" && !Boolean(props.cloudConfirmedUsername.trim()),
+);
 </script>
 
 <template>
@@ -34,6 +51,17 @@ const { t } = useI18n();
       <h1 class="title">
         <span>{{ t("appTitle") }}</span>
         <span class="beta-pill">{{ t("beta") }}</span>
+        <span class="sync-pill" :class="{ cloud: showCloudIndicator, pending: showCloudPending }">
+          <span
+            class="live-dot"
+            :class="{ blinking: isCloudBusy }"
+            aria-hidden="true"
+            title="sync status"
+          >
+            ●
+          </span>
+          {{ syncIndicator }}
+        </span>
         <a
           class="feedback-pill"
           href="https://github.com/nitzcard/calories-tracker/issues"
@@ -120,6 +148,7 @@ const { t } = useI18n();
   display: inline-flex;
   gap: 0.5rem;
   align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .beta-pill {
@@ -147,6 +176,66 @@ const { t } = useI18n();
 
 .feedback-pill:hover {
   text-decoration: underline;
+}
+
+.sync-pill {
+  padding: 0 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: var(--bevel-raised);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.sync-pill.cloud {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+
+.sync-pill.pending {
+  border-color: color-mix(in srgb, #eab308 60%, var(--border));
+  background: color-mix(in srgb, #eab308 12%, var(--surface-2));
+}
+
+.live-dot {
+  font-size: 0.9em;
+  line-height: 1;
+  color: #a3a3a3;
+  opacity: 0.75;
+}
+
+.sync-pill.cloud .live-dot {
+  color: #4ade80;
+}
+
+.sync-pill.pending .live-dot {
+  color: #eab308;
+}
+
+.live-dot.blinking {
+  animation: liveBlink 850ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot.blinking {
+    animation: none;
+  }
+}
+
+@keyframes liveBlink {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .controls-grid {

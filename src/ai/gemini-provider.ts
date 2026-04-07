@@ -36,28 +36,32 @@ export class GeminiProvider implements AIProvider {
       );
     }
 
-    const response = await fetch(this.buildEndpoint(apiKey), {
+    const endpoint = this.buildEndpoint(apiKey);
+    const body = JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: buildGeminiNutritionPrompt(input) }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.15,
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA,
+      },
+    });
+
+    const response = await fetchWithRetry(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: buildGeminiNutritionPrompt(input) }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.15,
-          responseMimeType: "application/json",
-          responseSchema: GEMINI_RESPONSE_SCHEMA,
-        },
-      }),
+      body,
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini request failed with status ${response.status}.`);
+      const errorMessage = await readGeminiErrorMessage(response);
+      throw new Error(errorMessage ?? `Gemini request failed with status ${response.status}.`);
     }
 
     const payload = (await response.json()) as GeminiGenerateContentResponse;
@@ -83,5 +87,47 @@ export class GeminiProvider implements AIProvider {
     }
 
     return text;
+  }
+}
+
+async function fetchWithRetry(url: string, init: RequestInit) {
+  const maxAttempts = 4;
+  const retryable = new Set([429, 503, 504]);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(url, init);
+    if (!retryable.has(response.status) || attempt === maxAttempts) {
+      return response;
+    }
+
+    // Exponential backoff with jitter. 503 (high demand) is usually temporary.
+    const base = 450 * Math.pow(2, attempt - 1);
+    const jitter = Math.round(Math.random() * 180);
+    await new Promise((resolve) => window.setTimeout(resolve, base + jitter));
+  }
+
+  // Unreachable due to return in loop, but TS likes a return.
+  return fetch(url, init);
+}
+
+async function readGeminiErrorMessage(response: Response) {
+  try {
+    const text = await response.text();
+    if (!text) return null;
+
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: string } };
+      const msg = parsed.error?.message?.trim();
+      if (msg) {
+        return `Gemini error (${response.status}): ${msg}`;
+      }
+    } catch {
+      // ignore json parse error
+    }
+
+    const clipped = text.length > 240 ? `${text.slice(0, 240)}…` : text;
+    return `Gemini error (${response.status}): ${clipped}`;
+  } catch {
+    return null;
   }
 }

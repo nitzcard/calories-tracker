@@ -7,6 +7,7 @@ import type {
   Profile,
   SyncQueueItem,
 } from "../types";
+import type { EncryptedSecretBoxV1 } from "../cloud/crypto";
 
 export interface ExportedAppData {
   schemaVersion: "1";
@@ -15,6 +16,9 @@ export interface ExportedAppData {
   dailyEntries: DailyEntry[];
   foodRules: FoodRule[];
   syncQueue: SyncQueueItem[];
+  encryptedSecrets?: {
+    aiKeys?: EncryptedSecretBoxV1;
+  };
 }
 
 const DEFAULT_PROFILE: Profile = {

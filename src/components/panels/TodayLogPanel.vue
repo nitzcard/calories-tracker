@@ -16,6 +16,7 @@ const props = defineProps<{
   isProfileReady: boolean;
   provider: string;
   analyzeIssue: string;
+  analysisError?: string | null;
   isSavingWeight: boolean;
   isSavingFoodLog: boolean;
   embedded?: boolean;
@@ -200,7 +201,10 @@ function missingKeyText(provider: string) {
           {{ t("jumpToResults") }}
         </a>
       </div>
-      <p v-if="analyzeIssue" class="analyze-issue">
+      <p v-if="analysisError" class="analyze-error">
+        {{ analysisError }}
+      </p>
+      <p v-else-if="analyzeIssue" class="analyze-issue">
         {{ issueText }}
       </p>
     </div>
@@ -323,6 +327,18 @@ function missingKeyText(provider: string) {
   background: #7a3d36;
   border: 1px solid #4e221d;
   box-shadow: var(--bevel-raised);
+}
+
+.analyze-error {
+  margin: 6px 0 0;
+  color: #fff1ef;
+  max-inline-size: 46rem;
+  display: inline-block;
+  padding: 0.35rem 0.55rem;
+  background: #7a3d36;
+  border: 1px solid #4e221d;
+  box-shadow: var(--bevel-raised);
+  white-space: pre-wrap;
 }
 
 @media (max-width: 640px) {

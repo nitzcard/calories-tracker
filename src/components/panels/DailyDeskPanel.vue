@@ -15,6 +15,7 @@ defineProps<{
   isProfileReady: boolean;
   provider: string;
   analyzeIssue: string;
+  analysisError?: string | null;
   isSavingWeight: boolean;
   isSavingFoodLog: boolean;
   foodInstructions: string;
@@ -50,6 +51,7 @@ const { t } = useI18n();
           :is-profile-ready="isProfileReady"
           :provider="provider"
           :analyze-issue="analyzeIssue"
+          :analysis-error="analysisError"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
           @update:selected-date="emit('update:selectedDate', $event)"
