@@ -3,15 +3,15 @@
 
 <img width="1460" height="858" alt="image" src="https://github.com/user-attachments/assets/b885ab5e-3942-4b4b-8a61-50a896c31b43" />
 
-## Deploy (Static.app)
+## Deploy (Surge)
 
 This repo includes a GitHub Actions workflow that deploys on every push to `main`.
 
 ### Required GitHub Secrets
 
-- `STATIC_APP_API_KEY`: your Static.app API key
-- (Optional) `STATIC_APP_PID`: set this after your first deploy to keep updating the same site
-- (Optional, for Cloud Sync) `VITE_SUPABASE_URL`: Supabase project URL
-- (Optional, for Cloud Sync) `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
+- `SURGE_DOMAIN`: the full Surge domain to deploy to (example: `calories-tracker.surge.sh`)
+- `SURGE_TOKEN`: Surge token (generate locally via `surge token`)
+- `VITE_SUPABASE_URL`: Supabase project URL
+- `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
 
 Add these at: GitHub repo → Settings → Secrets and variables → Actions → “New repository secret”.
