@@ -107,9 +107,9 @@ const confirmedUserTag = computed(() => {
               <option value="light">{{ t("light") }}</option>
               <option value="dark">{{ t("dark") }}</option>
               <option value="purple-dark">{{ t("purpleDark") }}</option>
-              <option value="counter-strike">{{ t("counterStrike") }}</option>
-              <option value="nord-dark">{{ t("nordDark") }}</option>
-              <option value="solarized-dark">{{ t("solarizedDark") }}</option>
+              <option value="cs16">{{ t("cs16") }}</option>
+              <option value="steam">{{ t("steam") }}</option>
+              <option value="cyberpunk-2077">{{ t("cyberpunk2077") }}</option>
             </select>
           </FieldControl>
         </FormField>

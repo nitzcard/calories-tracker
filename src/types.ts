@@ -3,9 +3,9 @@ export type ThemeMode =
   | "light"
   | "dark"
   | "purple-dark"
-  | "counter-strike"
-  | "nord-dark"
-  | "solarized-dark";
+  | "cs16"
+  | "steam"
+  | "cyberpunk-2077";
 export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";

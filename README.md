@@ -11,5 +11,7 @@ This repo includes a GitHub Actions workflow that deploys on every push to `main
 
 - `STATIC_APP_API_KEY`: your Static.app API key
 - (Optional) `STATIC_APP_PID`: set this after your first deploy to keep updating the same site
+- (Optional, for Cloud Sync) `VITE_SUPABASE_URL`: Supabase project URL
+- (Optional, for Cloud Sync) `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
 
 Add these at: GitHub repo → Settings → Secrets and variables → Actions → “New repository secret”.

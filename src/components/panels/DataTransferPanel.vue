@@ -58,9 +58,9 @@ interface Profile {
     | "light"
     | "dark"
     | "purple-dark"
-    | "counter-strike"
-    | "nord-dark"
-    | "solarized-dark";
+    | "cs16"
+    | "steam"
+    | "cyberpunk-2077";
 }
 
 interface DailyEntry {

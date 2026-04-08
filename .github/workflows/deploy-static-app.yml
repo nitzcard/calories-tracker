@@ -20,12 +20,14 @@ jobs:
 
       - name: Deploy
         uses: designmodo/static-app-deploy-action@v1.0.0
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         with:
           api-key: ${{ secrets.STATIC_APP_API_KEY }}
           # Optional: set this after your first deploy to update the same site each push
-          pid: ${{ secrets.STATIC_APP_PID }}
+          # pid: ${{ secrets.STATIC_APP_PID }}
           node-version: "20"
           install-command: "npm ci"
           build-command: "npm run build"
           build-dir: "dist"
-

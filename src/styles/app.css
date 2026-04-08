@@ -1,3 +1,7 @@
+a[attr*="freeplain"] {
+  display: none;
+}
+
 :root {
   color-scheme: light;
   --bg: #c3beb2;
@@ -128,88 +132,121 @@
   background: #17131f;
 }
 
-:root[data-theme="counter-strike"] {
+:root[data-theme="cs16"] {
   color-scheme: dark;
-  --bg: #0b1008;
-  --panel: #11190d;
-  --surface-1: #1a2413;
-  --surface-2: #141e0f;
-  --surface-3: #0f160b;
-  --border: #5b6a55;
-  --border-strong: #a6b39e;
-  --text-primary: #e6efe0;
-  --text-muted: #b4c2ac;
-  --accent: #9ad24a; /* HUD-ish green */
-  --accent-soft: rgba(154, 210, 74, 0.14);
+  --bg: #1e1d14;
+  --panel: #2b2a1d;
+  --surface-1: #363423;
+  --surface-2: #2f2d20;
+  --surface-3: #252318;
+  --border: #6e653d;
+  --border-strong: #cbbf79;
+  --text-primary: #f2f0c8;
+  --text-muted: #c7c08b;
+  --accent: #ffcc33;
+  --accent-soft: rgba(255, 204, 51, 0.14);
+  --shadow: none;
+  --bevel-raised:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.08),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.38);
+  --bevel-sunken:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.36),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.06);
   --surface: var(--surface-2);
-  --input-bg: #0f160b;
-  --input-border: #6a7a62;
-  --input-focus: #c4ff6d;
-  --pill: #1a2413;
-  --pill-text: #e6efe0;
-  --required-pane-bg: color-mix(in srgb, #ef4444 12%, var(--panel));
-  --required-pane-border: color-mix(in srgb, #ef4444 55%, var(--border-strong));
-  --required-outline: #ef4444;
-  --input-disabled-bg: color-mix(in srgb, var(--surface-3) 72%, var(--input-bg));
-  --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
-  --input-disabled-stripe: rgba(230, 239, 224, 0.07);
-  background: #0b1008;
-}
-
-:root[data-theme="nord-dark"] {
-  color-scheme: dark;
-  --bg: #2e3440;
-  --panel: #3b4252;
-  --surface-1: #434c5e;
-  --surface-2: #3a4252;
-  --surface-3: #333b49;
-  --border: #6b7686;
-  --border-strong: #d8dee9;
-  --text-primary: #eceff4;
-  --text-muted: #c0c8d6;
-  --accent: #88c0d0;
-  --accent-soft: rgba(136, 192, 208, 0.14);
-  --surface: var(--surface-2);
-  --input-bg: #2e3440;
-  --input-border: #6b7686;
-  --input-focus: #8fbcbb;
-  --pill: #434c5e;
-  --pill-text: #eceff4;
-  --required-pane-bg: color-mix(in srgb, #ef4444 12%, var(--panel));
-  --required-pane-border: color-mix(in srgb, #ef4444 55%, var(--border-strong));
-  --required-outline: #ef4444;
+  --input-bg: #1a190f;
+  --input-border: #7b7246;
+  --input-focus: #ffd666;
   --input-disabled-bg: color-mix(in srgb, var(--surface-3) 70%, var(--input-bg));
   --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
-  --input-disabled-stripe: rgba(236, 239, 244, 0.07);
-  background: #2e3440;
-}
-
-:root[data-theme="solarized-dark"] {
-  color-scheme: dark;
-  --bg: #002b36;
-  --panel: #073642;
-  --surface-1: #0a3f4c;
-  --surface-2: #06313b;
-  --surface-3: #052a33;
-  --border: #586e75;
-  --border-strong: #93a1a1;
-  --text-primary: #eee8d5;
-  --text-muted: #c4bda7;
-  --accent: #268bd2;
-  --accent-soft: rgba(38, 139, 210, 0.14);
-  --surface: var(--surface-2);
-  --input-bg: #002b36;
-  --input-border: #586e75;
-  --input-focus: #2aa198;
-  --pill: #0a3f4c;
-  --pill-text: #eee8d5;
+  --input-disabled-stripe: rgba(242, 240, 200, 0.06);
+  --pill: #342f1c;
+  --pill-text: #f2f0c8;
+  --compact-control-inline-size: 11rem;
+  --text-control-inline-size: 18rem;
+  --controls-gap: 6px;
+  --controls-min: 180px;
   --required-pane-bg: color-mix(in srgb, #ef4444 12%, var(--panel));
   --required-pane-border: color-mix(in srgb, #ef4444 55%, var(--border-strong));
   --required-outline: #ef4444;
+  background: var(--bg);
+}
+
+:root[data-theme="steam"] {
+  color-scheme: dark;
+  --bg: #171a21;
+  --panel: #1b2838;
+  --surface-1: #243447;
+  --surface-2: #1f2b3b;
+  --surface-3: #192432;
+  --border: #3a4a5f;
+  --border-strong: #6b88a6;
+  --text-primary: #c7d5e0;
+  --text-muted: #8f98a0;
+  --accent: #66c0f4;
+  --accent-soft: rgba(102, 192, 244, 0.14);
+  --shadow: none;
+  --bevel-raised:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.06),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.34);
+  --bevel-sunken:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.34),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.05);
+  --surface: var(--surface-2);
+  --input-bg: #0f151d;
+  --input-border: #3a4a5f;
+  --input-focus: #93d7ff;
   --input-disabled-bg: color-mix(in srgb, var(--surface-3) 70%, var(--input-bg));
   --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
-  --input-disabled-stripe: rgba(238, 232, 213, 0.07);
-  background: #002b36;
+  --input-disabled-stripe: rgba(199, 213, 224, 0.06);
+  --pill: #223143;
+  --pill-text: #c7d5e0;
+  --compact-control-inline-size: 11rem;
+  --text-control-inline-size: 18rem;
+  --controls-gap: 6px;
+  --controls-min: 180px;
+  --required-pane-bg: color-mix(in srgb, #ef4444 12%, var(--panel));
+  --required-pane-border: color-mix(in srgb, #ef4444 55%, var(--border-strong));
+  --required-outline: #ef4444;
+  background: var(--bg);
+}
+
+:root[data-theme="cyberpunk-2077"] {
+  color-scheme: dark;
+  --bg: #0b0b16;
+  --panel: #111027;
+  --surface-1: #17143a;
+  --surface-2: #121132;
+  --surface-3: #0f0e25;
+  --border: #3b2aa3;
+  --border-strong: #7c5cff;
+  --text-primary: #f7f7ff;
+  --text-muted: #b8b6d6;
+  --accent: #fcee0a;
+  --accent-soft: rgba(252, 238, 10, 0.14);
+  --shadow: none;
+  --bevel-raised:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.07),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.38);
+  --bevel-sunken:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.36),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.05);
+  --surface: var(--surface-2);
+  --input-bg: #0a0919;
+  --input-border: #4b3bd6;
+  --input-focus: #05d9e8;
+  --input-disabled-bg: color-mix(in srgb, var(--surface-3) 70%, var(--input-bg));
+  --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
+  --input-disabled-stripe: rgba(247, 247, 255, 0.06);
+  --pill: #17143a;
+  --pill-text: #f7f7ff;
+  --compact-control-inline-size: 11rem;
+  --text-control-inline-size: 18rem;
+  --controls-gap: 6px;
+  --controls-min: 180px;
+  --required-pane-bg: color-mix(in srgb, #ff2a6d 12%, var(--panel));
+  --required-pane-border: color-mix(in srgb, #ff2a6d 55%, var(--border-strong));
+  --required-outline: #ff2a6d;
+  background: var(--bg);
 }
 
 * {

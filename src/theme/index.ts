@@ -6,7 +6,7 @@ export function detectThemeMode(): ThemeMode {
 
 export function resolveTheme(
   mode: ThemeMode,
-): "light" | "dark" | "purple-dark" | "counter-strike" | "nord-dark" | "solarized-dark" {
+): "light" | "dark" | "purple-dark" | "cs16" | "steam" | "cyberpunk-2077" {
   if (mode !== "system") {
     return mode;
   }

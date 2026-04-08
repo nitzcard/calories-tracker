@@ -65,9 +65,9 @@ export function readStoredThemeMode(): ThemeMode | null {
     value === "light" ||
     value === "dark" ||
     value === "purple-dark" ||
-    value === "counter-strike" ||
-    value === "nord-dark" ||
-    value === "solarized-dark"
+    value === "cs16" ||
+    value === "steam" ||
+    value === "cyberpunk-2077"
     ? value
     : null;
 }
