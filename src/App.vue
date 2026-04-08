@@ -54,6 +54,7 @@ const {
   aiKeys,
   dataTransferStatus,
   isAnalyzing,
+  isAutoSaving,
   isTransferringData,
   isSavingWeight,
   isSavingFoodLog,
@@ -92,6 +93,7 @@ const {
 	  cloudMode,
 	  cloudUsername,
 	  cloudConfirmedUsername,
+    hasSavedCloudPassword,
 	  isCloudBusy,
     isCloudSyncing,
 	  cloudStatus,
@@ -111,6 +113,8 @@ const constantDataOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.constantData) ?? fal
 const didInitializePanels = ref(false);
 const tdeeHighlightToken = ref(0);
 const correctionNoticeToken = ref(0);
+const transientToast = ref<{ kind: "local" | "cloud" | "success" | "error"; message: string } | null>(null);
+let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 const isProfileReady = computed(
   () =>
     Boolean(
@@ -133,6 +137,50 @@ const averageCalories = computed(() => {
   const sum = ys.reduce((acc, value) => acc + value, 0);
   return Math.round(sum / ys.length);
 });
+const activeToast = computed(() => {
+  if (isCloudSyncing.value) {
+    return {
+      kind: "cloud" as const,
+      message: `☁️ ${t("toastCloudSyncing")}`,
+      spinning: true,
+    };
+  }
+
+  if (isAutoSaving.value || isTransferringData.value) {
+    return {
+      kind: "local" as const,
+      message: isTransferringData.value
+        ? `💾 ${t("toastLocalTransferring")}`
+        : `💾 ${t("toastLocalSaving")}`,
+      spinning: true,
+    };
+  }
+
+  if (transientToast.value) {
+    return {
+      kind: transientToast.value.kind,
+      message: transientToast.value.message,
+      spinning: false,
+    };
+  }
+
+  return null;
+});
+
+function showTransientToast(
+  kind: "local" | "cloud" | "success" | "error",
+  message: string,
+  duration = 4200,
+) {
+  transientToast.value = { kind, message };
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+  }
+  toastTimeout = setTimeout(() => {
+    transientToast.value = null;
+    toastTimeout = null;
+  }, duration);
+}
 
 watch(
   locale,
@@ -140,6 +188,42 @@ watch(
     document.title = `${t("appTitle")} (${t("beta")})`;
   },
   { immediate: true },
+);
+
+watch(
+  notice,
+  (next, previous) => {
+    if (!next || next === previous) {
+      return;
+    }
+
+    if (next === "correction") {
+      showTransientToast("local", `💾 ${t("resultsUpdated")}`);
+      return;
+    }
+
+    if (next === "queued") {
+      showTransientToast("local", `💾 ${t("resultsQueued")}`, 5200);
+    }
+  },
+);
+
+watch(
+  cloudStatus,
+  (next, previous) => {
+    if (next === previous) {
+      return;
+    }
+
+    if (next === "synced") {
+      showTransientToast("success", `✅ ${t("cloudSyncSuccess")}`);
+      return;
+    }
+
+    if (next === "failed") {
+      showTransientToast("error", `⚠️ ${cloudError.value || t("cloudSyncFailed")}`, 6200);
+    }
+  },
 );
 
 watch(
@@ -228,6 +312,20 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       <button class="notice-dismiss" @click="clearNotice">x</button>
     </p>
 
+    <transition name="status-toast">
+      <div
+        v-if="activeToast"
+        class="status-toast"
+        :class="`status-toast--${activeToast.kind}`"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span class="status-toast__glyph" :class="{ 'is-spinning': activeToast.spinning }" aria-hidden="true"></span>
+        <span class="status-toast__message">{{ activeToast.message }}</span>
+      </div>
+    </transition>
+
     <details
       v-if="profile"
       class="panel constant-data-panel"
@@ -246,16 +344,17 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       </summary>
 
       <div class="constant-data-grid">
-        <CloudSyncPanel
-          :locale="locale"
-          :cloud-mode="cloudMode"
-          :cloud-username="cloudUsername"
-          :cloud-confirmed-username="cloudConfirmedUsername"
-          :is-cloud-busy="isCloudBusy"
-          :cloud-status="cloudStatus"
-          :cloud-last-synced-at="cloudLastSyncedAt"
-          :cloud-error="cloudError"
-          :supabase-configured="supabaseConfigured"
+	        <CloudSyncPanel
+	          :locale="locale"
+	          :cloud-mode="cloudMode"
+	          :cloud-username="cloudUsername"
+	          :cloud-confirmed-username="cloudConfirmedUsername"
+            :has-saved-cloud-password="hasSavedCloudPassword"
+	          :is-cloud-busy="isCloudBusy"
+	          :cloud-status="cloudStatus"
+	          :cloud-last-synced-at="cloudLastSyncedAt"
+	          :cloud-error="cloudError"
+	          :supabase-configured="supabaseConfigured"
           @update:cloud-mode="setCloudMode"
           @update:cloud-username="setCloudUsername"
           @sync="cloudSyncNow($event)"
@@ -377,6 +476,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :y-unit="t('unitKcal')"
           :reference-lines="[
             { label: t('tdeeSummary'), value: tdee.selectedValue, color: '#9a7b24' },
+            { label: t('targetCaloriesLine'), value: tdee.targetTdee, color: '#8f3333' },
             { label: t('avgCaloriesLine'), value: averageCalories, color: '#6a6a6a' },
           ]"
         />
@@ -392,6 +492,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :entries="entries"
           :saving-calories="savingHistoryCalories"
           :tdee-reference="tdee.selectedValue"
+          :target-weight-reference="tdee.targetWeight"
           @save-calories="saveHistoryCalories"
         />
       </div>
@@ -509,6 +610,96 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   padding: 0.1rem 0.45rem;
 }
 
+.status-toast {
+  position: fixed;
+  inset-inline-end: 1rem;
+  inset-block-end: 1rem;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-inline-size: min(32rem, calc(100vw - 2rem));
+  padding: 0.72rem 0.95rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, black 8%);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22), var(--bevel-raised);
+  color: var(--text-primary);
+  backdrop-filter: blur(10px);
+}
+
+.status-toast--local {
+  border-color: color-mix(in srgb, #9a7b24 52%, var(--border));
+  background: color-mix(in srgb, #9a7b24 14%, var(--panel));
+}
+
+.status-toast--cloud {
+  border-color: color-mix(in srgb, #2563eb 58%, var(--border));
+  background: color-mix(in srgb, #2563eb 14%, var(--panel));
+}
+
+.status-toast--success {
+  border-color: color-mix(in srgb, #15803d 56%, var(--border));
+  background: color-mix(in srgb, #15803d 14%, var(--panel));
+}
+
+.status-toast--error {
+  border-color: color-mix(in srgb, #b91c1c 58%, var(--border));
+  background: color-mix(in srgb, #b91c1c 13%, var(--panel));
+}
+
+.status-toast__glyph {
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  flex: 0 0 auto;
+  opacity: 0.92;
+}
+
+.status-toast--success .status-toast__glyph,
+.status-toast--error .status-toast__glyph {
+  border-inline-end-color: currentColor;
+}
+
+.status-toast--success .status-toast__glyph {
+  background: radial-gradient(circle at center, currentColor 0 38%, transparent 42% 100%);
+}
+
+.status-toast--error .status-toast__glyph {
+  background:
+    linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%),
+    linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%);
+}
+
+.status-toast__glyph.is-spinning {
+  animation: status-toast-spin 0.85s linear infinite;
+}
+
+.status-toast__message {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.status-toast-enter-active,
+.status-toast-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.status-toast-enter-from,
+.status-toast-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+}
+
+@keyframes status-toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .constant-data-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -537,6 +728,13 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 }
 
 @media (max-width: 960px) {
+  .status-toast {
+    inset-inline: 0.75rem;
+    inset-block-end: 0.75rem;
+    max-inline-size: none;
+    border-radius: 1rem;
+  }
+
   .app-shell {
     padding: 10px;
   }

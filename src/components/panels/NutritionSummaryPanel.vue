@@ -242,6 +242,176 @@ function macroRecommendationKey(macro: "protein" | "carbs" | "fat" | "fiber") {
   return keys[macro];
 }
 
+function resolveTotalCalories() {
+  const totals = dailyTotals.value;
+  if (!totals) return null;
+  const fallbackCalories =
+    (totals.protein ?? 0) * 4 +
+    (totals.carbs ?? 0) * 4 +
+    (totals.fat ?? 0) * 9;
+  const totalCalories = totals.calories ?? (fallbackCalories > 0 ? fallbackCalories : null);
+  return totalCalories && totalCalories > 0 ? totalCalories : null;
+}
+
+function formatRecommendedRange(min: number, max: number) {
+  const fmt = (n: number) => Math.round(n);
+  return `${fmt(min)}-${fmt(max)}`;
+}
+
+function formatRecommendedMin(min: number) {
+  return `${Math.round(min)}+`;
+}
+
+function macroRecommendedRange(macro: "protein" | "carbs" | "fat" | "fiber") {
+  if (macro === "fiber") {
+    return { min: 25, max: 38, unit: t("unitG") };
+  }
+
+  const totalCalories = resolveTotalCalories();
+  if (macro === "carbs") {
+    if (!totalCalories) return null;
+    return { min: (totalCalories * 0.35) / 4, max: (totalCalories * 0.55) / 4, unit: t("unitG") };
+  }
+
+  if (macro === "fat") {
+    if (!totalCalories) return null;
+    return { min: (totalCalories * 0.2) / 9, max: (totalCalories * 0.35) / 9, unit: t("unitG") };
+  }
+
+  const weight = props.profile?.estimatedWeight ?? props.entry?.weight ?? null;
+  if (!weight || weight <= 0) return null;
+  return { min: weight * 1.6, max: weight * 2.2, unit: t("unitG") };
+}
+
+function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
+  const range = macroRecommendedRange(macro);
+  if (!range) return null;
+  const actual = dailyTotals.value?.[macro] ?? null;
+  if (actual == null || !Number.isFinite(actual) || range.max <= 0) return null;
+
+  const scaleMax = macro === "protein" ? Math.max(range.min * 2, actual) : Math.max(range.max, actual);
+  const actualPct = Math.min(100, Math.max(0, (actual / scaleMax) * 100));
+  const minPct = Math.min(100, Math.max(0, (range.min / scaleMax) * 100));
+  const maxPct =
+    macro === "protein" ? 100 : Math.min(100, Math.max(0, (range.max / scaleMax) * 100));
+  const state = actual < range.min ? "low" : actual > range.max ? "high" : "ok";
+
+  return {
+    actual,
+    ...range,
+    actualPct,
+    minPct,
+    maxPct,
+    state,
+    label: macro === "protein" ? formatRecommendedMin(range.min) : formatRecommendedRange(range.min, range.max),
+    maxLabel: macro === "protein" ? "∞" : undefined,
+  };
+}
+
+function formatActual(value: number, unit: string) {
+  return `${Math.round(value)} ${unit}`;
+}
+
+const proteinGauge = computed(() => macroGauge("protein"));
+const carbsGauge = computed(() => macroGauge("carbs"));
+const fatGauge = computed(() => macroGauge("fat"));
+const fiberGauge = computed(() => macroGauge("fiber"));
+
+type MacroShare = { protein: number; carbs: number; fat: number; total: number };
+const macroShare = computed<MacroShare | null>(() => {
+  const totals = dailyTotals.value;
+  if (!totals) return null;
+  const p = totals.protein;
+  const c = totals.carbs;
+  const f = totals.fat;
+  if (p == null || c == null || f == null) return null;
+  const proteinCalories = p * 4;
+  const carbsCalories = c * 4;
+  const fatCalories = f * 9;
+  const total = proteinCalories + carbsCalories + fatCalories;
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return { protein: proteinCalories, carbs: carbsCalories, fat: fatCalories, total };
+});
+
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const angle = ((angleDeg - 90) * Math.PI) / 180;
+  return {
+    x: cx + r * Math.cos(angle),
+    y: cy + r * Math.sin(angle),
+  };
+}
+
+function describeWedge(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const largeArc = endAngle - startAngle <= 180 ? "0" : "1";
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`;
+}
+
+type MacroPieSlice = {
+  key: "protein" | "carbs" | "fat";
+  label: string;
+  percent: number;
+  lines: string[];
+  path: string;
+  textX: number;
+  textY: number;
+  color: string;
+};
+
+const macroPieSlices = computed<MacroPieSlice[] | null>(() => {
+  const share = macroShare.value;
+  if (!share) return null;
+
+  const totals = dailyTotals.value;
+  if (!totals) return null;
+
+  const proteinPct = (share.protein / share.total) * 100;
+  const carbsPct = (share.carbs / share.total) * 100;
+  const fatPct = Math.max(0, 100 - proteinPct - carbsPct);
+
+  const slices = [
+    { key: "protein" as const, percent: proteinPct, color: "#0a88a3", grams: totals.protein ?? 0 },
+    { key: "carbs" as const, percent: carbsPct, color: "#6e5b28", grams: totals.carbs ?? 0 },
+    { key: "fat" as const, percent: fatPct, color: "#7c2d2d", grams: totals.fat ?? 0 },
+  ];
+
+  // Build wedges clockwise from 0°.
+  let angle = 0;
+  const cx = 50;
+  const cy = 50;
+  const r = 48;
+  const labelR = 30;
+
+  return slices.map((slice) => {
+    const start = angle;
+    const end = angle + (slice.percent / 100) * 360;
+    angle = end;
+
+    const mid = (start + end) / 2;
+    const pos = polarToCartesian(cx, cy, labelR, mid);
+    const label = slice.key === "protein" ? t("protein") : slice.key === "carbs" ? t("carbs") : t("fat");
+    const rounded = Math.round(slice.percent);
+    const gramsRounded = Math.round(slice.grams);
+    const lines =
+      rounded >= 12
+        ? [label, `${rounded}%`, `${gramsRounded}g`]
+        : rounded >= 8
+          ? [label, `${rounded}%`, `${gramsRounded}g`]
+          : [`${rounded}%`];
+    return {
+      key: slice.key,
+      label,
+      percent: rounded,
+      lines,
+      path: describeWedge(cx, cy, r, start, end),
+      textX: pos.x,
+      textY: pos.y,
+      color: slice.color,
+    };
+  });
+});
+
 const proteinPerEstimatedWeight = computed(() => {
   const protein = dailyTotals.value?.protein;
   const weight = props.profile?.estimatedWeight;
@@ -292,17 +462,48 @@ const proteinPerLeanBodyWeight = computed(() => {
       </div>
     </template>
 
-    <div v-if="entry?.nutritionSnapshot && isStale" class="stale-box">
+      <div v-if="entry?.nutritionSnapshot && isStale" class="stale-box">
       <strong>{{ t("staleNutritionTitle") }}</strong>
       <p>{{ t("staleNutritionHelper") }}</p>
     </div>
 
     <template v-else-if="entry?.nutritionSnapshot">
       <div class="stats-grid">
-        <div class="compact-stat">
+        <div class="compact-stat compact-stat--calories">
           <strong>{{ t("calories") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.calories ?? "-" }}</span>
-          <small class="stat-helper">&nbsp;</small>
+          <div v-if="macroPieSlices" class="macro-pie-inline">
+            <svg class="macro-pie-svg" viewBox="0 0 100 100" role="img" aria-label="macros pie">
+              <template v-for="slice in macroPieSlices" :key="slice.key">
+                <path :d="slice.path" :fill="slice.color" opacity="0.95"></path>
+                <text
+                  :x="slice.textX"
+                  :y="slice.textY"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                  class="macro-pie-text"
+                  :title="`${slice.label}: ${slice.percent}%`"
+                >
+                  <tspan
+                    v-for="(line, idx) in slice.lines"
+                    :key="`${slice.key}-${idx}`"
+                    :x="slice.textX"
+                    :dy="
+                      idx === 0
+                        ? slice.lines.length === 1
+                          ? 0
+                          : slice.lines.length === 2
+                            ? -4.5
+                            : -10
+                        : 10
+                    "
+                  >
+                    {{ line }}
+                  </tspan>
+                </text>
+              </template>
+            </svg>
+          </div>
         </div>
         <div class="compact-stat">
           <strong>{{ t("protein") }}</strong>
@@ -310,6 +511,30 @@ const proteinPerLeanBodyWeight = computed(() => {
           <small v-if="macroPercent('protein') !== null" class="stat-meta">
             {{ macroPercent("protein") }}% {{ t("macroShareOfCalories") }}
           </small>
+          <div v-if="proteinGauge" class="macro-gauge" :data-state="proteinGauge.state">
+            <div class="macro-bar" aria-hidden="true">
+              <div
+                class="macro-bar__range"
+                :style="{
+                  left: `${proteinGauge.minPct}%`,
+                  width: `${Math.max(0, proteinGauge.maxPct - proteinGauge.minPct)}%`,
+                }"
+              ></div>
+              <div class="macro-bar__marker" :style="{ left: `${proteinGauge.actualPct}%` }"></div>
+            </div>
+            <div class="macro-bar__ticks" aria-hidden="true">
+              <div class="macro-bar__tick" :style="{ left: `${proteinGauge.minPct}%` }">
+                <span>{{ Math.round(proteinGauge.min) }}</span>
+              </div>
+              <div class="macro-bar__tick" :style="{ left: `${proteinGauge.maxPct}%` }">
+                <span>{{ proteinGauge.maxLabel ?? Math.round(proteinGauge.max) }}</span>
+              </div>
+            </div>
+            <small class="stat-meta">
+              {{ formatActual(proteinGauge.actual, proteinGauge.unit) }} · {{ t("recommendedRange") }}:
+              {{ proteinGauge.label }} {{ proteinGauge.unit }}
+            </small>
+          </div>
           <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
             {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
           </small>
@@ -324,6 +549,30 @@ const proteinPerLeanBodyWeight = computed(() => {
           <small v-if="macroPercent('carbs') !== null" class="stat-meta">
             {{ macroPercent("carbs") }}% {{ t("macroShareOfCalories") }}
           </small>
+          <div v-if="carbsGauge" class="macro-gauge" :data-state="carbsGauge.state">
+            <div class="macro-bar" aria-hidden="true">
+              <div
+                class="macro-bar__range"
+                :style="{
+                  left: `${carbsGauge.minPct}%`,
+                  width: `${Math.max(0, carbsGauge.maxPct - carbsGauge.minPct)}%`,
+                }"
+              ></div>
+              <div class="macro-bar__marker" :style="{ left: `${carbsGauge.actualPct}%` }"></div>
+            </div>
+            <div class="macro-bar__ticks" aria-hidden="true">
+              <div class="macro-bar__tick" :style="{ left: `${carbsGauge.minPct}%` }">
+                <span>{{ Math.round(carbsGauge.min) }}</span>
+              </div>
+              <div class="macro-bar__tick" :style="{ left: `${carbsGauge.maxPct}%` }">
+                <span>{{ carbsGauge.maxLabel ?? Math.round(carbsGauge.max) }}</span>
+              </div>
+            </div>
+            <small class="stat-meta">
+              {{ formatActual(carbsGauge.actual, carbsGauge.unit) }} · {{ t("recommendedRange") }}: {{ carbsGauge.label }}
+              {{ carbsGauge.unit }}
+            </small>
+          </div>
           <small class="stat-helper">{{ t(macroRecommendationKey("carbs")) }}</small>
         </div>
         <div class="compact-stat">
@@ -332,11 +581,59 @@ const proteinPerLeanBodyWeight = computed(() => {
           <small v-if="macroPercent('fat') !== null" class="stat-meta">
             {{ macroPercent("fat") }}% {{ t("macroShareOfCalories") }}
           </small>
+          <div v-if="fatGauge" class="macro-gauge" :data-state="fatGauge.state">
+            <div class="macro-bar" aria-hidden="true">
+              <div
+                class="macro-bar__range"
+                :style="{
+                  left: `${fatGauge.minPct}%`,
+                  width: `${Math.max(0, fatGauge.maxPct - fatGauge.minPct)}%`,
+                }"
+              ></div>
+              <div class="macro-bar__marker" :style="{ left: `${fatGauge.actualPct}%` }"></div>
+            </div>
+            <div class="macro-bar__ticks" aria-hidden="true">
+              <div class="macro-bar__tick" :style="{ left: `${fatGauge.minPct}%` }">
+                <span>{{ Math.round(fatGauge.min) }}</span>
+              </div>
+              <div class="macro-bar__tick" :style="{ left: `${fatGauge.maxPct}%` }">
+                <span>{{ fatGauge.maxLabel ?? Math.round(fatGauge.max) }}</span>
+              </div>
+            </div>
+            <small class="stat-meta">
+              {{ formatActual(fatGauge.actual, fatGauge.unit) }} · {{ t("recommendedRange") }}: {{ fatGauge.label }}
+              {{ fatGauge.unit }}
+            </small>
+          </div>
           <small class="stat-helper">{{ t(macroRecommendationKey("fat")) }}</small>
         </div>
         <div class="compact-stat">
           <strong>{{ t("fiber") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.fiber ?? "-" }}</span>
+          <div v-if="fiberGauge" class="macro-gauge" :data-state="fiberGauge.state">
+            <div class="macro-bar" aria-hidden="true">
+              <div
+                class="macro-bar__range"
+                :style="{
+                  left: `${fiberGauge.minPct}%`,
+                  width: `${Math.max(0, fiberGauge.maxPct - fiberGauge.minPct)}%`,
+                }"
+              ></div>
+              <div class="macro-bar__marker" :style="{ left: `${fiberGauge.actualPct}%` }"></div>
+            </div>
+            <div class="macro-bar__ticks" aria-hidden="true">
+              <div class="macro-bar__tick" :style="{ left: `${fiberGauge.minPct}%` }">
+                <span>{{ Math.round(fiberGauge.min) }}</span>
+              </div>
+              <div class="macro-bar__tick" :style="{ left: `${fiberGauge.maxPct}%` }">
+                <span>{{ fiberGauge.maxLabel ?? Math.round(fiberGauge.max) }}</span>
+              </div>
+            </div>
+            <small class="stat-meta">
+              {{ formatActual(fiberGauge.actual, fiberGauge.unit) }} · {{ t("recommendedRange") }}: {{ fiberGauge.label }}
+              {{ fiberGauge.unit }}
+            </small>
+          </div>
           <small class="stat-helper">{{ t(macroRecommendationKey("fiber")) }}</small>
         </div>
         <div class="compact-stat">
@@ -627,6 +924,18 @@ const proteinPerLeanBodyWeight = computed(() => {
   align-content: start;
 }
 
+.compact-stat--calories {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 6px;
+}
+
+.compact-stat--calories .macro-pie-inline {
+  align-self: stretch;
+  justify-self: stretch;
+  min-block-size: 200px;
+}
+
 .compact-stat > span {
   font-variant-numeric: tabular-nums;
 }
@@ -639,6 +948,80 @@ const proteinPerLeanBodyWeight = computed(() => {
   color: var(--text-muted);
   line-height: 1.3;
   min-block-size: 2.6em;
+}
+
+.macro-gauge {
+  margin-block-start: 4px;
+  display: grid;
+  gap: 4px;
+}
+
+.macro-bar {
+  position: relative;
+  block-size: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  box-shadow: var(--bevel-sunken);
+}
+
+.macro-bar__range {
+  position: absolute;
+  inset-block: 0;
+  background: color-mix(in srgb, #27ae60 32%, transparent);
+}
+
+.macro-bar__marker {
+  position: absolute;
+  inset-block: -2px;
+  inline-size: 2px;
+  background: color-mix(in srgb, var(--text-primary) 85%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 75%, transparent);
+}
+
+.macro-bar__ticks {
+  position: relative;
+  block-size: 1rem;
+}
+
+.macro-bar__tick {
+  position: absolute;
+  inset-block-start: 2px;
+  transform: translateX(-50%);
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.macro-pie-inline {
+  display: grid;
+  gap: 6px;
+  margin-block-start: 8px;
+  inline-size: 100%;
+}
+
+.macro-pie-svg {
+  inline-size: 100%;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  block-size: auto;
+  height: auto;
+  display: block;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--bevel-sunken);
+  background: var(--surface-3);
+}
+
+.macro-pie-text {
+  fill: rgba(255, 255, 255, 0.92);
+  font-weight: 800;
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 2px;
 }
 
 .notes,

@@ -47,6 +47,7 @@ interface Profile {
   age: number | null;
   height: number | null;
   estimatedWeight: number | null;
+  targetWeight: number | null;
   bodyFat: number | null;
   tdeeEquation: "mifflinStJeor" | "harrisBenedict" | "cunningham" | "observedTdee";
   activityPrompt: string;

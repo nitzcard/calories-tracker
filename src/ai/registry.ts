@@ -6,6 +6,7 @@ import type { AiProviderOption, AppLocale } from "../types";
 
 const providers = new Map<string, AIProvider>([
   ["gemini-2.5-flash", new GeminiProvider("gemini-2.5-flash", "Gemini 2.5 Flash")],
+  ["gemini-2.5-flash-latest", new GeminiProvider("gemini-2.5-flash-latest", "Gemini 2.5 Flash (Latest)")],
   ["gemini-2.5-flash-lite", new GeminiProvider("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite")],
   [
     "gemini-3-flash-preview",
@@ -111,6 +112,13 @@ function friendlyGeminiLabel(id: string) {
 
 function buildBuiltinProviderOptions(locale: AppLocale): AiProviderOption[] {
   return [
+    {
+      id: "gemini-2.5-flash-latest",
+      label: "Gemini 2.5 Flash (Latest)",
+      helper: translations[locale].providerHelperDefaultFlash,
+      experimental: false,
+      source: "builtin",
+    },
     {
       id: "gemini-2.5-flash",
       label: "Gemini 2.5 Flash",

@@ -28,6 +28,7 @@ const DEFAULT_PROFILE: Profile = {
   age: null,
   height: null,
   estimatedWeight: null,
+  targetWeight: null,
   bodyFat: null,
   tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
@@ -58,6 +59,7 @@ export async function ensureDefaultProfile(
       ...existing,
       estimatedWeight:
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
+      targetWeight: (existing as Profile).targetWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.targetWeight,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       tdeeEquation: normalizedEquation,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,

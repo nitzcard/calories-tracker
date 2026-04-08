@@ -6,6 +6,7 @@ export const DASHBOARD_STORAGE_KEYS = {
   themeMode: "calorie-tracker.theme-mode",
   aiModel: "calorie-tracker.ai-model",
   aiModelUserSet: "calorie-tracker.ai-model-user-set",
+  geminiLatestModel: "calorie-tracker.gemini-latest-model",
   cloudMode: "calorie-tracker.cloud-mode",
   cloudUsername: "calorie-tracker.cloud-username",
   cloudConfirmedUsername: "calorie-tracker.cloud-confirmed-username",
@@ -16,7 +17,12 @@ export function normalizeProvider(value: string | null): string {
     return value;
   }
 
-  return "gemini-2.5-flash";
+  const suggestedLatest = localStorage.getItem(DASHBOARD_STORAGE_KEYS.geminiLatestModel);
+  if (suggestedLatest && suggestedLatest.startsWith("gemini-")) {
+    return suggestedLatest;
+  }
+
+  return "gemini-2.5-flash-latest";
 }
 
 export function buildAnalyzeIssue(

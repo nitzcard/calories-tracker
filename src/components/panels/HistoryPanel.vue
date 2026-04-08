@@ -4,13 +4,14 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
 import type { AppLocale, DailyEntry } from "../../types";
-import { formatEntryDate, resolvedDailyCalories } from "../../domain/entries";
+import { deducedWeightFromEntries, formatEntryDate, resolvedDailyCalories } from "../../domain/entries";
 
 const props = defineProps<{
   locale: AppLocale;
   entries: DailyEntry[];
   savingCalories: Record<string, boolean>;
   tdeeReference: number | null;
+  targetWeightReference?: number | null;
 }>();
 
 const { t } = useI18n();
@@ -50,6 +51,20 @@ function caloriesVsTdee(entry: DailyEntry) {
   }
 
   return `${calories} / ${props.tdeeReference}`;
+}
+
+function caloriesRemainingToTarget(entry: DailyEntry) {
+  if (props.targetWeightReference == null) {
+    return "-";
+  }
+
+  const effectiveWeight = entry.weight ?? deducedWeightFromEntries(props.entries, entry.date);
+  if (effectiveWeight == null) {
+    return "-";
+  }
+
+  const remaining = Math.round(Math.max(0, effectiveWeight - props.targetWeightReference) * 7700);
+  return String(remaining);
 }
 
 function deltaPartsFromDelta(delta: number) {
@@ -95,12 +110,13 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             <th>{{ t("weightWithUnit") }}</th>
             <th class="calories-column">{{ t("calories") }}</th>
             <th class="numeric-pair">{{ t("caloriesVsTdee") }}</th>
+            <th class="numeric-pair">{{ t("caloriesRemainingToTarget") }}</th>
             <th>{{ t("deficitSurplus") }}</th>
           </tr>
         </thead>
         <tbody>
           <tr class="summary-row">
-            <td colspan="4">{{ t("allTimeDeficitSurplus") }}</td>
+            <td colspan="5">{{ t("allTimeDeficitSurplus") }}</td>
             <td class="delta-cell">
               <template v-if="tdeeReference != null">
                 <span class="delta-inline">
@@ -116,7 +132,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             </td>
           </tr>
           <tr class="summary-row summary-row--recent">
-            <td colspan="4">{{ t("last7dDeficitSurplus") }}</td>
+            <td colspan="5">{{ t("last7dDeficitSurplus") }}</td>
             <td class="delta-cell">
               <template v-if="tdeeReference != null">
                 <span class="delta-inline">
@@ -146,6 +162,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             />
           </td>
 	          <td class="numeric-pair">{{ caloriesVsTdee(entry) }}</td>
+	          <td class="numeric-pair">{{ caloriesRemainingToTarget(entry) }}</td>
 	          <td class="delta-cell">
 	            <template v-if="deficitOrSurplusParts(entry).kind !== 'unknown'">
 	              <span class="delta-inline">
@@ -226,6 +243,10 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         <div class="history-card__row">
           <div class="k">{{ t("caloriesVsTdee") }}</div>
           <div class="v numeric-pair">{{ caloriesVsTdee(entry) }}</div>
+        </div>
+        <div class="history-card__row">
+          <div class="k">{{ t("caloriesRemainingToTarget") }}</div>
+          <div class="v numeric-pair">{{ caloriesRemainingToTarget(entry) }}</div>
         </div>
 	        <div class="history-card__row">
 	          <div class="k">{{ t("deficitSurplus") }}</div>

@@ -33,7 +33,7 @@ watch(
   },
 );
 
-function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "bodyFat">(key: K, event: Event) {
+function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(key: K, event: Event) {
   const raw = (event.target as HTMLInputElement).value;
   const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
   emit("update:profile", nextProfile);
@@ -93,6 +93,17 @@ function saveImmediateProfile(profile: Profile) {
             type="number"
             step="0.1"
             @input="saveNullableNumber('estimatedWeight', $event)"
+          />
+          <span class="field-unit">{{ t("unitKg") }}</span>
+        </div>
+      </FormField>
+      <FormField :label="t('targetWeight')" :helper="t('targetWeightHelper')">
+        <div class="unit-field">
+          <input
+            :value="profile.targetWeight ?? ''"
+            type="number"
+            step="0.1"
+            @input="saveNullableNumber('targetWeight', $event)"
           />
           <span class="field-unit">{{ t("unitKg") }}</span>
         </div>

@@ -105,6 +105,7 @@ function mergeProfilePreservingData(
     age: pickNullableNumber(preferred.age, other.age),
     height: pickNullableNumber(preferred.height, other.height),
     estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
+    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
     bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
     activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
     foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
@@ -246,6 +247,7 @@ function isBaselineBlob(blob: ExportedAppData) {
     (!p.age &&
       !p.height &&
       !p.estimatedWeight &&
+      !p.targetWeight &&
       !p.bodyFat &&
       !p.activityPrompt.trim() &&
       !p.foodInstructions.trim());

@@ -314,6 +314,22 @@ function selectedTdeeValue(
 export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): TdeeSnapshot {
   const formulaWeight = resolveFormulaWeight(entries, profile);
   const formulas = calculateFormulaTdee(profile, formulaWeight.value);
+  const normalizedTargetWeight =
+    profile.targetWeight !== null &&
+    profile.targetWeight !== undefined &&
+    Number.isFinite(profile.targetWeight) &&
+    profile.targetWeight > 0
+      ? profile.targetWeight
+      : null;
+  const targetFormulas = normalizedTargetWeight !== null
+    ? calculateFormulaTdee(profile, normalizedTargetWeight)
+    : { average: null, breakdown: {}, activityMultiplier: null };
+  const targetTdee =
+    normalizedTargetWeight !== null
+      ? (profile.tdeeEquation === "observedTdee"
+          ? targetFormulas.average
+          : targetFormulas.breakdown[profile.tdeeEquation] ?? targetFormulas.average)
+      : null;
   const observed = calculateObservedTdeeRange(entries);
   return {
     observedTdee: observed.value,
@@ -331,6 +347,8 @@ export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): Tdee
     activityMultiplier: formulas.activityMultiplier,
     selectedEquation: profile.tdeeEquation,
     selectedValue: selectedTdeeValue(profile.tdeeEquation, formulas, observed.value),
+    targetWeight: normalizedTargetWeight,
+    targetTdee,
     lastComputedAt: new Date().toISOString(),
   };
 }

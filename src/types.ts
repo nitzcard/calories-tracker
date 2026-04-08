@@ -29,6 +29,7 @@ export interface Profile {
   age: number | null;
   height: number | null;
   estimatedWeight: number | null;
+  targetWeight: number | null;
   bodyFat: number | null;
   tdeeEquation: TdeeEquation;
   activityPrompt: string;
@@ -190,6 +191,8 @@ export interface TdeeSnapshot {
   activityMultiplier: number | null;
   selectedEquation: TdeeEquation;
   selectedValue: number | null;
+  targetWeight: number | null;
+  targetTdee: number | null;
   lastComputedAt: string;
 }
 

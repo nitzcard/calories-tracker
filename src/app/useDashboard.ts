@@ -121,6 +121,17 @@ export function useDashboard() {
     }
   }
 
+  const hasSavedCloudPassword = computed(() => {
+    const normalized = normalizeUsername(cloudUsername.value);
+    if (!normalized) return false;
+    try {
+      const stored = localStorage.getItem(cloudPasswordStorageKey(normalized)) ?? "";
+      return Boolean(stored.trim());
+    } catch {
+      return Boolean(cloudPassword.value.trim());
+    }
+  });
+
   const savedCurrentEntry = computed(() =>
     findEntryByDate(entries.value, selectedDate.value),
   );
@@ -193,10 +204,12 @@ export function useDashboard() {
 	          formulaTdeeAverage: null,
 	          formulaBreakdown: {},
 	          formulaWeight: null,
-	          formulaWeightSource: null,
-	          activityMultiplier: null,
+          formulaWeightSource: null,
+          activityMultiplier: null,
           selectedEquation: "mifflinStJeor" as const,
           selectedValue: null,
+          targetWeight: null,
+          targetTdee: null,
           lastComputedAt: "",
         },
   );
@@ -605,6 +618,11 @@ export function useDashboard() {
       return;
     }
 
+    if (options?.password?.trim()) {
+      cloudPassword.value = options.password;
+      saveCloudPasswordToStorage(username, options.password);
+    }
+
     isCloudBusy.value = true;
     cloudIsSyncing.value = true;
     cloudStatus.value = "idle";
@@ -835,6 +853,13 @@ export function useDashboard() {
         syncGeminiProviderOptions(geminiOptions);
         const detectedIds = new Set(geminiOptions.map((option) => option.id));
         const suggested = suggestLatestStableFlash(geminiOptions);
+        if (suggested) {
+          try {
+            localStorage.setItem(DASHBOARD_STORAGE_KEYS.geminiLatestModel, suggested);
+          } catch {
+            // ignore
+          }
+        }
         const userPicked = localStorage.getItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet) === "1";
         const shouldNormalizeToLatest =
           provider.value.startsWith("gemini-") && !detectedIds.has(provider.value);
@@ -981,6 +1006,7 @@ export function useDashboard() {
     cloudMode,
     cloudUsername,
     cloudConfirmedUsername,
+    hasSavedCloudPassword,
     isCloudBusy,
     isCloudSyncing: cloudIsSyncing,
     cloudStatus,

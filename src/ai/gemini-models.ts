@@ -33,10 +33,8 @@ export async function fetchGeminiModelOptions(apiKey: string, locale: AppLocale)
     .map((m) => normalizeModelId(m.name ?? ""))
     .filter((id) => Boolean(id) && id.startsWith("gemini-"));
 
-  const latestOnly = usable.filter((id) => id.includes("latest"));
-  const visibleIds = latestOnly.length ? latestOnly : usable;
-
-  const unique = Array.from(new Set(visibleIds));
+  // Prefer "latest" models in sorting, but keep the full detected set so users can pick older/stable ids too.
+  const unique = Array.from(new Set(usable.filter(isRelevantGeminiModelId)));
   unique.sort((a, b) => {
     return compareModelPreference(a, b);
   });
@@ -85,4 +83,11 @@ function compareModelPreference(a: string, b: string) {
     }
   }
   return String(ra[ra.length - 1]).localeCompare(String(rb[rb.length - 1]));
+}
+
+function isRelevantGeminiModelId(id: string) {
+  const lowered = id.toLowerCase();
+  // Keep text/chat models; exclude non-chat modalities that still show up under gemini-*.
+  const blocked = ["embedding", "embed", "imagen", "image", "tts", "speech", "audio", "transcribe"];
+  return !blocked.some((part) => lowered.includes(part));
 }
