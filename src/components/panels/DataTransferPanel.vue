@@ -53,7 +53,14 @@ interface Profile {
   foodInstructions: string;
   aiModel: string;
   locale: "en" | "he";
-  themeMode: "system" | "light" | "dark" | "purple-dark";
+  themeMode:
+    | "system"
+    | "light"
+    | "dark"
+    | "purple-dark"
+    | "counter-strike"
+    | "nord-dark"
+    | "solarized-dark";
 }
 
 interface DailyEntry {

@@ -1,0 +1,31 @@
+name: Deploy to Static.app
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: static-app-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy
+        uses: designmodo/static-app-deploy-action@v1.0.0
+        with:
+          api-key: ${{ secrets.STATIC_APP_API_KEY }}
+          # Optional: set this after your first deploy to update the same site each push
+          # pid: ${{ secrets.STATIC_APP_PID }}
+          node-version: "20"
+          install-command: "npm ci"
+          build-command: "npm run build"
+          build-dir: "dist"
+

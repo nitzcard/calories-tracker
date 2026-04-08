@@ -64,7 +64,10 @@ export function readStoredThemeMode(): ThemeMode | null {
   return value === "system" ||
     value === "light" ||
     value === "dark" ||
-    value === "purple-dark"
+    value === "purple-dark" ||
+    value === "counter-strike" ||
+    value === "nord-dark" ||
+    value === "solarized-dark"
     ? value
     : null;
 }

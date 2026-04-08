@@ -4,7 +4,9 @@ export function detectThemeMode(): ThemeMode {
   return "system";
 }
 
-export function resolveTheme(mode: ThemeMode): "light" | "dark" | "purple-dark" {
+export function resolveTheme(
+  mode: ThemeMode,
+): "light" | "dark" | "purple-dark" | "counter-strike" | "nord-dark" | "solarized-dark" {
   if (mode !== "system") {
     return mode;
   }

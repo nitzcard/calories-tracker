@@ -1,4 +1,11 @@
-export type ThemeMode = "system" | "light" | "dark" | "purple-dark";
+export type ThemeMode =
+  | "system"
+  | "light"
+  | "dark"
+  | "purple-dark"
+  | "counter-strike"
+  | "nord-dark"
+  | "solarized-dark";
 export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
