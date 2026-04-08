@@ -113,8 +113,13 @@ const constantDataOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.constantData) ?? fal
 const didInitializePanels = ref(false);
 const tdeeHighlightToken = ref(0);
 const correctionNoticeToken = ref(0);
-const transientToast = ref<{ kind: "local" | "cloud" | "success" | "error"; message: string } | null>(null);
+const transientToast = ref<{ kind: "local" | "cloud" | "error"; message: string } | null>(null);
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
+const ACTIVE_TOAST_MIN_MS = 5000;
+const localToastVisibleUntil = ref(0);
+const cloudToastVisibleUntil = ref(0);
+let localToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
+let cloudToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 const isProfileReady = computed(
   () =>
     Boolean(
@@ -137,40 +142,92 @@ const averageCalories = computed(() => {
   const sum = ys.reduce((acc, value) => acc + value, 0);
   return Math.round(sum / ys.length);
 });
-const activeToast = computed(() => {
-  if (isCloudSyncing.value) {
-    return {
+
+function bumpToastVisibility(kind: "local" | "cloud") {
+  const nextVisibleUntil = Date.now() + ACTIVE_TOAST_MIN_MS;
+
+  if (kind === "local") {
+    localToastVisibleUntil.value = Math.max(localToastVisibleUntil.value, nextVisibleUntil);
+    return;
+  }
+
+  cloudToastVisibleUntil.value = Math.max(cloudToastVisibleUntil.value, nextVisibleUntil);
+}
+
+function scheduleActiveToastHide(kind: "local" | "cloud") {
+  const delay = Math.max(
+    0,
+    (kind === "local" ? localToastVisibleUntil.value : cloudToastVisibleUntil.value) - Date.now(),
+  );
+
+  const clear = () => {
+    if (kind === "local") {
+      if (localToastHideTimeout) {
+        clearTimeout(localToastHideTimeout);
+      }
+      localToastHideTimeout = setTimeout(() => {
+        localToastVisibleUntil.value = 0;
+        localToastHideTimeout = null;
+      }, delay);
+      return;
+    }
+
+    if (cloudToastHideTimeout) {
+      clearTimeout(cloudToastHideTimeout);
+    }
+    cloudToastHideTimeout = setTimeout(() => {
+      cloudToastVisibleUntil.value = 0;
+      cloudToastHideTimeout = null;
+    }, delay);
+  };
+
+  clear();
+}
+
+const activeToasts = computed(() => {
+  const items: Array<{
+    id: string;
+    kind: "local" | "cloud" | "error";
+    message: string;
+    spinning: boolean;
+  }> = [];
+
+  if (isCloudSyncing.value || cloudToastVisibleUntil.value > Date.now()) {
+    items.push({
+      id: "cloud-active",
       kind: "cloud" as const,
       message: `☁️ ${t("toastCloudSyncing")}`,
       spinning: true,
-    };
+    });
   }
 
-  if (isAutoSaving.value || isTransferringData.value) {
-    return {
+  if (isAutoSaving.value || isTransferringData.value || localToastVisibleUntil.value > Date.now()) {
+    items.push({
+      id: "local-active",
       kind: "local" as const,
       message: isTransferringData.value
         ? `💾 ${t("toastLocalTransferring")}`
         : `💾 ${t("toastLocalSaving")}`,
       spinning: true,
-    };
+    });
   }
 
   if (transientToast.value) {
-    return {
+    items.push({
+      id: "transient",
       kind: transientToast.value.kind,
       message: transientToast.value.message,
       spinning: false,
-    };
+    });
   }
 
-  return null;
+  return items;
 });
 
 function showTransientToast(
-  kind: "local" | "cloud" | "success" | "error",
+  kind: "local" | "cloud" | "error",
   message: string,
-  duration = 4200,
+  duration = 5000,
 ) {
   transientToast.value = { kind, message };
   if (toastTimeout) {
@@ -191,6 +248,36 @@ watch(
 );
 
 watch(
+  () => isAutoSaving.value || isTransferringData.value,
+  (active, wasActive) => {
+    if (active) {
+      bumpToastVisibility("local");
+      return;
+    }
+
+    if (wasActive) {
+      scheduleActiveToastHide("local");
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  isCloudSyncing,
+  (active, wasActive) => {
+    if (active) {
+      bumpToastVisibility("cloud");
+      return;
+    }
+
+    if (wasActive) {
+      scheduleActiveToastHide("cloud");
+    }
+  },
+  { immediate: true },
+);
+
+watch(
   notice,
   (next, previous) => {
     if (!next || next === previous) {
@@ -203,7 +290,7 @@ watch(
     }
 
     if (next === "queued") {
-      showTransientToast("local", `💾 ${t("resultsQueued")}`, 5200);
+      showTransientToast("local", `💾 ${t("resultsQueued")}`, 5000);
     }
   },
 );
@@ -215,13 +302,8 @@ watch(
       return;
     }
 
-    if (next === "synced") {
-      showTransientToast("success", `✅ ${t("cloudSyncSuccess")}`);
-      return;
-    }
-
     if (next === "failed") {
-      showTransientToast("error", `⚠️ ${cloudError.value || t("cloudSyncFailed")}`, 6200);
+      showTransientToast("error", `⚠️ ${cloudError.value || t("cloudSyncFailed")}`, 5000);
     }
   },
 );
@@ -312,19 +394,20 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       <button class="notice-dismiss" @click="clearNotice">x</button>
     </p>
 
-    <transition name="status-toast">
-      <div
-        v-if="activeToast"
-        class="status-toast"
-        :class="`status-toast--${activeToast.kind}`"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <span class="status-toast__glyph" :class="{ 'is-spinning': activeToast.spinning }" aria-hidden="true"></span>
-        <span class="status-toast__message">{{ activeToast.message }}</span>
-      </div>
-    </transition>
+    <div v-if="activeToasts.length" class="status-toast-stack" aria-live="polite" aria-atomic="true">
+      <transition-group name="status-toast">
+        <div
+          v-for="toast in activeToasts"
+          :key="toast.id"
+          class="status-toast"
+          :class="`status-toast--${toast.kind}`"
+          role="status"
+        >
+          <span class="status-toast__glyph" :class="{ 'is-spinning': toast.spinning }" aria-hidden="true"></span>
+          <span class="status-toast__message">{{ toast.message }}</span>
+        </div>
+      </transition-group>
+    </div>
 
     <details
       v-if="profile"
@@ -610,11 +693,18 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   padding: 0.1rem 0.45rem;
 }
 
-.status-toast {
+.status-toast-stack {
   position: fixed;
-  inset-inline-end: 1rem;
+  inset-inline-start: 1rem;
   inset-block-end: 1rem;
   z-index: 40;
+  display: grid;
+  gap: 0.65rem;
+  justify-items: start;
+  pointer-events: none;
+}
+
+.status-toast {
   display: inline-flex;
   align-items: center;
   gap: 0.7rem;
@@ -626,21 +716,17 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22), var(--bevel-raised);
   color: var(--text-primary);
   backdrop-filter: blur(10px);
+  pointer-events: auto;
 }
 
 .status-toast--local {
-  border-color: color-mix(in srgb, #9a7b24 52%, var(--border));
-  background: color-mix(in srgb, #9a7b24 14%, var(--panel));
+  border-color: color-mix(in srgb, #15803d 56%, var(--border));
+  background: color-mix(in srgb, #15803d 16%, var(--panel));
 }
 
 .status-toast--cloud {
-  border-color: color-mix(in srgb, #2563eb 58%, var(--border));
-  background: color-mix(in srgb, #2563eb 14%, var(--panel));
-}
-
-.status-toast--success {
-  border-color: color-mix(in srgb, #15803d 56%, var(--border));
-  background: color-mix(in srgb, #15803d 14%, var(--panel));
+  border-color: color-mix(in srgb, #16a34a 58%, var(--border));
+  background: color-mix(in srgb, #16a34a 18%, var(--panel));
 }
 
 .status-toast--error {
@@ -658,13 +744,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   opacity: 0.92;
 }
 
-.status-toast--success .status-toast__glyph,
 .status-toast--error .status-toast__glyph {
   border-inline-end-color: currentColor;
-}
-
-.status-toast--success .status-toast__glyph {
-  background: radial-gradient(circle at center, currentColor 0 38%, transparent 42% 100%);
 }
 
 .status-toast--error .status-toast__glyph {
@@ -728,9 +809,13 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 }
 
 @media (max-width: 960px) {
-  .status-toast {
+  .status-toast-stack {
     inset-inline: 0.75rem;
     inset-block-end: 0.75rem;
+    justify-items: stretch;
+  }
+
+  .status-toast {
     max-inline-size: none;
     border-radius: 1rem;
   }

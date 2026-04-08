@@ -2,10 +2,11 @@ import type { AppLocale } from "../types";
 
 export const translations: Record<AppLocale, Record<string, string>> = {
   en: {
-    appTitle: "Local Nutrition Desk",
+    appTitle: "🥗 Calorie & Nutrition Tracker",
     beta: "beta",
-    appSubtitle: "Offline-first calorie, weight, and TDEE tracker",
-    headerHelper: "Save everything locally first, then analyze food entries when you want.",
+    appSubtitle: "Track calories, weight, meals, and TDEE with local-first saving and optional AI analysis.",
+    headerHelper:
+      "Just write what you ate and your weight. The app saves it automatically on this device, helps you track calories and weight over time, and can also analyze meals with AI and sync to cloud if you want.",
     feedbackLabel: "Feedback 💬",
     syncIndicatorLocal: "🏠 Local",
     syncIndicatorCloud: "☁️ Cloud",
@@ -317,10 +318,11 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     statusStale: "Needs refresh",
   },
   he: {
-    appTitle: "יומן תזונה מקומי",
+    appTitle: "🥗 מעקב קלוריות ותזונה",
     beta: "בטא",
-    appSubtitle: "מעקב מקומי אחר קלוריות, משקל ו־TDEE",
-    headerHelper: "הכול נשמר מקומית קודם, ואז אפשר לנתח את ימי האכילה מתי שרוצים.",
+    appSubtitle: "מעקב אחר קלוריות, משקל, ארוחות ו־TDEE עם שמירה מקומית וניתוח AI אופציונלי.",
+    headerHelper:
+      "פשוט רושמים מה אכלת ואת המשקל שלך. האפליקציה שומרת את זה אוטומטית על המכשיר הזה, עוזרת לעקוב אחרי קלוריות ומשקל לאורך זמן, ואם רוצים אפשר גם לנתח ארוחות עם AI ולסנכרן לענן.",
     feedbackLabel: "משוב 💬",
     syncIndicatorLocal: "מקומי",
     syncIndicatorCloud: "ענן",
