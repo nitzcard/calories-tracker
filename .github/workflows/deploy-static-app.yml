@@ -23,7 +23,7 @@ jobs:
         with:
           api-key: ${{ secrets.STATIC_APP_API_KEY }}
           # Optional: set this after your first deploy to update the same site each push
-          # pid: ${{ secrets.STATIC_APP_PID }}
+          pid: ${{ secrets.STATIC_APP_PID }}
           node-version: "20"
           install-command: "npm ci"
           build-command: "npm run build"
