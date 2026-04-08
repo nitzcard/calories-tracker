@@ -20,7 +20,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:cloudMode": [value: "offline" | "cloud"];
   "update:cloudUsername": [value: string];
-  sync: [payload: { username: string; password: string }];
+  sync: [payload: { username: string; password?: string }];
   logout: [];
 }>();
 
@@ -81,6 +81,11 @@ function syncNow() {
   draftPassword.value = "";
 }
 
+function syncExistingUser() {
+  emit("update:cloudUsername", draftUsername.value);
+  emit("sync", { username: draftUsername.value, password: draftPassword.value.trim() || undefined });
+}
+
 function logout() {
   draftPassword.value = "";
   emit("logout");
@@ -114,7 +119,7 @@ function logout() {
           <input
             type="password"
             autocomplete="current-password"
-            :disabled="cloudMode !== 'cloud' || isLoggedIn"
+            :disabled="cloudMode !== 'cloud' || isCloudBusy"
             :value="draftPassword"
             @input="draftPassword = ($event.target as HTMLInputElement).value"
           />
@@ -136,6 +141,16 @@ function logout() {
           >
             <span v-if="isCloudBusy" class="button-feedback" aria-hidden="true"></span>
             {{ t("cloudLogin") }}
+          </button>
+
+          <button
+            v-if="isLoggedIn"
+            class="secondary-action"
+            :disabled="isCloudBusy || cloudMode !== 'cloud' || !supabaseConfigured || !isOnline"
+            @click="syncExistingUser"
+          >
+            <span v-if="isCloudBusy" class="button-feedback" aria-hidden="true"></span>
+            {{ t("cloudSyncNow") }}
           </button>
 
           <button

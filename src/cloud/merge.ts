@@ -50,29 +50,9 @@ function mergeDailyEntries(local: DailyEntry[], remote: DailyEntry[]): DailyEntr
       byDate.set(entry.date, entry);
       continue;
     }
-    byDate.set(entry.date, pickNewerEntry(previous, entry));
+    byDate.set(entry.date, mergeEntryPreservingData(previous, entry));
   }
   return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function pickNewerEntry(a: DailyEntry, b: DailyEntry) {
-  // If one side preserves meaningfully more data, keep it even if timestamps differ.
-  const aScore = scoreEntry(a);
-  const bScore = scoreEntry(b);
-  if (Math.abs(aScore - bScore) >= 2) {
-    return aScore > bScore ? a : b;
-  }
-
-  if (a.updatedAt !== b.updatedAt) {
-    return a.updatedAt > b.updatedAt ? a : b;
-  }
-  if (a.createdAt !== b.createdAt) {
-    return a.createdAt > b.createdAt ? a : b;
-  }
-
-  // Deterministic tie-breakers.
-  if (aScore !== bScore) return aScore > bScore ? a : b;
-  return b;
 }
 
 function scoreEntry(entry: DailyEntry) {
@@ -83,6 +63,73 @@ function scoreEntry(entry: DailyEntry) {
   if (entry.manualCalories != null) score += 1;
   if (entry.weight != null) score += 1;
   return score;
+}
+
+function mergeEntryPreservingData(a: DailyEntry, b: DailyEntry): DailyEntry {
+  const newer = a.updatedAt >= b.updatedAt ? a : b;
+  const older = newer === a ? b : a;
+
+  const mergedFoodLogText = pickTextPreferLonger(a.foodLogText, b.foodLogText, newer);
+  const mergedWeight =
+    newer.weight != null ? newer.weight : older.weight != null ? older.weight : null;
+  const mergedManualCalories =
+    newer.manualCalories != null
+      ? newer.manualCalories
+      : older.manualCalories != null
+        ? older.manualCalories
+        : null;
+
+  const nutritionSide = pickNutritionSide(a, b, newer);
+  const mergedNutritionSnapshot = nutritionSide.nutritionSnapshot;
+  const foodLogChangedSinceNutrition =
+    Boolean(mergedNutritionSnapshot) &&
+    mergedFoodLogText.trim() !== nutritionSide.foodLogText.trim();
+
+  return {
+    ...newer,
+    foodLogText: mergedFoodLogText,
+    weight: mergedWeight,
+    manualCalories: mergedManualCalories,
+    nutritionSnapshot: mergedNutritionSnapshot,
+    aiStatus: nutritionSide.aiStatus,
+    aiError: nutritionSide.aiError,
+    analysisStale: Boolean(nutritionSide.analysisStale) || foodLogChangedSinceNutrition,
+    updatedAt: maxIso(a.updatedAt, b.updatedAt),
+    createdAt: minIso(
+      a.createdAt || a.updatedAt,
+      b.createdAt || b.updatedAt,
+    ),
+  };
+}
+
+function pickTextPreferLonger(a: string, b: string, newer: DailyEntry): string {
+  const aTrim = a.trim();
+  const bTrim = b.trim();
+  if (!aTrim && !bTrim) return "";
+  if (!aTrim) return b;
+  if (!bTrim) return a;
+  if (aTrim.length !== bTrim.length) return aTrim.length > bTrim.length ? a : b;
+  // Same length: prefer the side that is newer overall for determinism.
+  return newer.foodLogText === a ? a : b;
+}
+
+function pickNutritionSide(a: DailyEntry, b: DailyEntry, newer: DailyEntry): DailyEntry {
+  if (a.nutritionSnapshot && !b.nutritionSnapshot) return a;
+  if (b.nutritionSnapshot && !a.nutritionSnapshot) return b;
+  if (a.nutritionSnapshot && b.nutritionSnapshot) {
+    const aUpdated = a.nutritionSnapshot.updatedAt || a.updatedAt;
+    const bUpdated = b.nutritionSnapshot.updatedAt || b.updatedAt;
+    return aUpdated >= bUpdated ? a : b;
+  }
+  return newer;
+}
+
+function maxIso(a: string, b: string): string {
+  return a >= b ? a : b;
+}
+
+function minIso(a: string, b: string): string {
+  return a <= b ? a : b;
 }
 
 function mergeFoodRules(local: FoodRule[], remote: FoodRule[], preferRemoteOverall: boolean): FoodRule[] {

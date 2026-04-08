@@ -94,6 +94,32 @@ export function useDashboard() {
   }
 
   const cloudPassword = ref("");
+  const cloudPasswordStorageKeyPrefix = "calorie-tracker.cloud-password::";
+
+  function cloudPasswordStorageKey(username: string) {
+    return `${cloudPasswordStorageKeyPrefix}${normalizeUsername(username)}`;
+  }
+
+  function loadCloudPasswordFromStorage(username: string) {
+    try {
+      const stored = localStorage.getItem(cloudPasswordStorageKey(username)) ?? "";
+      if (stored.trim()) {
+        cloudPassword.value = stored;
+        return true;
+      }
+    } catch {
+      // Ignore; storage may be unavailable in some contexts.
+    }
+    return false;
+  }
+
+  function saveCloudPasswordToStorage(username: string, password: string) {
+    try {
+      localStorage.setItem(cloudPasswordStorageKey(username), password);
+    } catch {
+      // Ignore; storage may be unavailable in some contexts.
+    }
+  }
 
   const savedCurrentEntry = computed(() =>
     findEntryByDate(entries.value, selectedDate.value),
@@ -102,8 +128,14 @@ export function useDashboard() {
     const savedFoodLog = savedCurrentEntry.value?.foodLogText ?? "";
     return currentFoodLog.value.trim() !== savedFoodLog.trim();
   });
+  const isCurrentWeightDirty = computed(() => {
+    const saved = savedCurrentEntry.value?.weight;
+    const savedWeight = saved !== null && saved !== undefined ? String(saved) : "";
+    return currentWeight.value.trim() !== savedWeight.trim();
+  });
 
   let foodDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let weightDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   watch(currentFoodLog, () => {
     if (!isCurrentFoodLogDirty.value) {
@@ -115,6 +147,19 @@ export function useDashboard() {
     if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
     foodDraftSaveTimer = setTimeout(() => {
       void saveFoodDraft();
+    }, 800);
+  });
+
+  watch(currentWeight, () => {
+    if (!isCurrentWeightDirty.value) {
+      if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
+      weightDraftSaveTimer = null;
+      return;
+    }
+
+    if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
+    weightDraftSaveTimer = setTimeout(() => {
+      void saveWeightDraft();
     }, 800);
   });
   const displayEntries = computed(() =>
@@ -221,6 +266,38 @@ export function useDashboard() {
     const savedProfile = await getProfile();
     profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value, themeMode.value));
     loadSelectedEntry();
+  }
+
+  async function persistDraftsForDate(date: string) {
+    const savedEntry = findEntryByDate(entries.value, date);
+    const savedFoodLog = savedEntry?.foodLogText ?? "";
+    const foodLogDirty = currentFoodLog.value.trim() !== savedFoodLog.trim();
+
+    const rawWeight = currentWeight.value;
+    const parsed = rawWeight.trim() ? Number(rawWeight) : null;
+    const normalizedWeight = parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    const savedWeight = savedEntry?.weight ?? null;
+    const weightDirty = normalizedWeight !== savedWeight;
+
+    if (!foodLogDirty && !weightDirty) {
+      return;
+    }
+
+    const update: Parameters<typeof upsertDailyEntry>[0] = { date };
+    if (foodLogDirty) {
+      update.foodLogText = currentFoodLog.value;
+    }
+    if (weightDirty) {
+      update.weight = normalizedWeight;
+    }
+
+    await autoSave.runAutoSave(async () => {
+      await upsertDailyEntry(update);
+      entries.value = await listEntries();
+    }, "today.persistDrafts");
+
+    if (foodLogDirty) scheduleCloudPush("today.foodLog");
+    if (weightDirty) scheduleCloudPush("today.weight");
   }
 
   function loadSelectedEntry() {
@@ -608,6 +685,9 @@ export function useDashboard() {
       localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, username);
       if (options?.password) {
         cloudPassword.value = options.password;
+        saveCloudPasswordToStorage(username, options.password);
+      } else if (!cloudPassword.value.trim()) {
+        loadCloudPasswordFromStorage(username);
       }
     } catch (err) {
       cloudStatus.value = "failed";
@@ -696,6 +776,9 @@ export function useDashboard() {
       cloudLastSyncedAt.value = "";
       cloudError.value = "";
     }
+    if (normalized && !cloudPassword.value.trim()) {
+      loadCloudPasswordFromStorage(normalized);
+    }
   }
 
   function cloudLogout() {
@@ -719,7 +802,22 @@ export function useDashboard() {
     }
   }
 
-  watch(selectedDate, loadSelectedEntry);
+  watch(
+    selectedDate,
+    async (nextDate, previousDate) => {
+      if (previousDate && previousDate !== nextDate) {
+        if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
+        foodDraftSaveTimer = null;
+        if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
+        weightDraftSaveTimer = null;
+
+        await persistDraftsForDate(previousDate);
+      }
+
+      loadSelectedEntry();
+    },
+    { flush: "sync" },
+  );
   watch(locale, syncChrome);
   watch(themeMode, syncChrome);
 
@@ -806,6 +904,12 @@ export function useDashboard() {
     }
     syncChrome();
     await refreshState();
+
+    const existingCloudUser = normalizeUsername(cloudConfirmedUsername.value || cloudUsername.value);
+    if (existingCloudUser && !cloudPassword.value.trim()) {
+      loadCloudPasswordFromStorage(existingCloudUser);
+    }
+
     await maybeInitCloudSync();
     void analysis.flushPendingAnalysis(false);
   });
@@ -840,6 +944,7 @@ export function useDashboard() {
   onUnmounted(() => {
     window.removeEventListener("online", handleOnline);
     if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
+    if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
   });
 
   return {
