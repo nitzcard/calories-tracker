@@ -893,7 +893,6 @@ export function useDashboard() {
       locale: locale.value,
       themeMode: themeMode.value,
     };
-    await saveProfile(profile.value);
     // If localStorage was cleared but IndexedDB still has keys, restore them.
     if (!aiKeys.value.gemini.trim()) {
       const dbKeys = await getStoredAiKeysFromDb();

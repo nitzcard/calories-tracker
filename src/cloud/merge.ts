@@ -29,14 +29,87 @@ function mergeProfile(local: Profile[], remote: Profile[], preferRemoteOverall: 
   if (!l && !r) return [];
   if (!l) return [r];
   if (!r) return [l];
-  if (preferRemoteOverall) return [r];
-  // Prefer the newest profile by updatedAt when available.
-  if (l.updatedAt && r.updatedAt && l.updatedAt !== r.updatedAt) {
-    return l.updatedAt > r.updatedAt ? [l] : [r];
+  if (preferRemoteOverall) {
+    return [mergeProfilePreservingData(l, r, { prefer: "remote" })];
   }
-  // Otherwise, prefer the profile that has more filled-in fields (common when pulling to a fresh device).
-  if (profileCompletenessScore(r) > profileCompletenessScore(l)) return [r];
-  return [l];
+
+  const prefer: "local" | "remote" = maxIso(l.updatedAt, r.updatedAt) === (l.updatedAt ?? "") ? "local" : "remote";
+  return [mergeProfilePreservingData(l, r, { prefer })];
+}
+
+function mergeProfilePreservingData(
+  local: Profile,
+  remote: Profile,
+  options: { prefer: "local" | "remote" },
+): Profile {
+  // Defaults/baselines should be "weak", especially on a fresh device right after login.
+  const DEFAULT = {
+    sex: "male" as const,
+    tdeeEquation: "mifflinStJeor" as const,
+    aiModel: "gemini-2.5-flash",
+    locale: "en" as const,
+    themeMode: "system" as const,
+  };
+
+  const preferred = options.prefer === "remote" ? remote : local;
+  const other = preferred === remote ? local : remote;
+
+  const pickNonEmpty = (a: string, b: string) => {
+    const aTrim = a.trim();
+    const bTrim = b.trim();
+    if (!aTrim && !bTrim) return "";
+    if (!aTrim) return b;
+    if (!bTrim) return a;
+    return a; // keep first argument by default
+  };
+
+  const pickNullableNumber = (a: number | null, b: number | null) => (a ?? b);
+
+  const pickEnumWithWeakDefault = <T extends string>(a: T, b: T, weak: T): T => {
+    if (a !== weak && b === weak) return a;
+    if (b !== weak && a === weak) return b;
+    return a;
+  };
+
+  const pickStringWithWeakDefault = (a: string, b: string, weak: string) => {
+    const aTrim = a.trim();
+    const bTrim = b.trim();
+    if (aTrim && !bTrim) return a;
+    if (bTrim && !aTrim) return b;
+    if (!aTrim && !bTrim) return "";
+    if (aTrim !== weak && bTrim === weak) return a;
+    if (bTrim !== weak && aTrim === weak) return b;
+    return a;
+  };
+
+  // For each field: prefer non-default/non-empty values first; if both are "strong", prefer the chosen side.
+  const mergedSex = pickEnumWithWeakDefault(preferred.sex, other.sex, DEFAULT.sex);
+  const mergedEquation = pickEnumWithWeakDefault(
+    preferred.tdeeEquation,
+    other.tdeeEquation,
+    DEFAULT.tdeeEquation,
+  );
+  const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
+  const mergedTheme = pickEnumWithWeakDefault(preferred.themeMode, other.themeMode, DEFAULT.themeMode);
+  const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
+
+  return {
+    ...other,
+    ...preferred,
+    id: "default",
+    sex: mergedSex,
+    tdeeEquation: mergedEquation,
+    locale: mergedLocale,
+    themeMode: mergedTheme,
+    aiModel: mergedModel,
+    age: pickNullableNumber(preferred.age, other.age),
+    height: pickNullableNumber(preferred.height, other.height),
+    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
+    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
+    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
+    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
+    updatedAt: maxIso(local.updatedAt, remote.updatedAt) || preferred.updatedAt || other.updatedAt,
+  };
 }
 
 function mergeDailyEntries(local: DailyEntry[], remote: DailyEntry[]): DailyEntry[] {
@@ -124,12 +197,16 @@ function pickNutritionSide(a: DailyEntry, b: DailyEntry, newer: DailyEntry): Dai
   return newer;
 }
 
-function maxIso(a: string, b: string): string {
-  return a >= b ? a : b;
+function maxIso(a?: string, b?: string): string {
+  const av = a ?? "";
+  const bv = b ?? "";
+  return av >= bv ? av : bv;
 }
 
-function minIso(a: string, b: string): string {
-  return a <= b ? a : b;
+function minIso(a?: string, b?: string): string {
+  const av = a ?? "";
+  const bv = b ?? "";
+  return av <= bv ? av : bv;
 }
 
 function mergeFoodRules(local: FoodRule[], remote: FoodRule[], preferRemoteOverall: boolean): FoodRule[] {
@@ -177,15 +254,4 @@ function isBaselineBlob(blob: ExportedAppData) {
   const hasRules = blob.foodRules.length > 0;
 
   return profileBaseline && !hasMeaningfulEntry && !hasRules;
-}
-
-function profileCompletenessScore(profile: Profile) {
-  let score = 0;
-  if (profile.age) score += 1;
-  if (profile.height) score += 1;
-  if (profile.estimatedWeight) score += 1;
-  if (profile.bodyFat) score += 1;
-  if (profile.activityPrompt.trim()) score += 1;
-  if (profile.foodInstructions.trim()) score += 1;
-  return score;
 }
