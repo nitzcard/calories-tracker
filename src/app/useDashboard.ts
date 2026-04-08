@@ -51,10 +51,10 @@ import {
 } from "../ai/registry";
 import { fetchGeminiModelOptions } from "../ai/gemini-models";
 import { mergeExportedAppData } from "../cloud/merge";
-
-const today = new Date().toISOString().slice(0, 10);
+import { localIsoDate } from "../domain/dates";
 
 export function useDashboard() {
+  const today = localIsoDate();
   const locale = ref<AppLocale>(readStoredLocale() ?? detectLocale());
   const themeMode = ref<ThemeMode>(readStoredThemeMode() ?? detectThemeMode());
   const profile = ref<Profile | null>(null);
@@ -101,6 +101,21 @@ export function useDashboard() {
   const isCurrentFoodLogDirty = computed(() => {
     const savedFoodLog = savedCurrentEntry.value?.foodLogText ?? "";
     return currentFoodLog.value.trim() !== savedFoodLog.trim();
+  });
+
+  let foodDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  watch(currentFoodLog, () => {
+    if (!isCurrentFoodLogDirty.value) {
+      if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
+      foodDraftSaveTimer = null;
+      return;
+    }
+
+    if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
+    foodDraftSaveTimer = setTimeout(() => {
+      void saveFoodDraft();
+    }, 800);
   });
   const displayEntries = computed(() =>
     entries.value.map((entry) =>
@@ -367,7 +382,7 @@ export function useDashboard() {
   const dataTransfer = useDataTransferState(refreshState);
 
   function autoExportFilename(date: string) {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = localIsoDate();
     return `calorie-tracker-backup-${day}-after-${date}.json`;
   }
 
@@ -518,6 +533,11 @@ export function useDashboard() {
     cloudStatus.value = "idle";
     cloudError.value = "";
     try {
+      // Ensure the current UI draft is persisted before snapshotting local state for the merge.
+      if (isCurrentFoodLogDirty.value) {
+        await saveFoodDraft();
+      }
+
       const localBefore = await exportAppData();
       const remote = await fetchUserBlob(username);
       if (!remote.ok) {
@@ -553,7 +573,7 @@ export function useDashboard() {
       if (remotePayload && options?.backupBeforePull !== false) {
         // Backup the local copy before we replace local state with a merged copy.
         await dataTransfer.exportData({
-          filename: `calorie-tracker-backup-${new Date().toISOString().slice(0, 10)}-before-cloud-merge-${username}.json`,
+          filename: `calorie-tracker-backup-${localIsoDate()}-before-cloud-merge-${username}.json`,
         });
       }
 
@@ -819,6 +839,7 @@ export function useDashboard() {
 
   onUnmounted(() => {
     window.removeEventListener("online", handleOnline);
+    if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
   });
 
   return {

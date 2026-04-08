@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { exportAppData, importAppData } from "../storage/repository";
+import { localIsoDate } from "../domain/dates";
 
 export function useDataTransferState(refreshState: () => Promise<void>) {
   const dataTransferStatus = ref<"idle" | "exported" | "imported" | "failed">("idle");
@@ -15,7 +16,7 @@ export function useDataTransferState(refreshState: () => Promise<void>) {
       const link = document.createElement("a");
       link.href = url;
       link.download =
-        options?.filename ?? `calorie-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        options?.filename ?? `calorie-tracker-backup-${localIsoDate()}.json`;
       link.click();
       URL.revokeObjectURL(url);
       dataTransferStatus.value = "exported";
