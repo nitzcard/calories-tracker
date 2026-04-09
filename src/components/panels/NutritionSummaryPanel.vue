@@ -373,6 +373,13 @@ function formatActual(value: number, unit: string) {
   return `${Math.round(value)} ${unit}`;
 }
 
+function macroEmoji(macro: "protein" | "carbs" | "fat" | "fiber") {
+  if (macro === "protein") return "💪";
+  if (macro === "carbs") return "🍚";
+  if (macro === "fiber") return "🌿";
+  return "🥑";
+}
+
 const proteinGauge = computed(() => macroGauge("protein"));
 const carbsGauge = computed(() => macroGauge("carbs"));
 const fatGauge = computed(() => macroGauge("fat"));
@@ -432,9 +439,9 @@ const macroPieSlices = computed<MacroPieSlice[] | null>(() => {
   const fatPct = Math.max(0, 100 - proteinPct - carbsPct);
 
   const slices = [
-    { key: "protein" as const, percent: proteinPct, color: "#0a88a3", grams: totals.protein ?? 0 },
-    { key: "carbs" as const, percent: carbsPct, color: "#6e5b28", grams: totals.carbs ?? 0 },
-    { key: "fat" as const, percent: fatPct, color: "#7c2d2d", grams: totals.fat ?? 0 },
+    { key: "protein" as const, percent: proteinPct, color: "#22c7db", grams: totals.protein ?? 0 },
+    { key: "carbs" as const, percent: carbsPct, color: "#7fd36b", grams: totals.carbs ?? 0 },
+    { key: "fat" as const, percent: fatPct, color: "#ee6a74", grams: totals.fat ?? 0 },
   ];
 
   // Build wedges clockwise from 0°.
@@ -514,6 +521,13 @@ const proteinPerLeanBodyWeight = computed(() => {
   >
     <template #meta>
       <div class="meta-row">
+        <span
+          v-if="entry?.nutritionSnapshot?.sourceModel"
+          class="status-pill status-pill--provider"
+          dir="ltr"
+        >
+          AI Model: {{ entry.nutritionSnapshot.sourceModel }}
+        </span>
         <span v-if="showCorrectionCue" class="status-pill" data-status="processing">
           {{ t("resultsUpdated") }}
         </span>
@@ -536,7 +550,7 @@ const proteinPerLeanBodyWeight = computed(() => {
           <div v-if="macroPieSlices" class="macro-pie-inline">
             <svg class="macro-pie-svg" viewBox="0 0 100 100" role="img" aria-label="macros pie">
               <template v-for="slice in macroPieSlices" :key="slice.key">
-                <path :d="slice.path" :fill="slice.color" opacity="0.95"></path>
+                <path class="macro-pie-slice" :d="slice.path" :fill="slice.color" opacity="0.96"></path>
                 <text
                   :x="slice.textX"
                   :y="slice.textY"
@@ -566,8 +580,8 @@ const proteinPerLeanBodyWeight = computed(() => {
             </svg>
           </div>
         </div>
-        <div class="compact-stat">
-          <strong>{{ t("protein") }}</strong>
+        <div class="compact-stat compact-stat--protein">
+          <strong><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.protein ?? "-" }}</span>
           <small v-if="macroPercent('protein') !== null" class="stat-meta">
             {{ macroPercent("protein") }}% {{ t("macroShareOfCalories") }}
@@ -604,8 +618,8 @@ const proteinPerLeanBodyWeight = computed(() => {
           </small>
           <small class="stat-helper">{{ macroRecommendationText("protein") }}</small>
         </div>
-        <div class="compact-stat">
-          <strong>{{ t("carbs") }}</strong>
+        <div class="compact-stat compact-stat--carbs">
+          <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.carbs ?? "-" }}</span>
           <small v-if="macroPercent('carbs') !== null" class="stat-meta">
             {{ macroPercent("carbs") }}% {{ t("macroShareOfCalories") }}
@@ -636,8 +650,8 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
           <small class="stat-helper">{{ macroRecommendationText("carbs") }}</small>
         </div>
-        <div class="compact-stat">
-          <strong>{{ t("fat") }}</strong>
+        <div class="compact-stat compact-stat--fat">
+          <strong><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.fat ?? "-" }}</span>
           <small v-if="macroPercent('fat') !== null" class="stat-meta">
             {{ macroPercent("fat") }}% {{ t("macroShareOfCalories") }}
@@ -668,8 +682,8 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
           <small class="stat-helper">{{ macroRecommendationText("fat") }}</small>
         </div>
-        <div class="compact-stat">
-          <strong>{{ t("fiber") }}</strong>
+        <div class="compact-stat compact-stat--fiber">
+          <strong><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.fiber ?? "-" }}</span>
           <div v-if="fiberGauge" class="macro-gauge" :data-state="fiberGauge.state">
             <div class="macro-bar" aria-hidden="true">
@@ -696,11 +710,6 @@ const proteinPerLeanBodyWeight = computed(() => {
             </small>
           </div>
           <small class="stat-helper">{{ macroRecommendationText("fiber") }}</small>
-        </div>
-        <div class="compact-stat">
-          <strong>{{ t("provider") }}</strong>
-          <span>{{ entry.nutritionSnapshot.sourceModel }}</span>
-          <small class="stat-helper">&nbsp;</small>
         </div>
       </div>
 
@@ -974,15 +983,79 @@ const proteinPerLeanBodyWeight = computed(() => {
   border-color: #7c2d2d;
 }
 
+.status-pill--provider {
+  background: color-mix(in srgb, var(--surface-2) 84%, #2a5f7a 16%);
+  color: color-mix(in srgb, white 82%, #7fd3ff 18%);
+  border-color: color-mix(in srgb, var(--border-strong) 60%, #4f93b4 40%);
+  max-inline-size: min(48vw, 32rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 8px;
   margin-block-start: 10px;
+  align-items: stretch;
 }
 
 .compact-stat {
+  display: grid;
+  gap: 4px;
   align-content: start;
+  min-inline-size: 0;
+  block-size: 100%;
+}
+
+.compact-stat--protein,
+.compact-stat--carbs,
+.compact-stat--fat,
+.compact-stat--fiber {
+  border: 1px solid color-mix(in srgb, var(--macro-accent) 42%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--macro-accent) 14%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--macro-accent) 6%, var(--surface)) 100%
+    );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+.compact-stat--protein {
+  --macro-accent: #19b6c9;
+}
+
+.compact-stat--carbs {
+  --macro-accent: #7bcf67;
+}
+
+.compact-stat--fat {
+  --macro-accent: #d45b63;
+}
+
+.compact-stat--fiber {
+  --macro-accent: #58b97f;
+}
+
+.macro-heading-mark {
+  display: inline-block;
+  margin-inline-end: 0.35rem;
+}
+
+.compact-stat--protein strong,
+.compact-stat--carbs strong,
+.compact-stat--fat strong,
+.compact-stat--fiber strong {
+  color: color-mix(in srgb, var(--macro-accent) 62%, var(--text-primary));
+}
+
+.compact-stat--protein > span,
+.compact-stat--carbs > span,
+.compact-stat--fat > span,
+.compact-stat--fiber > span {
+  color: color-mix(in srgb, var(--macro-accent) 78%, white 22%);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
 }
 
 .compact-stat--calories {
@@ -1002,13 +1075,33 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .stat-meta {
+  display: block;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .stat-helper {
+  display: block;
   color: var(--text-muted);
   line-height: 1.3;
-  min-block-size: 2.6em;
+  min-block-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.compact-stat--protein .stat-meta,
+.compact-stat--protein .stat-helper,
+.compact-stat--carbs .stat-meta,
+.compact-stat--carbs .stat-helper,
+.compact-stat--fat .stat-meta,
+.compact-stat--fat .stat-helper,
+.compact-stat--fiber .stat-meta,
+.compact-stat--fiber .stat-helper {
+  color: color-mix(in srgb, var(--macro-accent) 38%, var(--text-primary));
+}
+
+.stat-meta + .stat-meta,
+.stat-meta + .stat-helper {
+  margin-block-start: 2px;
 }
 
 .macro-gauge {
@@ -1029,6 +1122,21 @@ const proteinPerLeanBodyWeight = computed(() => {
   position: absolute;
   inset-block: 0;
   background: color-mix(in srgb, #27ae60 32%, transparent);
+}
+
+.compact-stat--protein .macro-bar__range,
+.compact-stat--carbs .macro-bar__range,
+.compact-stat--fat .macro-bar__range,
+.compact-stat--fiber .macro-bar__range {
+  background: color-mix(in srgb, var(--macro-accent) 44%, transparent);
+}
+
+.compact-stat--protein .macro-bar__marker,
+.compact-stat--carbs .macro-bar__marker,
+.compact-stat--fat .macro-bar__marker,
+.compact-stat--fiber .macro-bar__marker {
+  background: color-mix(in srgb, var(--macro-accent) 88%, white 12%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 68%, transparent);
 }
 
 .macro-bar__marker {
@@ -1074,6 +1182,12 @@ const proteinPerLeanBodyWeight = computed(() => {
   border: 1px solid var(--border-strong);
   box-shadow: var(--bevel-sunken);
   background: var(--surface-3);
+}
+
+.macro-pie-slice {
+  stroke: color-mix(in srgb, var(--bg) 82%, white 18%);
+  stroke-width: 1.35px;
+  stroke-linejoin: round;
 }
 
 .macro-pie-text {
@@ -1259,7 +1373,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   }
 
   .stat-helper {
-    min-block-size: 3.2em;
+    min-block-size: 0;
     font-size: 0.82rem;
   }
 

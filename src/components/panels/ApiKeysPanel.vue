@@ -64,11 +64,25 @@ function emitSave(provider: keyof StoredAiKeys) {
       </FormField>
     </div>
 
-    <p v-if="!keys.gemini" class="helper-text helper-text--after">
-      <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noreferrer">
+    <div class="helper-links helper-links--after">
+      <a
+        class="helper-link"
+        href="https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/approaches/integration-models#bring-your-own-key-byok"
+        target="_blank"
+        rel="noreferrer"
+      >
+        {{ t("byokExplainLink") }}
+      </a>
+      <a
+        v-if="!keys.gemini"
+        class="helper-link"
+        href="https://ai.google.dev/gemini-api/docs/api-key"
+        target="_blank"
+        rel="noreferrer"
+      >
         {{ t("getGeminiKey") }}
       </a>
-    </p>
+    </div>
   </BasePanel>
 </template>
 
@@ -85,8 +99,19 @@ function emitSave(provider: keyof StoredAiKeys) {
   margin: 0;
 }
 
-.helper-text--after {
+.helper-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.helper-links--after {
   margin-block-start: 8px;
+}
+
+.helper-link {
+  color: var(--text-muted);
 }
 
 .keys-grid :deep(input) {
