@@ -67,7 +67,7 @@ function emitSave(provider: keyof StoredAiKeys) {
     <div class="helper-links helper-links--after">
       <a
         class="helper-link"
-        href="https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/approaches/integration-models#bring-your-own-key-byok"
+        href="https://en.wikipedia.org/wiki/Bring_your_own_encryption"
         target="_blank"
         rel="noreferrer"
       >
