@@ -31,7 +31,6 @@ export interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   targetWeight: number | null;
-  customTdee: number | null;
   bodyFat: number | null;
   tdeeEquation: TdeeEquation;
   activityPrompt: string;
@@ -159,6 +158,7 @@ export interface DailyEntry {
   foodLogText: string;
   weight: number | null;
   manualCalories: number | null;
+  customTdee: number | null;
   analysisStale: boolean;
   nutritionSnapshot: NutritionSnapshot | null;
   aiStatus: AiStatus;
@@ -186,6 +186,7 @@ export interface TdeeSnapshot {
   observedReason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
   observedMinEntries: number;
   observedMinDays: number;
+  customTdee: number | null;
   formulaTdeeAverage: number | null;
   formulaBreakdown: Record<string, number>;
   formulaWeight: number | null;
@@ -261,6 +262,7 @@ export interface DailyEntryInput {
   foodLogText?: string;
   weight?: number | null;
   manualCalories?: number | null;
+  customTdee?: number | null;
 }
 
 export interface AiAnalysisInput {

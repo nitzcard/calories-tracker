@@ -74,6 +74,7 @@ const {
   weightPoints,
   caloriePoints,
   savingHistoryCalories,
+  isCalculatingCustomTdee,
   statusLabel,
   onLocaleChange,
   onThemeChange,
@@ -81,6 +82,7 @@ const {
   saveWeightDraft,
   saveFoodDraft,
   saveHistoryCalories,
+  calculateCustomTdeeWithGemini,
   analyzeCurrentDay,
   saveProfileDraft,
   saveActivityPrompt,
@@ -192,24 +194,39 @@ const activeToasts = computed(() => {
     spinning: boolean;
   }> = [];
 
-  if (isCloudSyncing.value || cloudToastVisibleUntil.value > Date.now()) {
-    items.push({
-      id: "cloud-active",
-      kind: "cloud" as const,
-      message: `☁️ ${t("toastCloudSyncing")}`,
-      spinning: true,
-    });
-  }
+  const cloudActive = isCloudSyncing.value || cloudToastVisibleUntil.value > Date.now();
+  const localActive =
+    isAutoSaving.value || isTransferringData.value || localToastVisibleUntil.value > Date.now();
 
-  if (isAutoSaving.value || isTransferringData.value || localToastVisibleUntil.value > Date.now()) {
+  if (cloudActive && localActive) {
     items.push({
-      id: "local-active",
-      kind: "local" as const,
+      id: "sync-active",
+      kind: "cloud" as const,
       message: isTransferringData.value
-        ? `💾 ${t("toastLocalTransferring")}`
-        : `💾 ${t("toastLocalSaving")}`,
+        ? `💾☁️ ${t("toastLocalCloudTransferring")}`
+        : `💾☁️ ${t("toastLocalCloudSyncing")}`,
       spinning: true,
     });
+  } else {
+    if (cloudActive) {
+      items.push({
+        id: "cloud-active",
+        kind: "cloud" as const,
+        message: `☁️ ${t("toastCloudSyncing")}`,
+        spinning: true,
+      });
+    }
+
+    if (localActive) {
+      items.push({
+        id: "local-active",
+        kind: "local" as const,
+        message: isTransferringData.value
+          ? `💾 ${t("toastLocalTransferring")}`
+          : `💾 ${t("toastLocalSaving")}`,
+        spinning: true,
+      });
+    }
   }
 
   if (transientToast.value) {
@@ -498,11 +515,13 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 	          :tdee="tdee"
 	          :selected-equation="profile.tdeeEquation"
 	          :highlight-token="tdeeHighlightToken"
-	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
+	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation || isCalculatingCustomTdee"
+            :is-calculating-custom-tdee="isCalculatingCustomTdee"
 	          @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;
           "
+            @calculate-custom-tdee="calculateCustomTdeeWithGemini"
         />
 
       </div>

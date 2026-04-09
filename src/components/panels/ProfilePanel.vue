@@ -26,6 +26,10 @@ const activityDraft = ref(props.profile.activityPrompt);
 const isProfileRequiredMissing = () =>
   props.profile.age == null || props.profile.height == null || !activityDraft.value.trim();
 
+let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+let latestProfileToSave: Profile | null = null;
+const PROFILE_SAVE_DEBOUNCE_MS = 2000;
+
 watch(
   () => props.profile.activityPrompt,
   (next) => {
@@ -33,16 +37,26 @@ watch(
   },
 );
 
-	function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "customTdee" | "bodyFat">(key: K, event: Event) {
+function scheduleProfileSave(nextProfile: Profile) {
+  latestProfileToSave = nextProfile;
+  if (profileSaveTimeout) clearTimeout(profileSaveTimeout);
+  profileSaveTimeout = setTimeout(() => {
+    if (!latestProfileToSave) return;
+    emit("save", latestProfileToSave);
+    profileSaveTimeout = null;
+  }, PROFILE_SAVE_DEBOUNCE_MS);
+}
+
+	function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(key: K, event: Event) {
 	  const raw = (event.target as HTMLInputElement).value;
 	  const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
 	  emit("update:profile", nextProfile);
-	  emit("save", nextProfile);
+    scheduleProfileSave(nextProfile);
 	}
 
 function saveImmediateProfile(profile: Profile) {
   emit("update:profile", profile);
-  emit("save", profile);
+  scheduleProfileSave(profile);
 }
 </script>
 
@@ -108,18 +122,6 @@ function saveImmediateProfile(profile: Profile) {
 	          <span class="field-unit">{{ t("unitKg") }}</span>
 	        </div>
 	      </FormField>
-        <FormField :label="t('customTdee')" :helper="t('customTdeeHelper')">
-          <div class="unit-field">
-            <input
-              :value="profile.customTdee ?? ''"
-              type="number"
-              step="1"
-              min="0"
-              @input="saveNullableNumber('customTdee', $event)"
-            />
-            <span class="field-unit">{{ t("unitKcal") }}</span>
-          </div>
-        </FormField>
       <FormField>
         <template #label>
           <span class="bodyfat-label">

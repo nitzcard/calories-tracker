@@ -49,7 +49,6 @@ function mergeProfilePreservingData(
 	    aiModel: "gemini-2.5-flash",
 	    locale: "en" as const,
 	    themeMode: "system" as const,
-      customTdee: null as number | null,
 	  };
 
   const preferred = options.prefer === "remote" ? remote : local;
@@ -94,9 +93,12 @@ function mergeProfilePreservingData(
   const mergedTheme = pickEnumWithWeakDefault(preferred.themeMode, other.themeMode, DEFAULT.themeMode);
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
 
+    const { customTdee: _legacyPreferred, ...preferredRest } = preferred as any;
+    const { customTdee: _legacyOther, ...otherRest } = other as any;
+
 	  return {
-	    ...other,
-	    ...preferred,
+	    ...otherRest,
+	    ...preferredRest,
 	    id: "default",
 	    sex: mergedSex,
 	    tdeeEquation: mergedEquation,
@@ -107,7 +109,6 @@ function mergeProfilePreservingData(
 	    height: pickNullableNumber(preferred.height, other.height),
 	    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
 	    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
-      customTdee: pickNullableNumber(preferred.customTdee ?? null, other.customTdee ?? null),
 	    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
 	    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
 	    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
@@ -138,6 +139,7 @@ function scoreEntry(entry: DailyEntry) {
   if (entry.nutritionSnapshot) score += 3;
   if (entry.manualCalories != null) score += 1;
   if (entry.weight != null) score += 1;
+  if ((entry as any).customTdee != null) score += 1;
   return score;
 }
 
@@ -154,6 +156,12 @@ function mergeEntryPreservingData(a: DailyEntry, b: DailyEntry): DailyEntry {
       : older.manualCalories != null
         ? older.manualCalories
         : null;
+  const mergedCustomTdee =
+    (newer as any).customTdee != null
+      ? (newer as any).customTdee
+      : (older as any).customTdee != null
+        ? (older as any).customTdee
+        : null;
 
   const nutritionSide = pickNutritionSide(a, b, newer);
   const mergedNutritionSnapshot = nutritionSide.nutritionSnapshot;
@@ -166,6 +174,7 @@ function mergeEntryPreservingData(a: DailyEntry, b: DailyEntry): DailyEntry {
     foodLogText: mergedFoodLogText,
     weight: mergedWeight,
     manualCalories: mergedManualCalories,
+    customTdee: mergedCustomTdee,
     nutritionSnapshot: mergedNutritionSnapshot,
     aiStatus: nutritionSide.aiStatus,
     aiError: nutritionSide.aiError,
@@ -250,7 +259,6 @@ function mergeEncryptedSecrets(local: ExportedAppData, remote: ExportedAppData) 
 	      !p.height &&
 	      !p.estimatedWeight &&
 	      !p.targetWeight &&
-        !p.customTdee &&
 	      !p.bodyFat &&
 	      !p.activityPrompt.trim() &&
 	      !p.foodInstructions.trim());

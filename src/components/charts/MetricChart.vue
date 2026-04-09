@@ -109,7 +109,7 @@ function renderChart() {
           stroke: "#5f5a4f",
           grid: { stroke: "rgba(95, 90, 79, 0.18)" },
           splits: () => xSplits,
-          values: (_u, splits) => splits.map((value) => formatDay(value)),
+          values: (_u, splits) => splits.map((value) => formatAxisDay(value)),
         },
         {
           stroke: "#5f5a4f",
@@ -175,6 +175,13 @@ function normalizeTimestamp(value: number) {
 
 function formatDay(value: number) {
   return dateFormatter.value.format(new Date(value * 1000));
+}
+
+function formatAxisDay(value: number) {
+  const date = new Date(value * 1000);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
 }
 
 function formatYAxisValue(value: number) {

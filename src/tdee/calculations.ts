@@ -1,4 +1,8 @@
-import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
+import {
+  deducedCustomTdeeFromEntries,
+  deducedWeightFromEntries,
+  resolvedDailyCalories,
+} from "../domain/entries";
 import type { DailyEntry, FormulaTdeeResult, Profile, TdeeEquation, TdeeSnapshot } from "../types";
 
 const MIN_OBSERVED_TDEE_DAYS = 7;
@@ -316,9 +320,14 @@ function selectedTdeeValue(
   return formulas.breakdown[selectedEquation] ?? null;
 }
 
-export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): TdeeSnapshot {
+export function buildTdeeSnapshot(
+  entries: DailyEntry[],
+  profile: Profile,
+  anchorDate?: string,
+): TdeeSnapshot {
   const formulaWeight = resolveFormulaWeight(entries, profile);
   const formulas = calculateFormulaTdee(profile, formulaWeight.value);
+  const customTdee = deducedCustomTdeeFromEntries(entries, anchorDate);
   const normalizedTargetWeight =
     profile.targetWeight !== null &&
     profile.targetWeight !== undefined &&
@@ -332,7 +341,7 @@ export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): Tdee
   const targetTdee =
     normalizedTargetWeight !== null
       ? (profile.tdeeEquation === "custom"
-          ? (profile.customTdee ?? null)
+          ? customTdee
           : profile.tdeeEquation === "observedTdee"
           ? targetFormulas.average
           : targetFormulas.breakdown[profile.tdeeEquation] ?? targetFormulas.average)
@@ -347,13 +356,14 @@ export function buildTdeeSnapshot(entries: DailyEntry[], profile: Profile): Tdee
     observedReason: observed.reason,
     observedMinEntries: MIN_OBSERVED_TDEE_ENTRIES,
     observedMinDays: MIN_OBSERVED_TDEE_DAYS,
+    customTdee,
     formulaTdeeAverage: formulas.average,
     formulaBreakdown: formulas.breakdown,
     formulaWeight: formulaWeight.value,
     formulaWeightSource: formulaWeight.source,
     activityMultiplier: formulas.activityMultiplier,
     selectedEquation: profile.tdeeEquation,
-    selectedValue: selectedTdeeValue(profile.tdeeEquation, formulas, observed.value, profile.customTdee ?? null),
+    selectedValue: selectedTdeeValue(profile.tdeeEquation, formulas, observed.value, customTdee),
     targetWeight: normalizedTargetWeight,
     targetTdee,
     lastComputedAt: new Date().toISOString(),

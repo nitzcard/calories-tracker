@@ -12,6 +12,7 @@ import BasePanel from "../base/BasePanel.vue";
 	  selectedEquation: TdeeEquation;
 	  highlightToken?: number;
 	  isUpdating?: boolean;
+    isCalculatingCustomTdee?: boolean;
 	}>();
 
 const isHighlighted = ref(false);
@@ -19,6 +20,7 @@ let highlightTimeout: ReturnType<typeof setTimeout> | null = null;
 const { t } = useI18n();
 const emit = defineEmits<{
   "select-equation": [value: TdeeEquation];
+  "calculate-custom-tdee": [];
 }>();
 
 watch(
@@ -106,64 +108,9 @@ function weightSourceText(source: "estimated" | "deduced" | "logged" | null) {
 	  emit("select-equation", value);
 	}
 
-  const promptCopied = ref(false);
-
-  function buildTdeeAgentPrompt() {
-    const p = props.profile;
-    const currentWeight = p.estimatedWeight ?? props.tdee.formulaWeight ?? null;
-    const targetWeight = p.targetWeight ?? null;
-    const activity = (p.activityPrompt ?? "").trim();
-    const sex = p.sex;
-    const age = p.age ?? null;
-    const heightCm = p.height ?? null;
-
-    return [
-      "You are a coach/nutrition assistant. Use up-to-date research and best practices (browse the web if you can) to estimate TDEE and set a calorie target for my goal.",
-      "",
-      "Inputs (metric):",
-      `- Sex: ${sex}`,
-      `- Age: ${age ?? "unknown"}`,
-      `- Height: ${heightCm ?? "unknown"} cm`,
-      `- Current weight: ${currentWeight ?? "unknown"} kg`,
-      `- Target weight: ${targetWeight ?? "none"} kg`,
-      "",
-      "Activity / lifestyle:",
-      activity ? `- ${activity}` : "- (not provided)",
-      "",
-      "What I want from you:",
-      "1) Estimate my TDEE using at least Mifflin-St Jeor and (if possible) one alternative method; state assumptions (activity multiplier).",
-      "2) If I gave a target weight, recommend a safe weekly loss/gain rate and a daily calorie target to reach it.",
-      "3) Output one final number for: recommended daily calories (kcal/day), and show the calculation.",
-      "4) Ask any critical clarifying questions only if needed; otherwise make conservative assumptions.",
-    ].join("\n");
-  }
-
-  async function copyTdeePrompt() {
-    const text = buildTdeeAgentPrompt();
-    promptCopied.value = false;
-    try {
-      await navigator.clipboard.writeText(text);
-      promptCopied.value = true;
-      setTimeout(() => (promptCopied.value = false), 2000);
-      return;
-    } catch {
-      // Fallback for older browsers / non-secure contexts.
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.setAttribute("readonly", "true");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      try {
-        document.execCommand("copy");
-        promptCopied.value = true;
-        setTimeout(() => (promptCopied.value = false), 2000);
-      } finally {
-        document.body.removeChild(textarea);
-      }
-    }
+  function calculateCustomTdee() {
+    if (props.isCalculatingCustomTdee) return;
+    emit("calculate-custom-tdee");
   }
 
 function observedEmptyText() {
@@ -208,8 +155,8 @@ function observedEmptyText() {
     </div>
 
       <div class="tdee-actions">
-        <button class="secondary-action" @click="copyTdeePrompt">
-          {{ promptCopied ? t("tdeePromptCopied") : t("tdeePromptCopy") }}
+        <button class="secondary-action" :disabled="Boolean(isCalculatingCustomTdee)" @click="calculateCustomTdee">
+          {{ isCalculatingCustomTdee ? t("tdeePromptCalculating") : t("tdeePromptCalculate") }}
         </button>
       </div>
 
@@ -234,7 +181,7 @@ function observedEmptyText() {
                 />
               </td>
               <td><strong>{{ t("customTdee") }}</strong></td>
-              <td class="calorie-cell">{{ profile.customTdee ?? "-" }}</td>
+              <td class="calorie-cell">{{ tdee.customTdee ?? "-" }}</td>
               <td>
                 {{ t("customTdeeRowHelper") }}
               </td>

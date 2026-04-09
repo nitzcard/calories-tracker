@@ -6,6 +6,7 @@ const props = defineProps<{
   value: number | null;
   fallbackValue: number | null;
   isSaving: boolean;
+  useFallbackAsValue?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -14,7 +15,9 @@ const emit = defineEmits<{
 
 const draft = ref("");
 
-const displayValue = computed(() => props.value ?? props.fallbackValue);
+const displayValue = computed(() =>
+  props.value ?? (props.useFallbackAsValue === false ? null : props.fallbackValue),
+);
 const placeholder = computed(() =>
   props.fallbackValue != null ? String(props.fallbackValue) : "-",
 );

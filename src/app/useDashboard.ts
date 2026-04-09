@@ -52,6 +52,7 @@ import {
 import { fetchGeminiModelOptions } from "../ai/gemini-models";
 import { mergeExportedAppData } from "../cloud/merge";
 import { localIsoDate } from "../domain/dates";
+import { estimateTdeeWithGemini } from "../ai/gemini-tdee";
 
 export function useDashboard() {
   const today = localIsoDate();
@@ -80,6 +81,7 @@ export function useDashboard() {
   const cloudStatus = ref<"idle" | "synced" | "failed">("idle");
   const cloudLastSyncedAt = ref("");
   const cloudError = ref("");
+  const isCalculatingCustomTdee = ref(false);
   const supabaseConfigured = computed(() => isSupabaseConfigured());
   const cloudIsSyncing = ref(false);
   let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -166,7 +168,7 @@ export function useDashboard() {
     if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
     foodDraftSaveTimer = setTimeout(() => {
       void saveFoodDraft();
-    }, 800);
+    }, 2000);
   });
 
   watch(currentWeight, () => {
@@ -179,7 +181,7 @@ export function useDashboard() {
     if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
     weightDraftSaveTimer = setTimeout(() => {
       void saveWeightDraft();
-    }, 800);
+    }, 2000);
   });
   const displayEntries = computed(() =>
     entries.value.map((entry) =>
@@ -199,7 +201,7 @@ export function useDashboard() {
   );
   const tdee = computed(() =>
     profile.value
-      ? buildTdeeSnapshot(displayEntries.value, profile.value)
+      ? buildTdeeSnapshot(displayEntries.value, profile.value, selectedDate.value)
 	        : {
 	          observedTdee: null,
 	          observedFromDate: null,
@@ -209,6 +211,7 @@ export function useDashboard() {
 	          observedReason: "insufficient_entries" as const,
 	          observedMinEntries: 4,
 	          observedMinDays: 7,
+            customTdee: null,
 	          formulaTdeeAverage: null,
 	          formulaBreakdown: {},
 	          formulaWeight: null,
@@ -221,6 +224,30 @@ export function useDashboard() {
           lastComputedAt: "",
         },
   );
+
+  async function calculateCustomTdeeWithGemini() {
+    if (!profile.value) return;
+    if (isCalculatingCustomTdee.value) return;
+
+    const effectiveProvider = provider.value.startsWith("gemini-")
+      ? provider.value
+      : "gemini-2.5-flash-latest";
+
+    isCalculatingCustomTdee.value = true;
+    try {
+      const result = await estimateTdeeWithGemini({
+        providerId: effectiveProvider,
+        profile: profile.value,
+        tdeeSnapshot: tdee.value,
+      });
+
+      const nextValue = Math.round(result.tdeeKcal);
+      await saveHistoryCustomTdee(selectedDate.value, nextValue);
+      await saveTdeeEquation("custom");
+    } finally {
+      isCalculatingCustomTdee.value = false;
+    }
+  }
   const weightPoints = computed(() =>
     displayEntries.value
       .filter((entry) => entry.weight !== null)
@@ -402,6 +429,17 @@ export function useDashboard() {
       await refreshState();
     }, `history.calories.${date}`);
     scheduleCloudPush(`history.calories.${date}`);
+  }
+
+  async function saveHistoryCustomTdee(date: string, customTdee: number | null) {
+    await autoSave.runAutoSave(async () => {
+      await upsertDailyEntry({
+        date,
+        customTdee,
+      });
+      await refreshState();
+    }, `history.customTdee.${date}`);
+    scheduleCloudPush(`history.customTdee.${date}`);
   }
 
   async function saveProfileDraft(nextProfile?: Profile) {
@@ -750,7 +788,7 @@ export function useDashboard() {
     if (cloudPushTimer) clearTimeout(cloudPushTimer);
     cloudPushTimer = setTimeout(() => {
       void runCloudPush();
-    }, 900);
+    }, 2000);
   }
 
   async function runCloudPush() {
@@ -1022,6 +1060,8 @@ export function useDashboard() {
     weightPoints,
     caloriePoints,
     savingHistoryCalories: autoSave.savingHistoryCalories,
+    savingHistoryCustomTdee: autoSave.savingHistoryCustomTdee,
+    isCalculatingCustomTdee,
     notice,
     cloudMode,
     cloudUsername,
@@ -1043,6 +1083,8 @@ export function useDashboard() {
     saveWeightDraft,
     saveFoodDraft,
     saveHistoryCalories,
+    saveHistoryCustomTdee,
+    calculateCustomTdeeWithGemini,
     analyzeCurrentDay,
     saveProfileDraft,
     saveActivityPrompt,

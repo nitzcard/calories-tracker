@@ -4,7 +4,11 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
 import type { AppLocale, DailyEntry } from "../../types";
-import { deducedWeightFromEntries, formatEntryDate, resolvedDailyCalories } from "../../domain/entries";
+import {
+  deducedWeightFromEntries,
+  formatEntryDate,
+  resolvedDailyCalories,
+} from "../../domain/entries";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -98,6 +102,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   if (kind === "maintenance") return t("maintenanceLabel");
   return "-";
 }
+
 </script>
 
 <template>

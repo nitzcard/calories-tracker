@@ -7,6 +7,7 @@ import type {
   Profile,
   SyncQueueItem,
 } from "../types";
+import { localIsoDate } from "../domain/dates";
 import type { EncryptedSecretBoxV1 } from "../cloud/crypto";
 import type { StoredAiKeys } from "../ai/credentials";
 
@@ -29,7 +30,6 @@ const DEFAULT_PROFILE: Profile = {
   height: null,
   estimatedWeight: null,
   targetWeight: null,
-  customTdee: null,
   bodyFat: null,
   tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
@@ -47,6 +47,7 @@ export async function ensureDefaultProfile(
   const existing = await db.profile.get("default");
   if (existing) {
     const legacyExisting = existing as Profile & { targetWeight?: number | null };
+    const legacyCustomTdee = (existing as any).customTdee as number | null | undefined;
     const legacyEquation = (existing as Profile & { tdeeEquation?: unknown }).tdeeEquation;
     const normalizedEquation =
       legacyEquation === "mifflinStJeor" ||
@@ -62,15 +63,49 @@ export async function ensureDefaultProfile(
       estimatedWeight:
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
       targetWeight: (existing as Profile).targetWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.targetWeight,
-      customTdee: (existing as Profile).customTdee ?? DEFAULT_PROFILE.customTdee,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       tdeeEquation: normalizedEquation,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
-    if (JSON.stringify(merged) !== JSON.stringify(existing)) {
-      await db.profile.put(merged);
+    // Strip legacy fields that moved out of the profile table.
+    const { customTdee: _legacy, ...strippedMerged } = merged as any;
+    // One-time migration: if we previously stored `customTdee` on the profile, move it into the
+    // daily entries history (so it can vary over time and sync cleanly).
+    if (legacyCustomTdee != null && Number.isFinite(legacyCustomTdee) && legacyCustomTdee > 0) {
+      const hasAnyCustom = await db.dailyEntries
+        // Dexie `filter` is fine here: this runs at most once per device.
+        .filter((entry) => (entry as any).customTdee != null)
+        .limit(1)
+        .count();
+      if (!hasAnyCustom) {
+        const today = localIsoDate();
+        const existingToday = await db.dailyEntries.get(today);
+        const now = new Date().toISOString();
+        await db.dailyEntries.put(
+          toPlain({
+            ...(existingToday ?? {
+              date: today,
+              foodLogText: "",
+              weight: null,
+              manualCalories: null,
+              customTdee: null,
+              analysisStale: false,
+              nutritionSnapshot: null,
+              aiStatus: "idle",
+              aiError: null,
+              updatedAt: now,
+              createdAt: now,
+            }),
+            customTdee: legacyCustomTdee,
+            updatedAt: now,
+          }),
+        );
+      }
     }
-    return merged;
+    if (JSON.stringify(strippedMerged) !== JSON.stringify(existing)) {
+      await db.profile.put(strippedMerged);
+    }
+    return strippedMerged as Profile;
   }
 
   const profile = { ...DEFAULT_PROFILE, locale, themeMode, updatedAt: new Date().toISOString() };
@@ -79,9 +114,10 @@ export async function ensureDefaultProfile(
 }
 
 export async function saveProfile(profile: Profile): Promise<void> {
+  const { customTdee: _legacy, ...stripped } = profile as any;
   await db.profile.put(
     toPlain({
-      ...profile,
+      ...stripped,
       updatedAt: new Date().toISOString(),
     }),
   );
@@ -109,6 +145,7 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
     foodLogText: "",
     weight: null,
     manualCalories: null,
+    customTdee: null,
     analysisStale: false,
     nutritionSnapshot: null,
     aiStatus: "idle",
@@ -130,6 +167,7 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
         : foodLogChanged
           ? null
           : entry.manualCalories,
+    customTdee: input.customTdee === undefined ? entry.customTdee : input.customTdee,
     analysisStale: foodLogChanged ? false : entry.analysisStale ?? false,
     nutritionSnapshot: foodLogChanged ? null : entry.nutritionSnapshot,
     aiStatus: foodLogChanged ? "idle" : entry.aiStatus,
@@ -174,6 +212,7 @@ function normalizeEntry(entry: DailyEntry): DailyEntry {
   return {
     ...entry,
     manualCalories: entry.manualCalories ?? null,
+    customTdee: (entry as any).customTdee ?? null,
     analysisStale: entry.analysisStale ?? false,
     nutritionSnapshot: entry.nutritionSnapshot ? normalizeNutritionSnapshot(entry.nutritionSnapshot) : null,
   };
@@ -297,10 +336,18 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
     await db.syncQueue.clear();
 
     if (data.profile.length) {
-      await db.profile.bulkPut(toPlain(data.profile));
+      const strippedProfiles = data.profile.map((p) => {
+        const { customTdee: _legacy, ...rest } = p as any;
+        return rest as Profile;
+      });
+      await db.profile.bulkPut(toPlain(strippedProfiles));
     }
     if (data.dailyEntries.length) {
-      await db.dailyEntries.bulkPut(toPlain(data.dailyEntries));
+      const normalizedEntries = data.dailyEntries.map((entry) => ({
+        ...entry,
+        customTdee: (entry as any).customTdee ?? null,
+      })) as DailyEntry[];
+      await db.dailyEntries.bulkPut(toPlain(normalizedEntries));
     }
     if (data.foodRules.length) {
       await db.foodRules.bulkPut(toPlain(data.foodRules));

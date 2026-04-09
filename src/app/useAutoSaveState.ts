@@ -31,6 +31,13 @@ export function useAutoSaveState() {
         .map(([key]) => [key.replace("history.calories.", ""), true]),
     ),
   );
+  const savingHistoryCustomTdee = computed<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      Object.entries(savingFields.value)
+        .filter(([key, value]) => key.startsWith("history.customTdee.") && value)
+        .map(([key]) => [key.replace("history.customTdee.", ""), true]),
+    ),
+  );
 
   async function runAutoSave(action: () => Promise<void>, fieldKey?: string) {
     activeAutoSaves += 1;
@@ -64,6 +71,7 @@ export function useAutoSaveState() {
     isSavingProvider,
     savingAiKeyField,
     savingHistoryCalories,
+    savingHistoryCustomTdee,
     runAutoSave,
   };
 }
