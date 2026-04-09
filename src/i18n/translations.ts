@@ -348,7 +348,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     syncIndicatorCloud: "ענן",
     syncIndicatorCloudPending: "ענן (לא מסונכרן)",
     apiKeys: "מפתחות API",
-    apiKeysHelper: "משתמשים במפתח Gemini שלך. הוא נשאר פרטי, ועם סנכרון ענן הוא נשמר מוצפן.",
+    apiKeysHelper: "השתמש במפתח Gemini שלך. הוא נשאר פרטי, ועם סנכרון ענן הוא נשמר מוצפן.",
     appSetup: "הגדרות אפליקציה",
     appSetupHelper: "כאן נמצאים מפתחות ה-API וכלי הגיבוי המקומיים. אפשר לכווץ את החלק הזה מתי שרוצים.",
     appSetupRequiredHelper: "צריך להוסיף כאן קודם מפתח Gemini. החלק הזה נפתח בהתחלה כשחסרה הגדרת אפליקציה נדרשת.",

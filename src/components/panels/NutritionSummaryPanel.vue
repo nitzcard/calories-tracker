@@ -231,12 +231,6 @@ function macroPercent(
   return Math.round((macroCalories / totalCalories) * 100);
 }
 
-function goalModeLabel(mode: "cut" | "leanMass" | "maingain") {
-  if (mode === "cut") return t("goalModeCut");
-  if (mode === "leanMass") return t("goalModeLeanMass");
-  return t("goalModeMaingain");
-}
-
 function macroGoalTargets(mode: "cut" | "leanMass" | "maingain") {
   if (mode === "cut") {
     return {
@@ -261,36 +255,23 @@ function macroGoalTargets(mode: "cut" | "leanMass" | "maingain") {
   };
 }
 
-function macroRecommendationText(macro: "protein" | "carbs" | "fat" | "fiber") {
-  if (macro === "fiber") {
-    return t("macroFiberRecommendation");
-  }
-
+function macroTargetText(macro: "protein" | "carbs" | "fat" | "fiber") {
   const mode = props.profile?.goalMode ?? "maingain";
-  const goal = goalModeLabel(mode);
   const targets = macroGoalTargets(mode);
 
   if (macro === "protein") {
-    return t("macroProteinRecommendationGoal", {
-      goal,
-      min: targets.protein.min,
-      max: targets.protein.max,
-    });
+    return `${targets.protein.min}-${targets.protein.max} ${t("unitProteinPerKg")}`;
   }
 
   if (macro === "carbs") {
-    return t("macroCarbsRecommendationGoal", {
-      goal,
-      min: targets.carbsPct.min,
-      max: targets.carbsPct.max,
-    });
+    return `${targets.carbsPct.min}-${targets.carbsPct.max}% ${t("macroShareOfCalories")}`;
   }
 
-  return t("macroFatRecommendationGoal", {
-    goal,
-    min: targets.fatPct.min,
-    max: targets.fatPct.max,
-  });
+  if (macro === "fat") {
+    return `${targets.fatPct.min}-${targets.fatPct.max}% ${t("macroShareOfCalories")}`;
+  }
+
+  return `25-38 ${t("unitG")}/${props.locale === "he" ? "יום" : "day"}`;
 }
 
 function resolveTotalCalories() {
@@ -371,6 +352,10 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
 
 function formatActual(value: number, unit: string) {
   return `${Math.round(value)} ${unit}`;
+}
+
+function formatRecommendedValue(gauge: { label: string; unit: string }) {
+  return `${gauge.label} ${gauge.unit}`;
 }
 
 function macroEmoji(macro: "protein" | "carbs" | "fat" | "fiber") {
@@ -605,10 +590,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <span>{{ proteinGauge.maxLabel ?? Math.round(proteinGauge.max) }}</span>
               </div>
             </div>
-            <small class="stat-meta">
-              {{ formatActual(proteinGauge.actual, proteinGauge.unit) }} · {{ t("recommendedRange") }}:
-              {{ proteinGauge.label }} {{ proteinGauge.unit }}
-            </small>
+            <div class="stat-stack">
+              <small class="stat-meta">{{ formatActual(proteinGauge.actual, proteinGauge.unit) }}</small>
+              <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(proteinGauge) }}</small>
+              <small class="stat-meta">{{ macroTargetText("protein") }}</small>
+            </div>
           </div>
           <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
             {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
@@ -616,7 +602,6 @@ const proteinPerLeanBodyWeight = computed(() => {
           <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
             {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
           </small>
-          <small class="stat-helper">{{ macroRecommendationText("protein") }}</small>
         </div>
         <div class="compact-stat compact-stat--carbs">
           <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</strong>
@@ -643,12 +628,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <span>{{ carbsGauge.maxLabel ?? Math.round(carbsGauge.max) }}</span>
               </div>
             </div>
-            <small class="stat-meta">
-              {{ formatActual(carbsGauge.actual, carbsGauge.unit) }} · {{ t("recommendedRange") }}: {{ carbsGauge.label }}
-              {{ carbsGauge.unit }}
-            </small>
+            <div class="stat-stack">
+              <small class="stat-meta">{{ formatActual(carbsGauge.actual, carbsGauge.unit) }}</small>
+              <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(carbsGauge) }}</small>
+              <small class="stat-meta">{{ macroTargetText("carbs") }}</small>
+            </div>
           </div>
-          <small class="stat-helper">{{ macroRecommendationText("carbs") }}</small>
         </div>
         <div class="compact-stat compact-stat--fat">
           <strong><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</strong>
@@ -675,12 +660,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <span>{{ fatGauge.maxLabel ?? Math.round(fatGauge.max) }}</span>
               </div>
             </div>
-            <small class="stat-meta">
-              {{ formatActual(fatGauge.actual, fatGauge.unit) }} · {{ t("recommendedRange") }}: {{ fatGauge.label }}
-              {{ fatGauge.unit }}
-            </small>
+            <div class="stat-stack">
+              <small class="stat-meta">{{ formatActual(fatGauge.actual, fatGauge.unit) }}</small>
+              <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(fatGauge) }}</small>
+              <small class="stat-meta">{{ macroTargetText("fat") }}</small>
+            </div>
           </div>
-          <small class="stat-helper">{{ macroRecommendationText("fat") }}</small>
         </div>
         <div class="compact-stat compact-stat--fiber">
           <strong><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</strong>
@@ -704,12 +689,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <span>{{ fiberGauge.maxLabel ?? Math.round(fiberGauge.max) }}</span>
               </div>
             </div>
-            <small class="stat-meta">
-              {{ formatActual(fiberGauge.actual, fiberGauge.unit) }} · {{ t("recommendedRange") }}: {{ fiberGauge.label }}
-              {{ fiberGauge.unit }}
-            </small>
+            <div class="stat-stack">
+              <small class="stat-meta">{{ formatActual(fiberGauge.actual, fiberGauge.unit) }}</small>
+              <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(fiberGauge) }}</small>
+              <small class="stat-meta">{{ macroTargetText("fiber") }}</small>
+            </div>
           </div>
-          <small class="stat-helper">{{ macroRecommendationText("fiber") }}</small>
         </div>
       </div>
 
@@ -1102,6 +1087,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 .stat-meta + .stat-meta,
 .stat-meta + .stat-helper {
   margin-block-start: 2px;
+}
+
+.stat-stack {
+  display: grid;
+  gap: 2px;
 }
 
 .macro-gauge {
