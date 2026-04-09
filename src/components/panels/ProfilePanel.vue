@@ -33,12 +33,12 @@ watch(
   },
 );
 
-function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(key: K, event: Event) {
-  const raw = (event.target as HTMLInputElement).value;
-  const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
-  emit("update:profile", nextProfile);
-  emit("save", nextProfile);
-}
+	function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "customTdee" | "bodyFat">(key: K, event: Event) {
+	  const raw = (event.target as HTMLInputElement).value;
+	  const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
+	  emit("update:profile", nextProfile);
+	  emit("save", nextProfile);
+	}
 
 function saveImmediateProfile(profile: Profile) {
   emit("update:profile", profile);
@@ -97,17 +97,29 @@ function saveImmediateProfile(profile: Profile) {
           <span class="field-unit">{{ t("unitKg") }}</span>
         </div>
       </FormField>
-      <FormField :label="t('targetWeight')" :helper="t('targetWeightHelper')">
-        <div class="unit-field">
-          <input
-            :value="profile.targetWeight ?? ''"
-            type="number"
-            step="0.1"
-            @input="saveNullableNumber('targetWeight', $event)"
-          />
-          <span class="field-unit">{{ t("unitKg") }}</span>
-        </div>
-      </FormField>
+	      <FormField :label="t('targetWeight')" :helper="t('targetWeightHelper')">
+	        <div class="unit-field">
+	          <input
+	            :value="profile.targetWeight ?? ''"
+	            type="number"
+	            step="0.1"
+	            @input="saveNullableNumber('targetWeight', $event)"
+	          />
+	          <span class="field-unit">{{ t("unitKg") }}</span>
+	        </div>
+	      </FormField>
+        <FormField :label="t('customTdee')" :helper="t('customTdeeHelper')">
+          <div class="unit-field">
+            <input
+              :value="profile.customTdee ?? ''"
+              type="number"
+              step="1"
+              min="0"
+              @input="saveNullableNumber('customTdee', $event)"
+            />
+            <span class="field-unit">{{ t("unitKcal") }}</span>
+          </div>
+        </FormField>
       <FormField>
         <template #label>
           <span class="bodyfat-label">

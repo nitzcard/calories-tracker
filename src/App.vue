@@ -492,13 +492,14 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           @save-activity="saveActivityAndHighlight"
         />
 
-        <TdeeSummaryPanel
-          :locale="locale"
-          :tdee="tdee"
-          :selected-equation="profile.tdeeEquation"
-          :highlight-token="tdeeHighlightToken"
-          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
-          @select-equation="
+	        <TdeeSummaryPanel
+	          :locale="locale"
+            :profile="profile"
+	          :tdee="tdee"
+	          :selected-equation="profile.tdeeEquation"
+	          :highlight-token="tdeeHighlightToken"
+	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
+	          @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;
           "

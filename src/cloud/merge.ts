@@ -43,13 +43,14 @@ function mergeProfilePreservingData(
   options: { prefer: "local" | "remote" },
 ): Profile {
   // Defaults/baselines should be "weak", especially on a fresh device right after login.
-  const DEFAULT = {
-    sex: "male" as const,
-    tdeeEquation: "mifflinStJeor" as const,
-    aiModel: "gemini-2.5-flash",
-    locale: "en" as const,
-    themeMode: "system" as const,
-  };
+	  const DEFAULT = {
+	    sex: "male" as const,
+	    tdeeEquation: "mifflinStJeor" as const,
+	    aiModel: "gemini-2.5-flash",
+	    locale: "en" as const,
+	    themeMode: "system" as const,
+      customTdee: null as number | null,
+	  };
 
   const preferred = options.prefer === "remote" ? remote : local;
   const other = preferred === remote ? local : remote;
@@ -93,25 +94,26 @@ function mergeProfilePreservingData(
   const mergedTheme = pickEnumWithWeakDefault(preferred.themeMode, other.themeMode, DEFAULT.themeMode);
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
 
-  return {
-    ...other,
-    ...preferred,
-    id: "default",
-    sex: mergedSex,
-    tdeeEquation: mergedEquation,
-    locale: mergedLocale,
-    themeMode: mergedTheme,
-    aiModel: mergedModel,
-    age: pickNullableNumber(preferred.age, other.age),
-    height: pickNullableNumber(preferred.height, other.height),
-    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
-    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
-    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
-    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
-    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
-    updatedAt: maxIso(local.updatedAt, remote.updatedAt) || preferred.updatedAt || other.updatedAt,
-  };
-}
+	  return {
+	    ...other,
+	    ...preferred,
+	    id: "default",
+	    sex: mergedSex,
+	    tdeeEquation: mergedEquation,
+	    locale: mergedLocale,
+	    themeMode: mergedTheme,
+	    aiModel: mergedModel,
+	    age: pickNullableNumber(preferred.age, other.age),
+	    height: pickNullableNumber(preferred.height, other.height),
+	    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
+	    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
+      customTdee: pickNullableNumber(preferred.customTdee ?? null, other.customTdee ?? null),
+	    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
+	    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
+	    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
+	    updatedAt: maxIso(local.updatedAt, remote.updatedAt) || preferred.updatedAt || other.updatedAt,
+	  };
+	}
 
 function mergeDailyEntries(local: DailyEntry[], remote: DailyEntry[]): DailyEntry[] {
   const byDate = new Map<string, DailyEntry>();
@@ -240,17 +242,18 @@ function mergeEncryptedSecrets(local: ExportedAppData, remote: ExportedAppData) 
   return undefined;
 }
 
-function isBaselineBlob(blob: ExportedAppData) {
-  const p = blob.profile?.[0];
-  const profileBaseline =
-    !p ||
-    (!p.age &&
-      !p.height &&
-      !p.estimatedWeight &&
-      !p.targetWeight &&
-      !p.bodyFat &&
-      !p.activityPrompt.trim() &&
-      !p.foodInstructions.trim());
+	function isBaselineBlob(blob: ExportedAppData) {
+	  const p = blob.profile?.[0];
+	  const profileBaseline =
+	    !p ||
+	    (!p.age &&
+	      !p.height &&
+	      !p.estimatedWeight &&
+	      !p.targetWeight &&
+        !p.customTdee &&
+	      !p.bodyFat &&
+	      !p.activityPrompt.trim() &&
+	      !p.foodInstructions.trim());
 
   const hasMeaningfulEntry = blob.dailyEntries.some((entry) => scoreEntry(entry) >= 2);
   const hasRules = blob.foodRules.length > 0;

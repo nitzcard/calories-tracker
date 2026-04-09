@@ -121,6 +121,14 @@ export function useDashboard() {
     }
   }
 
+  function removeCloudPasswordFromStorage(username: string) {
+    try {
+      localStorage.removeItem(cloudPasswordStorageKey(username));
+    } catch {
+      // Ignore; storage may be unavailable in some contexts.
+    }
+  }
+
   const hasSavedCloudPassword = computed(() => {
     const normalized = normalizeUsername(cloudUsername.value);
     if (!normalized) return false;
@@ -611,16 +619,15 @@ export function useDashboard() {
       return;
     }
 
+    if (!options?.password?.trim() && !cloudPassword.value.trim()) {
+      loadCloudPasswordFromStorage(username);
+    }
+
     const secret = getCloudSecret(username, options?.password);
     if (!secret) {
       cloudStatus.value = "failed";
       cloudError.value = "Missing cloud password.";
       return;
-    }
-
-    if (options?.password?.trim()) {
-      cloudPassword.value = options.password;
-      saveCloudPasswordToStorage(username, options.password);
     }
 
     isCloudBusy.value = true;
@@ -650,6 +657,12 @@ export function useDashboard() {
         } catch {
           throw new Error("Bad cloud password.");
         }
+      }
+
+      // If we got here, the password was valid (or there was nothing to decrypt yet).
+      if (options?.password?.trim()) {
+        cloudPassword.value = options.password;
+        saveCloudPasswordToStorage(username, options.password);
       }
 
       // Two-way merge: keep newer daily entries on either side.
@@ -709,7 +722,14 @@ export function useDashboard() {
       }
     } catch (err) {
       cloudStatus.value = "failed";
-      cloudError.value = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      cloudError.value = message;
+      if (message === "Bad cloud password.") {
+        cloudPassword.value = "";
+        removeCloudPasswordFromStorage(username);
+        cloudConfirmedUsername.value = "";
+        localStorage.removeItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername);
+      }
     } finally {
       isCloudBusy.value = false;
       cloudIsSyncing.value = false;

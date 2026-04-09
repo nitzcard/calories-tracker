@@ -2,16 +2,17 @@
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
-import type { AppLocale, TdeeEquation, TdeeSnapshot } from "../../types";
-import { formatEntryDate } from "../../domain/entries";
+	import type { AppLocale, Profile, TdeeEquation, TdeeSnapshot } from "../../types";
+	import { formatEntryDate } from "../../domain/entries";
 
-const props = defineProps<{
-  locale: AppLocale;
-  tdee: TdeeSnapshot;
-  selectedEquation: TdeeEquation;
-  highlightToken?: number;
-  isUpdating?: boolean;
-}>();
+	const props = defineProps<{
+	  locale: AppLocale;
+    profile: Profile;
+	  tdee: TdeeSnapshot;
+	  selectedEquation: TdeeEquation;
+	  highlightToken?: number;
+	  isUpdating?: boolean;
+	}>();
 
 const isHighlighted = ref(false);
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -101,9 +102,69 @@ function weightSourceText(source: "estimated" | "deduced" | "logged" | null) {
   return t("weightSourceLogged");
 }
 
-function onPick(value: TdeeEquation) {
-  emit("select-equation", value);
-}
+	function onPick(value: TdeeEquation) {
+	  emit("select-equation", value);
+	}
+
+  const promptCopied = ref(false);
+
+  function buildTdeeAgentPrompt() {
+    const p = props.profile;
+    const currentWeight = p.estimatedWeight ?? props.tdee.formulaWeight ?? null;
+    const targetWeight = p.targetWeight ?? null;
+    const activity = (p.activityPrompt ?? "").trim();
+    const sex = p.sex;
+    const age = p.age ?? null;
+    const heightCm = p.height ?? null;
+
+    return [
+      "You are a coach/nutrition assistant. Use up-to-date research and best practices (browse the web if you can) to estimate TDEE and set a calorie target for my goal.",
+      "",
+      "Inputs (metric):",
+      `- Sex: ${sex}`,
+      `- Age: ${age ?? "unknown"}`,
+      `- Height: ${heightCm ?? "unknown"} cm`,
+      `- Current weight: ${currentWeight ?? "unknown"} kg`,
+      `- Target weight: ${targetWeight ?? "none"} kg`,
+      "",
+      "Activity / lifestyle:",
+      activity ? `- ${activity}` : "- (not provided)",
+      "",
+      "What I want from you:",
+      "1) Estimate my TDEE using at least Mifflin-St Jeor and (if possible) one alternative method; state assumptions (activity multiplier).",
+      "2) If I gave a target weight, recommend a safe weekly loss/gain rate and a daily calorie target to reach it.",
+      "3) Output one final number for: recommended daily calories (kcal/day), and show the calculation.",
+      "4) Ask any critical clarifying questions only if needed; otherwise make conservative assumptions.",
+    ].join("\n");
+  }
+
+  async function copyTdeePrompt() {
+    const text = buildTdeeAgentPrompt();
+    promptCopied.value = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      promptCopied.value = true;
+      setTimeout(() => (promptCopied.value = false), 2000);
+      return;
+    } catch {
+      // Fallback for older browsers / non-secure contexts.
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "true");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        document.execCommand("copy");
+        promptCopied.value = true;
+        setTimeout(() => (promptCopied.value = false), 2000);
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    }
+  }
 
 function observedEmptyText() {
   if (props.tdee.observedReason === "insufficient_span") {
@@ -146,8 +207,14 @@ function observedEmptyText() {
       <small class="tdee-parts-note">{{ t("tdeePartsNote") }}</small>
     </div>
 
-    <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
-      <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
+      <div class="tdee-actions">
+        <button class="secondary-action" @click="copyTdeePrompt">
+          {{ promptCopied ? t("tdeePromptCopied") : t("tdeePromptCopy") }}
+        </button>
+      </div>
+
+	    <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
+	      <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
         <thead>
           <tr>
             <th class="pick-col"></th>
@@ -156,8 +223,23 @@ function observedEmptyText() {
             <th>{{ t("tdeeFrom") }}</th>
           </tr>
         </thead>
-        <tbody>
-	          <tr>
+	        <tbody>
+            <tr>
+              <td class="pick-col">
+                <input
+                  type="radio"
+                  name="tdeeEquation"
+                  :checked="selectedEquation === 'custom'"
+                  @change="onPick('custom')"
+                />
+              </td>
+              <td><strong>{{ t("customTdee") }}</strong></td>
+              <td class="calorie-cell">{{ profile.customTdee ?? "-" }}</td>
+              <td>
+                {{ t("customTdeeRowHelper") }}
+              </td>
+            </tr>
+		          <tr>
 	            <td class="pick-col">
 	              <input
 	                type="radio"
@@ -231,11 +313,17 @@ function observedEmptyText() {
   gap: 0.55rem;
 }
 
-.tdee-part-row {
+	.tdee-part-row {
   display: grid;
   gap: 0.15rem;
   padding-inline-start: 0.2rem;
-}
+	}
+
+  .tdee-actions {
+    margin-block-start: 8px;
+    display: flex;
+    justify-content: flex-start;
+  }
 
 .tdee-part-heading {
   display: flex;

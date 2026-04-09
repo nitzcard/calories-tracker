@@ -29,6 +29,7 @@ const DEFAULT_PROFILE: Profile = {
   height: null,
   estimatedWeight: null,
   targetWeight: null,
+  customTdee: null,
   bodyFat: null,
   tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
@@ -51,6 +52,7 @@ export async function ensureDefaultProfile(
       legacyEquation === "mifflinStJeor" ||
       legacyEquation === "harrisBenedict" ||
       legacyEquation === "cunningham" ||
+      legacyEquation === "custom" ||
       legacyEquation === "observedTdee"
         ? legacyEquation
         : DEFAULT_PROFILE.tdeeEquation;
@@ -60,6 +62,7 @@ export async function ensureDefaultProfile(
       estimatedWeight:
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
       targetWeight: (existing as Profile).targetWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.targetWeight,
+      customTdee: (existing as Profile).customTdee ?? DEFAULT_PROFILE.customTdee,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       tdeeEquation: normalizedEquation,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,

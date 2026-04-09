@@ -13,6 +13,7 @@ export type TdeeEquation =
   | "mifflinStJeor"
   | "harrisBenedict"
   | "cunningham"
+  | "custom"
   | "observedTdee";
 
 export interface AiProviderOption {
@@ -30,6 +31,7 @@ export interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   targetWeight: number | null;
+  customTdee: number | null;
   bodyFat: number | null;
   tdeeEquation: TdeeEquation;
   activityPrompt: string;

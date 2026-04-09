@@ -43,7 +43,8 @@ export function formatEntryDate(
 }
 
 export function deducedWeightFromEntries(entries: DailyEntry[], anchorDate?: string) {
-  const validWeights = entries
+  // If weight is missing for a given day, use the most recent known weight (no smoothing).
+  const lastKnown = entries
     .filter(
       (entry) =>
         entry.weight !== null &&
@@ -51,17 +52,8 @@ export function deducedWeightFromEntries(entries: DailyEntry[], anchorDate?: str
         (!anchorDate || entry.date <= anchorDate),
     )
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((entry) => entry.weight as number);
+    .at(-1)?.weight;
 
-  if (!validWeights.length) {
-    return null;
-  }
-
-  let smoothed = validWeights[0];
-  for (let index = 1; index < validWeights.length; index += 1) {
-    const next = validWeights[index];
-    smoothed = smoothed * 0.72 + next * 0.28;
-  }
-
-  return Math.round(smoothed * 10) / 10;
+  if (lastKnown == null) return null;
+  return Math.round((lastKnown as number) * 10) / 10;
 }
