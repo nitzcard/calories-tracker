@@ -104,7 +104,7 @@ function formatSigned(value: number | null, unit: string) {
       </div>
       <div class="compact-stat">
         <strong>{{ t("macroCaloriesVsTdee7d") }}</strong>
-        <span>{{ formatSigned(insights.averageCaloriesVsObservedTdee7d, t("unitKcal")) }}</span>
+        <span>{{ formatSigned(insights.averageCaloriesVsTdee7d, t("unitKcal")) }}</span>
       </div>
     </div>
 
@@ -139,7 +139,7 @@ function formatSigned(value: number | null, unit: string) {
               </tr>
               <tr>
                 <td>{{ t("macroCaloriesVsTdee") }}</td>
-                <td>{{ formatSigned(insights.averageCaloriesVsObservedTdee7d, t("unitKcal")) }}</td>
+                <td>{{ formatSigned(insights.averageCaloriesVsTdee7d, t("unitKcal")) }}</td>
                 <td>-</td>
               </tr>
               <tr>

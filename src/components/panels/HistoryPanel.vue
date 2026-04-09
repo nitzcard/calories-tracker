@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
+import HistoryWeightCell from "./HistoryWeightCell.vue";
 import type { AppLocale, DailyEntry } from "../../types";
 import {
   deducedWeightFromEntries,
@@ -14,6 +15,7 @@ const props = defineProps<{
   locale: AppLocale;
   entries: DailyEntry[];
   savingCalories: Record<string, boolean>;
+  savingWeight: Record<string, boolean>;
   tdeeReference: number | null;
   targetWeightReference?: number | null;
 }>();
@@ -22,6 +24,7 @@ const { t } = useI18n();
 
 const emit = defineEmits<{
   "save-calories": [date: string, calories: number | null];
+  "save-weight": [date: string, weight: number | null];
 }>();
 
 const sortedEntries = computed(() =>
@@ -155,8 +158,12 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         <tr v-for="entry in sortedEntries" :key="entry.date">
           <td>{{ formatEntryDate(entry.date, locale) }}</td>
           <td class="weight-cell">
-            <span v-if="entry.weight != null" class="weight-num" dir="ltr">{{ entry.weight }}</span>
-            <span v-else>-</span>
+            <HistoryWeightCell
+              :value="entry.weight"
+              :fallback-value="deducedWeightFromEntries(entries, entry.date)"
+              :is-saving="Boolean(savingWeight[entry.date])"
+              @save="emit('save-weight', entry.date, $event)"
+            />
           </td>
           <td class="calories-column">
             <HistoryCaloriesCell
@@ -230,8 +237,12 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         <div class="history-card__row">
           <div class="k">{{ t("weightWithUnit") }}</div>
           <div class="v">
-            <span v-if="entry.weight != null" class="weight-num" dir="ltr">{{ entry.weight }}</span>
-            <span v-else>-</span>
+            <HistoryWeightCell
+              :value="entry.weight"
+              :fallback-value="deducedWeightFromEntries(entries, entry.date)"
+              :is-saving="Boolean(savingWeight[entry.date])"
+              @save="emit('save-weight', entry.date, $event)"
+            />
           </div>
         </div>
         <div class="history-card__row">

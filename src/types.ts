@@ -9,6 +9,7 @@ export type ThemeMode =
 export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
+export type GoalMode = "cut" | "leanMass" | "maingain";
 export type TdeeEquation =
   | "mifflinStJeor"
   | "harrisBenedict"
@@ -31,7 +32,9 @@ export interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   targetWeight: number | null;
+  customTdee: number | null;
   bodyFat: number | null;
+  goalMode: GoalMode;
   tdeeEquation: TdeeEquation;
   activityPrompt: string;
   foodInstructions: string;
@@ -186,7 +189,6 @@ export interface TdeeSnapshot {
   observedReason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
   observedMinEntries: number;
   observedMinDays: number;
-  customTdee: number | null;
   formulaTdeeAverage: number | null;
   formulaBreakdown: Record<string, number>;
   formulaWeight: number | null;
@@ -252,7 +254,7 @@ export interface NutritionInsights {
   macros: MacroInsightStat[];
   averageProteinPerKg7d: number | null;
   averageProteinPerKg30d: number | null;
-  averageCaloriesVsObservedTdee7d: number | null;
+  averageCaloriesVsTdee7d: number | null;
   calorieConsistency7d: number | null;
   topFoods30d: TopFoodInsightItem[];
 }

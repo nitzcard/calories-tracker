@@ -74,6 +74,7 @@ const {
   weightPoints,
   caloriePoints,
   savingHistoryCalories,
+  savingHistoryWeight,
   isCalculatingCustomTdee,
   statusLabel,
   onLocaleChange,
@@ -82,6 +83,7 @@ const {
   saveWeightDraft,
   saveFoodDraft,
   saveHistoryCalories,
+  saveHistoryWeight,
   calculateCustomTdeeWithGemini,
   analyzeCurrentDay,
   saveProfileDraft,
@@ -186,6 +188,15 @@ function scheduleActiveToastHide(kind: "local" | "cloud") {
   clear();
 }
 
+const canAutoCloudSync = computed(() => {
+  if (cloudMode.value !== "cloud") return false;
+  if (!supabaseConfigured.value) return false;
+  if (!cloudConfirmedUsername.value.trim()) return false;
+  if (!hasSavedCloudPassword.value) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  return true;
+});
+
 const activeToasts = computed(() => {
   const items: Array<{
     id: string;
@@ -198,35 +209,53 @@ const activeToasts = computed(() => {
   const localActive =
     isAutoSaving.value || isTransferringData.value || localToastVisibleUntil.value > Date.now();
 
-  if (cloudActive && localActive) {
-    items.push({
-      id: "sync-active",
-      kind: "cloud" as const,
-      message: isTransferringData.value
-        ? `💾☁️ ${t("toastLocalCloudTransferring")}`
-        : `💾☁️ ${t("toastLocalCloudSyncing")}`,
-      spinning: true,
-    });
-  } else {
-    if (cloudActive) {
-      items.push({
-        id: "cloud-active",
-        kind: "cloud" as const,
-        message: `☁️ ${t("toastCloudSyncing")}`,
-        spinning: true,
-      });
-    }
+  const shouldCombine = (cloudActive && localActive) || (localActive && canAutoCloudSync.value);
 
-    if (localActive) {
-      items.push({
-        id: "local-active",
-        kind: "local" as const,
-        message: isTransferringData.value
-          ? `💾 ${t("toastLocalTransferring")}`
-          : `💾 ${t("toastLocalSaving")}`,
-        spinning: true,
-      });
-    }
+  const activeToast =
+    shouldCombine
+      ? {
+          id: "sync-active",
+          kind: "cloud" as const,
+          message: isTransferringData.value
+            ? `💾☁️ ${t("toastLocalCloudTransferring")}`
+            : `💾☁️ ${t("toastLocalCloudSyncing")}`,
+          spinning: true,
+        }
+      : cloudActive
+        ? {
+            id: "cloud-active",
+            kind: "cloud" as const,
+            message: `☁️ ${t("toastCloudSyncing")}`,
+            spinning: true,
+          }
+        : localActive
+          ? {
+              id: "local-active",
+              kind: "local" as const,
+              message: isTransferringData.value
+                ? `💾 ${t("toastLocalTransferring")}`
+                : `💾 ${t("toastLocalSaving")}`,
+              spinning: true,
+            }
+          : null;
+
+  // Keep the UI to a single toast: fold transient info into the active toast when present.
+  if (transientToast.value?.kind === "error") {
+    items.push({
+      id: "transient",
+      kind: "error",
+      message: transientToast.value.message,
+      spinning: false,
+    });
+    return items;
+  }
+
+  if (activeToast) {
+    const mergedMessage = transientToast.value?.message
+      ? `${activeToast.message} • ${transientToast.value.message}`
+      : activeToast.message;
+    items.push({ ...activeToast, message: mergedMessage });
+    return items;
   }
 
   if (transientToast.value) {
@@ -517,6 +546,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 	          :highlight-token="tdeeHighlightToken"
 	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation || isCalculatingCustomTdee"
             :is-calculating-custom-tdee="isCalculatingCustomTdee"
+            @update:profile="profile = $event"
+            @save="saveProfileAndHighlight"
 	          @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;
@@ -594,9 +625,11 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :locale="locale"
           :entries="entries"
           :saving-calories="savingHistoryCalories"
+          :saving-weight="savingHistoryWeight"
           :tdee-reference="tdee.selectedValue"
           :target-weight-reference="tdee.targetWeight"
           @save-calories="saveHistoryCalories"
+          @save-weight="saveHistoryWeight"
         />
       </div>
     </section>

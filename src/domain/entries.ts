@@ -57,19 +57,3 @@ export function deducedWeightFromEntries(entries: DailyEntry[], anchorDate?: str
   if (lastKnown == null) return null;
   return Math.round((lastKnown as number) * 10) / 10;
 }
-
-export function deducedCustomTdeeFromEntries(entries: DailyEntry[], anchorDate?: string) {
-  // If custom TDEE is missing for a given day, use the most recent known custom TDEE.
-  const lastKnown = entries
-    .filter(
-      (entry) =>
-        entry.customTdee !== null &&
-        entry.customTdee !== undefined &&
-        (!anchorDate || entry.date <= anchorDate),
-    )
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .at(-1)?.customTdee;
-
-  if (lastKnown == null) return null;
-  return Math.round((lastKnown as number) * 1) / 1;
-}

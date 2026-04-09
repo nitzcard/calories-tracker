@@ -49,6 +49,8 @@ function mergeProfilePreservingData(
 	    aiModel: "gemini-2.5-flash",
 	    locale: "en" as const,
 	    themeMode: "system" as const,
+      goalMode: "maingain" as const,
+      customTdee: null as number | null,
 	  };
 
   const preferred = options.prefer === "remote" ? remote : local;
@@ -92,23 +94,27 @@ function mergeProfilePreservingData(
   const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
   const mergedTheme = pickEnumWithWeakDefault(preferred.themeMode, other.themeMode, DEFAULT.themeMode);
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
-
-    const { customTdee: _legacyPreferred, ...preferredRest } = preferred as any;
-    const { customTdee: _legacyOther, ...otherRest } = other as any;
+  const mergedGoalMode = pickEnumWithWeakDefault(
+    preferred.goalMode ?? DEFAULT.goalMode,
+    other.goalMode ?? DEFAULT.goalMode,
+    DEFAULT.goalMode,
+  );
 
 	  return {
-	    ...otherRest,
-	    ...preferredRest,
+	    ...other,
+	    ...preferred,
 	    id: "default",
 	    sex: mergedSex,
 	    tdeeEquation: mergedEquation,
 	    locale: mergedLocale,
 	    themeMode: mergedTheme,
 	    aiModel: mergedModel,
+      goalMode: mergedGoalMode,
 	    age: pickNullableNumber(preferred.age, other.age),
 	    height: pickNullableNumber(preferred.height, other.height),
 	    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
 	    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
+      customTdee: pickNullableNumber(preferred.customTdee ?? null, other.customTdee ?? null),
 	    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
 	    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
 	    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
@@ -259,6 +265,7 @@ function mergeEncryptedSecrets(local: ExportedAppData, remote: ExportedAppData) 
 	      !p.height &&
 	      !p.estimatedWeight &&
 	      !p.targetWeight &&
+        !p.customTdee &&
 	      !p.bodyFat &&
 	      !p.activityPrompt.trim() &&
 	      !p.foodInstructions.trim());

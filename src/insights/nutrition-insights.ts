@@ -55,7 +55,7 @@ export function buildNutritionInsights(
   entries: DailyEntry[],
   profile: Profile,
   anchorDate: string,
-  observedTdee: number | null,
+  tdeeReference: number | null,
   locale: AppLocale,
 ): NutritionInsights {
   const anchorTime = Date.parse(anchorDate);
@@ -71,7 +71,7 @@ export function buildNutritionInsights(
     macros,
     averageProteinPerKg7d,
     averageProteinPerKg30d,
-    averageCaloriesVsObservedTdee7d: observedTdee ? caloriesVsTdee(analyzed7d, observedTdee) : null,
+    averageCaloriesVsTdee7d: tdeeReference ? caloriesVsTdee(analyzed7d, tdeeReference) : null,
     calorieConsistency7d: calorieConsistency(analyzed7d),
     topFoods30d: buildTopFoods(analyzed30d, locale),
   };
@@ -144,13 +144,13 @@ function buildProteinPerKg(entries: DailyEntry[]) {
   );
 }
 
-function caloriesVsTdee(entries: DailyEntry[], observedTdee: number) {
+function caloriesVsTdee(entries: DailyEntry[], tdeeReference: number) {
   const calories = dailyMacroSamples(entries, "calories");
   if (!calories.length) {
     return null;
   }
 
-  return Math.round(average(calories)! - observedTdee);
+  return Math.round(average(calories)! - tdeeReference);
 }
 
 function calorieConsistency(entries: DailyEntry[]) {

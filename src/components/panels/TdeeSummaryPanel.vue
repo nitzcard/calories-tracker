@@ -21,6 +21,8 @@ const { t } = useI18n();
 const emit = defineEmits<{
   "select-equation": [value: TdeeEquation];
   "calculate-custom-tdee": [];
+  "update:profile": [profile: Profile];
+  save: [profile: Profile];
 }>();
 
 watch(
@@ -108,8 +110,62 @@ function weightSourceText(source: "estimated" | "deduced" | "logged" | null) {
 	  emit("select-equation", value);
 	}
 
+  const customTdeeDraft = ref("");
+  let customTdeeSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+  const CUSTOM_TDEE_DEBOUNCE_MS = 2000;
+
+  function parseCustomTdeeDraft(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.round(parsed);
+  }
+
+  watch(
+    () => props.profile.customTdee,
+    (next) => {
+      customTdeeDraft.value = next != null ? String(next) : "";
+    },
+    { immediate: true },
+  );
+
+  function scheduleCustomTdeeSave(nextProfile: Profile) {
+    if (customTdeeSaveTimeout) {
+      clearTimeout(customTdeeSaveTimeout);
+    }
+    customTdeeSaveTimeout = setTimeout(() => {
+      emit("save", nextProfile);
+      customTdeeSaveTimeout = null;
+    }, CUSTOM_TDEE_DEBOUNCE_MS);
+  }
+
+  function onCustomTdeeInput(event: Event) {
+    const raw = (event.target as HTMLInputElement).value;
+    customTdeeDraft.value = raw;
+    const nextValue = parseCustomTdeeDraft(raw);
+    const nextProfile = { ...props.profile, customTdee: nextValue };
+    emit("update:profile", nextProfile);
+    scheduleCustomTdeeSave(nextProfile);
+  }
+
+  function onCustomTdeeBlur() {
+    const nextValue = parseCustomTdeeDraft(customTdeeDraft.value);
+    const nextProfile = { ...props.profile, customTdee: nextValue };
+    emit("update:profile", nextProfile);
+    if (customTdeeSaveTimeout) {
+      clearTimeout(customTdeeSaveTimeout);
+      customTdeeSaveTimeout = null;
+    }
+    emit("save", nextProfile);
+  }
+
   function calculateCustomTdee() {
     if (props.isCalculatingCustomTdee) return;
+    if (customTdeeSaveTimeout) {
+      clearTimeout(customTdeeSaveTimeout);
+      customTdeeSaveTimeout = null;
+    }
     emit("calculate-custom-tdee");
   }
 
@@ -154,13 +210,7 @@ function observedEmptyText() {
       <small class="tdee-parts-note">{{ t("tdeePartsNote") }}</small>
     </div>
 
-      <div class="tdee-actions">
-        <button class="secondary-action" :disabled="Boolean(isCalculatingCustomTdee)" @click="calculateCustomTdee">
-          {{ isCalculatingCustomTdee ? t("tdeePromptCalculating") : t("tdeePromptCalculate") }}
-        </button>
-      </div>
-
-	    <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
+		    <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
 	      <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
         <thead>
           <tr>
@@ -181,7 +231,32 @@ function observedEmptyText() {
                 />
               </td>
               <td><strong>{{ t("customTdee") }}</strong></td>
-              <td class="calorie-cell">{{ tdee.customTdee ?? "-" }}</td>
+              <td class="calorie-cell calorie-cell--custom">
+                <div class="tdee-custom-cell">
+                  <input
+                    class="tdee-custom-input"
+                    type="number"
+                    step="1"
+                    min="0"
+                    :value="customTdeeDraft"
+                    placeholder="-"
+                    @input="onCustomTdeeInput"
+                    @blur="onCustomTdeeBlur"
+                    @keydown.enter.prevent="onCustomTdeeBlur"
+                  />
+                  <button
+                    class="tdee-custom-calc"
+                    :class="{ 'is-busy': Boolean(isCalculatingCustomTdee) }"
+                    :disabled="Boolean(isCalculatingCustomTdee)"
+                    type="button"
+                    :title="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
+                    :aria-label="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
+                    @click="calculateCustomTdee"
+                  >
+                    {{ isCalculatingCustomTdee ? t("tdeeCalcShortBusy") : t("tdeeCalcShort") }}
+                  </button>
+                </div>
+              </td>
               <td>
                 {{ t("customTdeeRowHelper") }}
               </td>
@@ -358,17 +433,70 @@ function observedEmptyText() {
 
 .tdee-table th:nth-child(3),
 .tdee-table td:nth-child(3) {
-  inline-size: 14%;
+  inline-size: 26%;
 }
 
 .tdee-table th:nth-child(4),
 .tdee-table td:nth-child(4) {
-  inline-size: 59%;
+  inline-size: 47%;
 }
 
 .calorie-cell {
   font-weight: 700;
   white-space: nowrap;
+}
+
+.calorie-cell--custom {
+  white-space: normal;
+}
+
+.tdee-custom-input {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  min-inline-size: 5.25rem;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+  padding: 0.18rem 0.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--bevel-sunken);
+}
+
+.tdee-custom-cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.tdee-custom-calc {
+  flex: 0 0 auto;
+  min-inline-size: 3.1rem;
+  block-size: 2.05rem;
+  padding: 0 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.92rem;
+  line-height: 1;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--bevel-raised);
+}
+
+.tdee-custom-calc.is-busy {
+  opacity: 0.85;
+  animation: status-toast-spin 0.85s linear infinite;
+}
+
+.tdee-custom-calc:disabled {
+  opacity: 0.65;
 }
 
 .tdee-table td {

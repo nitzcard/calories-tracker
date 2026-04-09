@@ -16,6 +16,9 @@ const GEMINI_TDEE_SCHEMA = {
   },
 } as const;
 
+const TDEE_MIN_REASONABLE = 800;
+const TDEE_MAX_REASONABLE = 6000;
+
 type GeminiGenerateContentResponse = {
   candidates?: Array<{
     content?: {
@@ -30,6 +33,7 @@ export async function estimateTdeeWithGemini(input: {
   providerId: string;
   profile: Profile;
   tdeeSnapshot: TdeeSnapshot;
+  historyWindow: Array<{ date: string; weightKg: number; caloriesKcal: number }>;
 }): Promise<{
   tdeeKcal: number;
   activityMultiplier: number | null;
@@ -43,7 +47,7 @@ export async function estimateTdeeWithGemini(input: {
   }
 
   const endpoint = buildEndpoint(input.providerId, apiKey);
-  const prompt = buildTdeePrompt(input.profile, input.tdeeSnapshot);
+  const prompt = buildTdeePrompt(input.profile, input.tdeeSnapshot, input.historyWindow);
 
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -84,10 +88,21 @@ function buildEndpoint(providerId: string, apiKey: string): string {
   return `${baseUrl}/models/${providerId}:generateContent?key=${apiKey}`;
 }
 
-function buildTdeePrompt(profile: Profile, tdee: TdeeSnapshot) {
+function buildTdeePrompt(
+  profile: Profile,
+  tdee: TdeeSnapshot,
+  historyWindow: Array<{ date: string; weightKg: number; caloriesKcal: number }>,
+) {
   const currentWeight = profile.estimatedWeight ?? tdee.formulaWeight ?? null;
   const targetWeight = profile.targetWeight ?? null;
   const activity = (profile.activityPrompt ?? "").trim();
+  const goalMode = profile.goalMode ?? "maingain";
+
+  const historyLines = historyWindow.length
+    ? historyWindow
+        .map((row) => `- ${row.date}: ${row.weightKg} kg, ${Math.round(row.caloriesKcal)} kcal`)
+        .join("\n")
+    : "- (not enough days with both weight and calories)";
 
   return [
     "Estimate my TDEE from the inputs below.",
@@ -96,6 +111,10 @@ function buildTdeePrompt(profile: Profile, tdee: TdeeSnapshot) {
     "- Output ONLY valid JSON that matches the given response schema.",
     "- Use metric units.",
     "- Make conservative assumptions if something is unknown; do not ask follow-up questions.",
+    "- Prefer a data-driven estimate from my history window when possible (weight + calories).",
+    "- If the history window is insufficient, fall back to a formula-based estimate (use the app estimates).",
+    "- When using history, estimate the TDEE that best explains the weight trend given logged calories (assume ~7700 kcal per 1 kg of body mass change as a rough energy-equivalent).",
+    `- Keep tdeeKcal within ${TDEE_MIN_REASONABLE}-${TDEE_MAX_REASONABLE} kcal/day.`,
     "- If you choose an activity multiplier, return it (or null if you avoid a multiplier).",
     "",
     "Inputs (metric):",
@@ -104,14 +123,23 @@ function buildTdeePrompt(profile: Profile, tdee: TdeeSnapshot) {
     `- Height: ${profile.height ?? "unknown"} cm`,
     `- Current weight: ${currentWeight ?? "unknown"} kg`,
     `- Target weight: ${targetWeight ?? "none"} kg`,
+    `- Goal mode: ${goalMode}`,
     "",
     "Activity / lifestyle:",
     activity ? `- ${activity}` : "- (not provided)",
     "",
+    "History window (most recent days with BOTH weight and calories):",
+    historyLines,
+    "",
+    "App estimates (for reference):",
+    `- Formula TDEE average: ${tdee.formulaTdeeAverage ?? "unknown"} kcal/day`,
+    `- Formula breakdown: ${Object.entries(tdee.formulaBreakdown ?? {}).map(([k, v]) => `${k}=${v}`).join(", ") || "unknown"}`,
+    `- Observed TDEE: ${tdee.observedTdee ?? "unknown"} kcal/day`,
+    "",
     "What to compute:",
-    "- tdeeKcal: one final estimated TDEE number in kcal/day.",
-    "- recommendedCaloriesKcal: if a target weight exists, give a conservative daily calorie target; otherwise null.",
-    "- assumptions: short bullet-style strings with your key assumptions (e.g. multiplier, rate of change).",
+    "- tdeeKcal: one final estimated TDEE number in kcal/day (a single number).",
+    "- recommendedCaloriesKcal: give a conservative daily calorie target based on goal mode (even if target weight is not set).",
+    "- assumptions: short bullet-style strings with your key assumptions.",
   ].join("\n");
 }
 
@@ -157,6 +185,7 @@ function parseTdeeResponse(value: unknown): {
   }
 
   const tdeeKcal = Math.max(0, value.tdeeKcal);
+  const clampedTdeeKcal = Math.min(TDEE_MAX_REASONABLE, Math.max(TDEE_MIN_REASONABLE, tdeeKcal));
   const recommendedCaloriesKcal =
     value.recommendedCaloriesKcal === null ||
     (typeof value.recommendedCaloriesKcal === "number" && Number.isFinite(value.recommendedCaloriesKcal))
@@ -164,7 +193,7 @@ function parseTdeeResponse(value: unknown): {
       : undefined;
 
   return {
-    tdeeKcal,
+    tdeeKcal: clampedTdeeKcal,
     activityMultiplier: value.activityMultiplier as number | null,
     assumptions: value.assumptions,
     recommendedCaloriesKcal,
@@ -210,4 +239,3 @@ async function readGeminiErrorMessage(response: Response) {
     return null;
   }
 }
-

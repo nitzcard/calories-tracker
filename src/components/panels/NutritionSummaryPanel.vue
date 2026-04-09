@@ -231,15 +231,66 @@ function macroPercent(
   return Math.round((macroCalories / totalCalories) * 100);
 }
 
-function macroRecommendationKey(macro: "protein" | "carbs" | "fat" | "fiber") {
-  const keys = {
-    protein: "macroProteinRecommendation",
-    carbs: "macroCarbsRecommendation",
-    fat: "macroFatRecommendation",
-    fiber: "macroFiberRecommendation",
-  } as const;
+function goalModeLabel(mode: "cut" | "leanMass" | "maingain") {
+  if (mode === "cut") return t("goalModeCut");
+  if (mode === "leanMass") return t("goalModeLeanMass");
+  return t("goalModeMaingain");
+}
 
-  return keys[macro];
+function macroGoalTargets(mode: "cut" | "leanMass" | "maingain") {
+  if (mode === "cut") {
+    return {
+      protein: { min: 1.8, max: 2.2 },
+      carbsPct: { min: 35, max: 50 },
+      fatPct: { min: 20, max: 35 },
+    };
+  }
+
+  if (mode === "leanMass") {
+    return {
+      protein: { min: 1.6, max: 2.0 },
+      carbsPct: { min: 40, max: 60 },
+      fatPct: { min: 20, max: 30 },
+    };
+  }
+
+  return {
+    protein: { min: 1.6, max: 2.0 },
+    carbsPct: { min: 35, max: 55 },
+    fatPct: { min: 20, max: 35 },
+  };
+}
+
+function macroRecommendationText(macro: "protein" | "carbs" | "fat" | "fiber") {
+  if (macro === "fiber") {
+    return t("macroFiberRecommendation");
+  }
+
+  const mode = props.profile?.goalMode ?? "maingain";
+  const goal = goalModeLabel(mode);
+  const targets = macroGoalTargets(mode);
+
+  if (macro === "protein") {
+    return t("macroProteinRecommendationGoal", {
+      goal,
+      min: targets.protein.min,
+      max: targets.protein.max,
+    });
+  }
+
+  if (macro === "carbs") {
+    return t("macroCarbsRecommendationGoal", {
+      goal,
+      min: targets.carbsPct.min,
+      max: targets.carbsPct.max,
+    });
+  }
+
+  return t("macroFatRecommendationGoal", {
+    goal,
+    min: targets.fatPct.min,
+    max: targets.fatPct.max,
+  });
 }
 
 function resolveTotalCalories() {
@@ -268,19 +319,29 @@ function macroRecommendedRange(macro: "protein" | "carbs" | "fat" | "fiber") {
   }
 
   const totalCalories = resolveTotalCalories();
+  const mode = props.profile?.goalMode ?? "maingain";
+  const targets = macroGoalTargets(mode);
   if (macro === "carbs") {
     if (!totalCalories) return null;
-    return { min: (totalCalories * 0.35) / 4, max: (totalCalories * 0.55) / 4, unit: t("unitG") };
+    return {
+      min: (totalCalories * (targets.carbsPct.min / 100)) / 4,
+      max: (totalCalories * (targets.carbsPct.max / 100)) / 4,
+      unit: t("unitG"),
+    };
   }
 
   if (macro === "fat") {
     if (!totalCalories) return null;
-    return { min: (totalCalories * 0.2) / 9, max: (totalCalories * 0.35) / 9, unit: t("unitG") };
+    return {
+      min: (totalCalories * (targets.fatPct.min / 100)) / 9,
+      max: (totalCalories * (targets.fatPct.max / 100)) / 9,
+      unit: t("unitG"),
+    };
   }
 
   const weight = props.profile?.estimatedWeight ?? props.entry?.weight ?? null;
   if (!weight || weight <= 0) return null;
-  return { min: weight * 1.6, max: weight * 2.2, unit: t("unitG") };
+  return { min: weight * targets.protein.min, max: weight * targets.protein.max, unit: t("unitG") };
 }
 
 function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
@@ -541,7 +602,7 @@ const proteinPerLeanBodyWeight = computed(() => {
           <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
             {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
           </small>
-          <small class="stat-helper">{{ t(macroRecommendationKey("protein")) }}</small>
+          <small class="stat-helper">{{ macroRecommendationText("protein") }}</small>
         </div>
         <div class="compact-stat">
           <strong>{{ t("carbs") }}</strong>
@@ -573,7 +634,7 @@ const proteinPerLeanBodyWeight = computed(() => {
               {{ carbsGauge.unit }}
             </small>
           </div>
-          <small class="stat-helper">{{ t(macroRecommendationKey("carbs")) }}</small>
+          <small class="stat-helper">{{ macroRecommendationText("carbs") }}</small>
         </div>
         <div class="compact-stat">
           <strong>{{ t("fat") }}</strong>
@@ -605,7 +666,7 @@ const proteinPerLeanBodyWeight = computed(() => {
               {{ fatGauge.unit }}
             </small>
           </div>
-          <small class="stat-helper">{{ t(macroRecommendationKey("fat")) }}</small>
+          <small class="stat-helper">{{ macroRecommendationText("fat") }}</small>
         </div>
         <div class="compact-stat">
           <strong>{{ t("fiber") }}</strong>
@@ -634,7 +695,7 @@ const proteinPerLeanBodyWeight = computed(() => {
               {{ fiberGauge.unit }}
             </small>
           </div>
-          <small class="stat-helper">{{ t(macroRecommendationKey("fiber")) }}</small>
+          <small class="stat-helper">{{ macroRecommendationText("fiber") }}</small>
         </div>
         <div class="compact-stat">
           <strong>{{ t("provider") }}</strong>
@@ -1103,11 +1164,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .meal-footer {
   display: flex;
-  justify-content: flex-end;
-  justify-content: end;
+  justify-content: flex-start;
+  justify-content: start;
   padding-block-start: 4px;
   border-block-start: 1px solid var(--meal-border, var(--border));
-  text-align: end;
+  text-align: start;
 }
 
 .meal-table-wrap {

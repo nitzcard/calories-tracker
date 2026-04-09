@@ -1,8 +1,4 @@
-import {
-  deducedCustomTdeeFromEntries,
-  deducedWeightFromEntries,
-  resolvedDailyCalories,
-} from "../domain/entries";
+import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
 import type { DailyEntry, FormulaTdeeResult, Profile, TdeeEquation, TdeeSnapshot } from "../types";
 
 const MIN_OBSERVED_TDEE_DAYS = 7;
@@ -323,11 +319,9 @@ function selectedTdeeValue(
 export function buildTdeeSnapshot(
   entries: DailyEntry[],
   profile: Profile,
-  anchorDate?: string,
 ): TdeeSnapshot {
   const formulaWeight = resolveFormulaWeight(entries, profile);
   const formulas = calculateFormulaTdee(profile, formulaWeight.value);
-  const customTdee = deducedCustomTdeeFromEntries(entries, anchorDate);
   const normalizedTargetWeight =
     profile.targetWeight !== null &&
     profile.targetWeight !== undefined &&
@@ -341,7 +335,7 @@ export function buildTdeeSnapshot(
   const targetTdee =
     normalizedTargetWeight !== null
       ? (profile.tdeeEquation === "custom"
-          ? customTdee
+          ? (profile.customTdee ?? null)
           : profile.tdeeEquation === "observedTdee"
           ? targetFormulas.average
           : targetFormulas.breakdown[profile.tdeeEquation] ?? targetFormulas.average)
@@ -356,14 +350,13 @@ export function buildTdeeSnapshot(
     observedReason: observed.reason,
     observedMinEntries: MIN_OBSERVED_TDEE_ENTRIES,
     observedMinDays: MIN_OBSERVED_TDEE_DAYS,
-    customTdee,
     formulaTdeeAverage: formulas.average,
     formulaBreakdown: formulas.breakdown,
     formulaWeight: formulaWeight.value,
     formulaWeightSource: formulaWeight.source,
     activityMultiplier: formulas.activityMultiplier,
     selectedEquation: profile.tdeeEquation,
-    selectedValue: selectedTdeeValue(profile.tdeeEquation, formulas, observed.value, customTdee),
+    selectedValue: selectedTdeeValue(profile.tdeeEquation, formulas, observed.value, profile.customTdee ?? null),
     targetWeight: normalizedTargetWeight,
     targetTdee,
     lastComputedAt: new Date().toISOString(),

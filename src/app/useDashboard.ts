@@ -201,7 +201,7 @@ export function useDashboard() {
   );
   const tdee = computed(() =>
     profile.value
-      ? buildTdeeSnapshot(displayEntries.value, profile.value, selectedDate.value)
+      ? buildTdeeSnapshot(displayEntries.value, profile.value)
 	        : {
 	          observedTdee: null,
 	          observedFromDate: null,
@@ -211,7 +211,6 @@ export function useDashboard() {
 	          observedReason: "insufficient_entries" as const,
 	          observedMinEntries: 4,
 	          observedMinDays: 7,
-            customTdee: null,
 	          formulaTdeeAverage: null,
 	          formulaBreakdown: {},
 	          formulaWeight: null,
@@ -233,16 +232,49 @@ export function useDashboard() {
       ? provider.value
       : "gemini-2.5-flash-latest";
 
+    const historyWindow = displayEntries.value
+      .filter((entry) => entry.date <= selectedDate.value)
+      .map((entry) => {
+        const calories = resolvedDailyCalories(entry);
+        return {
+          date: entry.date,
+          weightKg: entry.weight,
+          caloriesKcal: calories,
+        };
+      })
+      .filter(
+        (row) =>
+          row.weightKg != null &&
+          row.caloriesKcal != null &&
+          Number.isFinite(row.weightKg) &&
+          Number.isFinite(row.caloriesKcal) &&
+          row.weightKg > 0 &&
+          row.caloriesKcal > 0,
+      )
+      .map((row) => ({
+        date: row.date,
+        weightKg: row.weightKg as number,
+        caloriesKcal: row.caloriesKcal as number,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-21);
+
     isCalculatingCustomTdee.value = true;
     try {
       const result = await estimateTdeeWithGemini({
         providerId: effectiveProvider,
         profile: profile.value,
         tdeeSnapshot: tdee.value,
+        historyWindow,
       });
 
       const nextValue = Math.round(result.tdeeKcal);
-      await saveHistoryCustomTdee(selectedDate.value, nextValue);
+      const nextProfile = { ...profile.value, customTdee: nextValue };
+      await autoSave.runAutoSave(async () => {
+        profile.value = nextProfile;
+        await saveProfile(nextProfile);
+      }, "constants.profile.customTdee");
+      scheduleCloudPush("constants.profile.customTdee");
       await saveTdeeEquation("custom");
     } finally {
       isCalculatingCustomTdee.value = false;
@@ -267,7 +299,7 @@ export function useDashboard() {
           displayEntries.value,
           profile.value,
           selectedDate.value,
-          tdee.value.observedTdee,
+          tdee.value.selectedValue,
           locale.value,
         )
       : {
@@ -282,7 +314,7 @@ export function useDashboard() {
           macros: [],
           averageProteinPerKg7d: null,
           averageProteinPerKg30d: null,
-          averageCaloriesVsObservedTdee7d: null,
+          averageCaloriesVsTdee7d: null,
           calorieConsistency7d: null,
           topFoods30d: [],
         },
@@ -431,15 +463,15 @@ export function useDashboard() {
     scheduleCloudPush(`history.calories.${date}`);
   }
 
-  async function saveHistoryCustomTdee(date: string, customTdee: number | null) {
+  async function saveHistoryWeight(date: string, weight: number | null) {
     await autoSave.runAutoSave(async () => {
       await upsertDailyEntry({
         date,
-        customTdee,
+        weight,
       });
       await refreshState();
-    }, `history.customTdee.${date}`);
-    scheduleCloudPush(`history.customTdee.${date}`);
+    }, `history.weight.${date}`);
+    scheduleCloudPush(`history.weight.${date}`);
   }
 
   async function saveProfileDraft(nextProfile?: Profile) {
@@ -1060,7 +1092,7 @@ export function useDashboard() {
     weightPoints,
     caloriePoints,
     savingHistoryCalories: autoSave.savingHistoryCalories,
-    savingHistoryCustomTdee: autoSave.savingHistoryCustomTdee,
+    savingHistoryWeight: autoSave.savingHistoryWeight,
     isCalculatingCustomTdee,
     notice,
     cloudMode,
@@ -1083,7 +1115,7 @@ export function useDashboard() {
     saveWeightDraft,
     saveFoodDraft,
     saveHistoryCalories,
-    saveHistoryCustomTdee,
+    saveHistoryWeight,
     calculateCustomTdeeWithGemini,
     analyzeCurrentDay,
     saveProfileDraft,

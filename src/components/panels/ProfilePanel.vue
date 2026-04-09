@@ -122,6 +122,21 @@ function saveImmediateProfile(profile: Profile) {
 	          <span class="field-unit">{{ t("unitKg") }}</span>
 	        </div>
 	      </FormField>
+        <FormField class="goal-mode-field" :label="t('goalMode')" :helper="t('goalModeHelper')">
+          <select
+            :value="profile.goalMode"
+            @change="
+              saveImmediateProfile({
+                ...profile,
+                goalMode: ($event.target as HTMLSelectElement).value as Profile['goalMode'],
+              })
+            "
+          >
+            <option value="cut">{{ t('goalModeCut') }}</option>
+            <option value="leanMass">{{ t('goalModeLeanMass') }}</option>
+            <option value="maingain">{{ t('goalModeMaingain') }}</option>
+          </select>
+        </FormField>
       <FormField>
         <template #label>
           <span class="bodyfat-label">
@@ -219,6 +234,10 @@ function saveImmediateProfile(profile: Profile) {
 .controls-grid :deep(.field) {
   inline-size: var(--compact-control-inline-size);
   max-inline-size: 100%;
+}
+
+.controls-grid :deep(.goal-mode-field) {
+  inline-size: calc(var(--compact-control-inline-size) * 1.55);
 }
 
 .inferred-block {
