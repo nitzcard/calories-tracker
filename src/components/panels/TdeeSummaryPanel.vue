@@ -210,9 +210,9 @@ function observedEmptyText() {
       <small class="tdee-parts-note">{{ t("tdeePartsNote") }}</small>
     </div>
 
-		    <div class="table-container">
-		      <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
-	        <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
+    <div class="table-container">
+      <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
+        <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
         <thead>
           <tr>
             <th class="pick-col"></th>
