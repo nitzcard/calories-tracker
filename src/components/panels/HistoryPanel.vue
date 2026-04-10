@@ -51,15 +51,6 @@ const rolling7dDelta = computed(() =>
   }, 0),
 );
 
-function caloriesVsTdee(entry: DailyEntry) {
-  const calories = resolvedDailyCalories(entry);
-  if (calories == null || props.tdeeReference == null) {
-    return "-";
-  }
-
-  return `${calories} / ${props.tdeeReference}`;
-}
-
 function caloriesRemainingToTarget(entry: DailyEntry) {
   if (props.targetWeightReference == null) {
     return "-";
@@ -117,14 +108,13 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             <th>{{ t("date") }}</th>
             <th>{{ t("weightWithUnit") }}</th>
             <th class="calories-column">{{ t("calories") }}</th>
-            <th class="numeric-pair">{{ t("caloriesVsTdee") }}</th>
             <th class="numeric-pair">{{ t("caloriesRemainingToTarget") }}</th>
             <th>{{ t("deficitSurplus") }}</th>
           </tr>
         </thead>
         <tbody>
           <tr class="summary-row">
-            <td colspan="5">{{ t("allTimeDeficitSurplus") }}</td>
+            <td colspan="4">{{ t("allTimeDeficitSurplus") }}</td>
             <td class="delta-cell">
               <template v-if="tdeeReference != null">
                 <span class="delta-inline">
@@ -140,7 +130,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             </td>
           </tr>
           <tr class="summary-row summary-row--recent">
-            <td colspan="5">{{ t("last7dDeficitSurplus") }}</td>
+            <td colspan="4">{{ t("last7dDeficitSurplus") }}</td>
             <td class="delta-cell">
               <template v-if="tdeeReference != null">
                 <span class="delta-inline">
@@ -173,7 +163,6 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               @save="emit('save-calories', entry.date, $event)"
             />
           </td>
-	          <td class="numeric-pair">{{ caloriesVsTdee(entry) }}</td>
 	          <td class="numeric-pair">{{ caloriesRemainingToTarget(entry) }}</td>
 	          <td class="delta-cell">
 	            <template v-if="deficitOrSurplusParts(entry).kind !== 'unknown'">
@@ -255,10 +244,6 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               @save="emit('save-calories', entry.date, $event)"
             />
           </div>
-        </div>
-        <div class="history-card__row">
-          <div class="k">{{ t("caloriesVsTdee") }}</div>
-          <div class="v numeric-pair">{{ caloriesVsTdee(entry) }}</div>
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("caloriesRemainingToTarget") }}</div>

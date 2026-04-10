@@ -210,8 +210,9 @@ function observedEmptyText() {
       <small class="tdee-parts-note">{{ t("tdeePartsNote") }}</small>
     </div>
 
-		    <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
-	      <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
+		    <div class="table-container">
+		      <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
+	        <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
         <thead>
           <tr>
             <th class="pick-col"></th>
@@ -317,6 +318,7 @@ function observedEmptyText() {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </BasePanel>
 </template>
@@ -395,8 +397,13 @@ function observedEmptyText() {
   line-height: 1.3;
 }
 
-.table-wrap {
+.table-container {
   margin-block-start: 10px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table-wrap.is-updating {
@@ -415,6 +422,7 @@ function observedEmptyText() {
 .tdee-table {
   inline-size: 100%;
   table-layout: fixed;
+  min-inline-size: 600px;
 }
 
 .tdee-table.is-updating {
@@ -467,7 +475,7 @@ function observedEmptyText() {
 .tdee-custom-cell {
   display: inline-flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -537,6 +545,22 @@ function observedEmptyText() {
     box-shadow:
       var(--bevel-raised),
       0 0 0 3px rgba(191, 162, 70, 0.88);
+  }
+}
+
+@media (max-width: 640px) {
+  .tdee-table {
+    min-inline-size: 550px;
+  }
+
+  .tdee-custom-calc {
+    min-inline-size: 2.8rem;
+    font-size: 0.85rem;
+    padding: 0 0.3rem;
+  }
+
+  .tdee-custom-input {
+    min-inline-size: 4.5rem;
   }
 }
 </style>
