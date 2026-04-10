@@ -227,11 +227,18 @@ function buildYRange(values: Array<number | null>): [number, number] {
   return [Math.max(0, min - pad), max + pad];
 }
 
+function onVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    renderChart();
+  }
+}
+
 onMounted(renderChart);
 onMounted(() => {
   if (!chartRef.value) return;
   resizeObserver = new ResizeObserver(() => renderChart());
   resizeObserver.observe(chartRef.value);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 });
 watch(() => props.points, renderChart, { deep: true });
 watch(() => props.label, renderChart);
@@ -242,6 +249,7 @@ watch(() => props.referenceLines, renderChart, { deep: true });
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   chart?.destroy();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 </script>
 
