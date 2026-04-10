@@ -92,7 +92,10 @@ function mergeProfilePreservingData(
     DEFAULT.tdeeEquation,
   );
   const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
-  const mergedTheme = pickEnumWithWeakDefault(preferred.themeMode, other.themeMode, DEFAULT.themeMode);
+  // Theme should respect user's explicit choice, including "system".
+  // Use preferred theme (most recent by updatedAt), falling back to other, then default.
+  // This ensures "system" theme is preserved when explicitly chosen by the user.
+  const mergedTheme = preferred.themeMode ?? other.themeMode ?? DEFAULT.themeMode;
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
   const mergedGoalMode = pickEnumWithWeakDefault(
     preferred.goalMode ?? DEFAULT.goalMode,

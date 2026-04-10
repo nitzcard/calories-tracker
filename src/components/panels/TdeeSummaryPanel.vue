@@ -210,8 +210,9 @@ function observedEmptyText() {
       <small class="tdee-parts-note">{{ t("tdeePartsNote") }}</small>
     </div>
 
-		    <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
-	      <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
+    <div class="table-container">
+      <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
+        <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
         <thead>
           <tr>
             <th class="pick-col"></th>
@@ -317,6 +318,118 @@ function observedEmptyText() {
           </tr>
         </tbody>
       </table>
+      </div>
+    </div>
+
+    <div class="tdee-cards">
+      <div class="tdee-card">
+        <div class="tdee-card__header">
+          <input
+            type="radio"
+            name="tdeeEquationMobile"
+            :checked="selectedEquation === 'custom'"
+            @change="onPick('custom')"
+            class="tdee-card__radio"
+          />
+          <strong class="tdee-card__title">{{ t("customTdee") }}</strong>
+        </div>
+        <div class="tdee-card__content">
+          <div class="tdee-card__row">
+            <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
+            <div class="tdee-custom-cell-mobile">
+              <input
+                class="tdee-custom-input"
+                type="number"
+                step="1"
+                min="0"
+                :value="customTdeeDraft"
+                placeholder="-"
+                @input="onCustomTdeeInput"
+                @blur="onCustomTdeeBlur"
+                @keydown.enter.prevent="onCustomTdeeBlur"
+              />
+              <button
+                class="tdee-custom-calc"
+                :class="{ 'is-busy': Boolean(isCalculatingCustomTdee) }"
+                :disabled="Boolean(isCalculatingCustomTdee)"
+                type="button"
+                :title="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
+                :aria-label="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
+                @click="calculateCustomTdee"
+              >
+                {{ isCalculatingCustomTdee ? t("tdeeCalcShortBusy") : t("tdeeCalcShort") }}
+              </button>
+            </div>
+          </div>
+          <div class="tdee-card__helper">{{ t("customTdeeRowHelper") }}</div>
+        </div>
+      </div>
+
+      <div class="tdee-card">
+        <div class="tdee-card__header">
+          <input
+            type="radio"
+            name="tdeeEquationMobile"
+            :checked="selectedEquation === 'observedTdee'"
+            @change="onPick('observedTdee')"
+            class="tdee-card__radio"
+          />
+          <strong class="tdee-card__title">{{ t("observedTdee") }}</strong>
+        </div>
+        <div class="tdee-card__content">
+          <div class="tdee-card__row">
+            <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
+            <div class="tdee-card__value">{{ tdee.observedTdee ?? "-" }}</div>
+          </div>
+          <div class="tdee-card__helper">
+            {{ t("observedTdeeExplain") }}
+            <span v-if="tdee.observedTdee == null">
+              <br />
+              <em class="muted">{{ observedEmptyText() }}</em>
+            </span>
+            <span v-if="tdee.observedFromDate && tdee.observedToDate">
+              <br />
+              {{ t("observedTdeeRange") }}:
+              {{ formatEntryDate(tdee.observedFromDate, locale) }} -
+              {{ formatEntryDate(tdee.observedToDate, locale) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-for="(value, name) in tdee.formulaBreakdown" :key="`card-${name}`" class="tdee-card">
+        <div class="tdee-card__header">
+          <input
+            type="radio"
+            name="tdeeEquationMobile"
+            :checked="selectedEquation === (name as TdeeEquation)"
+            @change="onPick(name as TdeeEquation)"
+            class="tdee-card__radio"
+          />
+          <a class="formula-link tdee-card__title" :href="formulaHref(name)" target="_blank" rel="noreferrer">
+            {{ formulaLabel(name) }}
+          </a>
+        </div>
+        <div class="tdee-card__content">
+          <div class="tdee-card__row">
+            <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
+            <div class="tdee-card__value">{{ value }}</div>
+          </div>
+          <div class="tdee-card__helper">
+            {{ formulaExplain(name) }}
+            <span v-if="selectedEquation === (name as TdeeEquation) && tdee.formulaWeight !== null">
+              <br />
+              {{ t("formulaWeightUsed") }}:
+              {{ tdee.formulaWeight }} {{ t("unitKg") }}
+              ({{ weightSourceText(tdee.formulaWeightSource) }})
+            </span>
+            <span v-if="selectedEquation === (name as TdeeEquation) && tdee.activityMultiplier !== null">
+              <br />
+              {{ t("activityMultiplierLabel") }}: {{ tdee.activityMultiplier }}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   </BasePanel>
 </template>
@@ -395,8 +508,17 @@ function observedEmptyText() {
   line-height: 1.3;
 }
 
-.table-wrap {
+.table-container {
   margin-block-start: 10px;
+}
+
+.tdee-cards {
+  display: none;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table-wrap.is-updating {
@@ -415,6 +537,7 @@ function observedEmptyText() {
 .tdee-table {
   inline-size: 100%;
   table-layout: fixed;
+  min-inline-size: 600px;
 }
 
 .tdee-table.is-updating {
@@ -467,7 +590,7 @@ function observedEmptyText() {
 .tdee-custom-cell {
   display: inline-flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -537,6 +660,93 @@ function observedEmptyText() {
     box-shadow:
       var(--bevel-raised),
       0 0 0 3px rgba(191, 162, 70, 0.88);
+  }
+}
+
+@media (max-width: 640px) {
+  .table-container {
+    display: none;
+  }
+
+  .tdee-cards {
+    display: grid;
+    gap: 10px;
+    margin-block-start: 10px;
+  }
+
+  .tdee-card {
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    box-shadow: var(--bevel-raised);
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .tdee-card__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .tdee-card__radio {
+    flex: 0 0 auto;
+  }
+
+  .tdee-card__title {
+    flex: 1 1 auto;
+    font-size: 1rem;
+  }
+
+  .tdee-card__content {
+    display: grid;
+    gap: 6px;
+    padding-inline-start: 30px;
+  }
+
+  .tdee-card__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .tdee-card__label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    flex: 0 0 auto;
+  }
+
+  .tdee-card__value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex: 1 1 auto;
+    text-align: end;
+  }
+
+  .tdee-card__helper {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .tdee-custom-cell-mobile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .tdee-custom-cell-mobile .tdee-custom-input {
+    flex: 1 1 auto;
+    min-inline-size: 5rem;
+    max-inline-size: 8rem;
+  }
+
+  .tdee-custom-cell-mobile .tdee-custom-calc {
+    flex: 0 0 auto;
   }
 }
 </style>
