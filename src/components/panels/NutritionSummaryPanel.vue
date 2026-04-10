@@ -336,7 +336,8 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
   const minPct = Math.min(100, Math.max(0, (range.min / scaleMax) * 100));
   const maxPct =
     macro === "protein" ? 100 : Math.min(100, Math.max(0, (range.max / scaleMax) * 100));
-  const state = actual < range.min ? "low" : actual > range.max ? "high" : "ok";
+  const state =
+    actual < range.min ? "low" : macro !== "protein" && actual > range.max ? "high" : "ok";
 
   return {
     actual,

@@ -162,6 +162,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               :is-saving="Boolean(savingCalories[entry.date])"
               @save="emit('save-calories', entry.date, $event)"
             />
+            <small v-if="tdeeReference != null" class="tdee-footnote">/ {{ tdeeReference }}</small>
           </td>
 	          <td class="numeric-pair">{{ caloriesRemainingToTarget(entry) }}</td>
 	          <td class="delta-cell">
@@ -243,6 +244,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               :is-saving="Boolean(savingCalories[entry.date])"
               @save="emit('save-calories', entry.date, $event)"
             />
+            <small v-if="tdeeReference != null" class="tdee-footnote">/ {{ tdeeReference }}</small>
           </div>
         </div>
         <div class="history-card__row">
@@ -323,6 +325,14 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
 .calories-column {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.tdee-footnote {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
