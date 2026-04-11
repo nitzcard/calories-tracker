@@ -212,7 +212,7 @@ function analyzedEntriesWithinWindow(entries: DailyEntry[], anchorTime: number, 
 function nutrientSamples(entries: DailyEntry[], nutrientKey: SupportedNutrientKey) {
   return entries
     .map((entry) => entry.nutritionSnapshot?.nutrients?.[nutrientKey] ?? null)
-    .filter((value): value is number => typeof value === "number");
+    .filter((value): value is number => typeof value === "number" && value > 0);
 }
 
 function dailyMacroSamples(entries: DailyEntry[], key: MacroInsightStat["key"]) {
@@ -246,11 +246,14 @@ function classifyStatus(
   }
 
   const coverage = averageValue / target;
-  if (coverage < 0.8) {
+  // < 50 % of RDA → clearly inadequate for most people (truly deficient territory)
+  // 50–80 % of RDA → borderline (near the EAR; may be inadequate for a portion of people)
+  // ≥ 80 % of RDA → covered (at or above the EAR; likely adequate for most people)
+  if (coverage < 0.5) {
     return "likely_low";
   }
 
-  if (coverage < 1) {
+  if (coverage < 0.8) {
     return "borderline";
   }
 
