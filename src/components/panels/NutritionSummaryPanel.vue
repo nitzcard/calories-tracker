@@ -255,22 +255,34 @@ function macroGoalTargets(mode: "cut" | "leanMass" | "maingain") {
   };
 }
 
+function goalModeLabel(mode: "cut" | "leanMass" | "maingain") {
+  const labels: Record<typeof mode, string> = {
+    cut: t("goalModeCut"),
+    leanMass: t("goalModeLeanMass"),
+    maingain: t("goalModeMaingain"),
+  };
+  return labels[mode];
+}
+
+function formatGoalRange(goalLabel: string, min: number, max: number, unit: string) {
+  return `${goalLabel}: ${min}-${max} ${unit}`;
+}
+
 function macroTargetText(macro: "protein" | "carbs" | "fat" | "fiber") {
   const mode = props.profile?.goalMode ?? "maingain";
   const targets = macroGoalTargets(mode);
-  const goalLabel =
-    mode === "cut" ? t("goalModeCut") : mode === "leanMass" ? t("goalModeLeanMass") : t("goalModeMaingain");
+  const goalLabel = goalModeLabel(mode);
 
   if (macro === "protein") {
-    return `${goalLabel}: ${targets.protein.min}-${targets.protein.max} ${t("unitProteinPerKg")}`;
+    return formatGoalRange(goalLabel, targets.protein.min, targets.protein.max, t("unitProteinPerKg"));
   }
 
   if (macro === "carbs") {
-    return `${goalLabel}: ${targets.carbsPct.min}-${targets.carbsPct.max}% ${t("macroShareOfCalories")}`;
+    return formatGoalRange(goalLabel, targets.carbsPct.min, targets.carbsPct.max, `% ${t("macroShareOfCalories")}`);
   }
 
   if (macro === "fat") {
-    return `${goalLabel}: ${targets.fatPct.min}-${targets.fatPct.max}% ${t("macroShareOfCalories")}`;
+    return formatGoalRange(goalLabel, targets.fatPct.min, targets.fatPct.max, `% ${t("macroShareOfCalories")}`);
   }
 
   return `25-38 ${t("unitG")}/${props.locale === "he" ? "יום" : "day"}`;
