@@ -212,7 +212,7 @@ function analyzedEntriesWithinWindow(entries: DailyEntry[], anchorTime: number, 
 function nutrientSamples(entries: DailyEntry[], nutrientKey: SupportedNutrientKey) {
   return entries
     .map((entry) => entry.nutritionSnapshot?.nutrients?.[nutrientKey] ?? null)
-    .filter((value): value is number => typeof value === "number");
+    .filter((value): value is number => typeof value === "number" && value > 0);
 }
 
 function dailyMacroSamples(entries: DailyEntry[], key: MacroInsightStat["key"]) {

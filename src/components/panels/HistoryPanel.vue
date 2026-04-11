@@ -237,7 +237,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("calories") }}</div>
-          <div class="v">
+          <div class="v v--calories">
             <HistoryCaloriesCell
               :value="entry.manualCalories"
               :fallback-value="resolvedDailyCalories(entry)"
@@ -392,6 +392,20 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
   .v.numeric-pair {
     text-align: start;
+  }
+
+  .v--calories {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .v--calories .tdee-footnote {
+    display: inline;
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
 
   .delta-word {
