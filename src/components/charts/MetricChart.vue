@@ -72,10 +72,15 @@ function renderChart() {
     ? [...yValues, ...referenceValuesList.flatMap((values) => values as Array<number | null>)]
     : yValues;
 
+  const chartWidth = chartRef.value?.clientWidth || 320;
+  const maxXLabels = Math.max(3, Math.floor(chartWidth / 52));
+  const thinFactor = Math.max(1, Math.ceil(xSplits.length / maxXLabels));
+  const visibleXSplits = xSplits.filter((_, idx) => idx % thinFactor === 0);
+
   chart?.destroy();
   chart = new uPlot(
     {
-      width: chartRef.value.clientWidth || 320,
+      width: chartWidth,
       height: 210,
       series: [
         {
@@ -108,7 +113,7 @@ function renderChart() {
         {
           stroke: "#5f5a4f",
           grid: { stroke: "rgba(95, 90, 79, 0.18)" },
-          splits: () => xSplits,
+          splits: () => visibleXSplits,
           values: (_u, splits) => splits.map((value) => formatAxisDay(value)),
         },
         {
@@ -222,11 +227,18 @@ function buildYRange(values: Array<number | null>): [number, number] {
   return [Math.max(0, min - pad), max + pad];
 }
 
+function onVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    renderChart();
+  }
+}
+
 onMounted(renderChart);
 onMounted(() => {
   if (!chartRef.value) return;
   resizeObserver = new ResizeObserver(() => renderChart());
   resizeObserver.observe(chartRef.value);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 });
 watch(() => props.points, renderChart, { deep: true });
 watch(() => props.label, renderChart);
@@ -237,6 +249,7 @@ watch(() => props.referenceLines, renderChart, { deep: true });
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   chart?.destroy();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 </script>
 
