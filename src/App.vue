@@ -641,7 +641,6 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   padding: var(--space-4);
   max-inline-size: 1400px;
   margin: 0 auto;
-  overflow-x: hidden;
 }
 
 .constant-data-panel {

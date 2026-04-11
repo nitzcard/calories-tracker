@@ -402,6 +402,11 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
     flex-wrap: nowrap;
   }
 
+  .v--calories :deep(.field-control) {
+    flex: 0 0 auto;
+    max-inline-size: 6rem;
+  }
+
   .v--calories .tdee-footnote {
     display: inline;
     white-space: nowrap;

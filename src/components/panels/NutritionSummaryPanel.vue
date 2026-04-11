@@ -613,14 +613,14 @@ const proteinPerLeanBodyWeight = computed(() => {
               <small class="stat-meta">{{ formatActual(proteinGauge.actual, proteinGauge.unit) }}</small>
               <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(proteinGauge) }}</small>
               <small class="stat-meta">{{ macroTargetText("protein") }}</small>
+              <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
+                {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
+              </small>
+              <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
+                {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
+              </small>
             </div>
           </div>
-          <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
-            {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
-          </small>
-          <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
-            {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
-          </small>
         </div>
         <div class="compact-stat compact-stat--carbs">
           <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</strong>
@@ -1159,6 +1159,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 .macro-bar__ticks {
   position: relative;
   block-size: 1rem;
+  /* Prevent tick labels that sit at the bar edges from overflowing into the page
+     scroll area (especially noticeable in RTL/Hebrew where physical-left overflow
+     is the natural scroll direction). The tick transforms already align edge ticks
+     inside the bar; this clip is a safety net for any remaining sub-pixel bleed. */
+  overflow-x: clip;
 }
 
 .macro-bar__tick {
