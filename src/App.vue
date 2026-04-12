@@ -647,7 +647,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   position: fixed;
   inset-block-start: 50%;
   inset-inline-start: 50%;
-  translate: -50% -50%;
+  transform: translate(-50%, -50%);
   z-index: 9999;
   display: flex;
   align-items: center;
