@@ -1,5 +1,12 @@
 import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
-import type { DailyEntry, FormulaTdeeResult, Profile, TdeeEquation, TdeeSnapshot } from "../types";
+import type {
+  DailyEntry,
+  FormulaTdeeResult,
+  MissingWeightStrategy,
+  Profile,
+  TdeeEquation,
+  TdeeSnapshot,
+} from "../types";
 
 const MIN_OBSERVED_TDEE_DAYS = 7;
 const MIN_OBSERVED_TDEE_ENTRIES = 4;
@@ -174,11 +181,14 @@ export function calculateFormulaTdee(
   return { average, breakdown, activityMultiplier: activity };
 }
 
-export function calculateObservedTdee(entries: DailyEntry[]): number | null {
-  return calculateObservedTdeeRange(entries).value;
+export function calculateObservedTdee(
+  entries: DailyEntry[],
+  strategy: MissingWeightStrategy = "previousDay",
+): number | null {
+  return calculateObservedTdeeRange(entries, strategy).value;
 }
 
-function calculateObservedTdeeRange(entries: DailyEntry[]): {
+function calculateObservedTdeeRange(entries: DailyEntry[], strategy: MissingWeightStrategy): {
   value: number | null;
   fromDate: string | null;
   toDate: string | null;
@@ -187,7 +197,11 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   reason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
 } {
   const valid = entries
-    .filter((entry) => entry.weight !== null && resolvedDailyCalories(entry) !== null)
+    .map((entry) => ({
+      ...entry,
+      effectiveWeight: deducedWeightFromEntries(entries, entry.date, strategy),
+    }))
+    .filter((entry) => entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (valid.length < MIN_OBSERVED_TDEE_ENTRIES) {
@@ -203,7 +217,7 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
 
   const first = valid[0];
   const last = valid[valid.length - 1];
-  if (first.weight === null || last.weight === null) {
+  if (first.effectiveWeight === null || last.effectiveWeight === null) {
     return {
       value: null,
       fromDate: null,
@@ -232,7 +246,7 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   // OLS linear regression on weight over time — more robust than endpoint averages
   const t0 = Date.parse(valid[0].date) / 86400000;
   const xs = valid.map((e) => Date.parse(e.date) / 86400000 - t0);
-  const ws = valid.map((e) => e.weight as number);
+  const ws = valid.map((e) => e.effectiveWeight as number);
   const xMean = xs.reduce((a, b) => a + b, 0) / xs.length;
   const wMean = ws.reduce((a, b) => a + b, 0) / ws.length;
   const slopeNumer = xs.reduce((sum, x, i) => sum + (x - xMean) * (ws[i] - wMean), 0);
@@ -277,7 +291,7 @@ function resolveFormulaWeight(entries: DailyEntry[], profile: Profile) {
     };
   }
 
-  const deducedWeight = deducedWeightFromEntries(entries);
+  const deducedWeight = deducedWeightFromEntries(entries, undefined, profile.weightMissingStrategy);
   if (deducedWeight != null && deducedWeight > 0) {
     return {
       value: deducedWeight,
@@ -340,7 +354,7 @@ export function buildTdeeSnapshot(
           ? targetFormulas.average
           : targetFormulas.breakdown[profile.tdeeEquation] ?? targetFormulas.average)
       : null;
-  const observed = calculateObservedTdeeRange(entries);
+  const observed = calculateObservedTdeeRange(entries, profile.weightMissingStrategy);
   return {
     observedTdee: observed.value,
     observedFromDate: observed.fromDate,

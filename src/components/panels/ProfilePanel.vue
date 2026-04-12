@@ -170,7 +170,7 @@ function saveImmediateProfile(profile: Profile) {
 	    <div class="inferred-block">
 	      <div class="inferred-title">{{ t("inferredDataTitle") }}</div>
 	      <div class="inferred-row">
-	        <FormField :label="t('deducedWeight')" :helper="t('deducedWeightHelper')">
+          <FormField :label="t('deducedWeight')" :helper="t('deducedWeightHelper')">
 	          <div class="unit-field">
 	            <input
 	              class="deduced-input"

@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
 import HistoryWeightCell from "./HistoryWeightCell.vue";
-import type { AppLocale, DailyEntry } from "../../types";
+import type { AppLocale, DailyEntry, MissingWeightStrategy } from "../../types";
 import {
   deducedWeightFromEntries,
   formatEntryDate,
@@ -18,6 +18,7 @@ const props = defineProps<{
   savingWeight: Record<string, boolean>;
   tdeeReference: number | null;
   targetWeightReference?: number | null;
+  weightMissingStrategy: MissingWeightStrategy;
 }>();
 
 const { t } = useI18n();
@@ -25,6 +26,7 @@ const { t } = useI18n();
 const emit = defineEmits<{
   "save-calories": [date: string, calories: number | null];
   "save-weight": [date: string, weight: number | null];
+  "update:weight-missing-strategy": [value: MissingWeightStrategy];
 }>();
 
 const sortedEntries = computed(() =>
@@ -56,7 +58,8 @@ function caloriesRemainingToTarget(entry: DailyEntry) {
     return "-";
   }
 
-  const effectiveWeight = entry.weight ?? deducedWeightFromEntries(props.entries, entry.date);
+  const effectiveWeight =
+    entry.weight ?? deducedWeightFromEntries(props.entries, entry.date, props.weightMissingStrategy);
   if (effectiveWeight == null) {
     return "-";
   }
@@ -101,6 +104,32 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
 <template>
   <BasePanel id="historyPanel" class="history-panel" :title="t('history')" :helper="t('historyHelper')" collapsible>
+    <fieldset class="history-weight-strategy" :aria-label="t('missingWeightStrategy')">
+      <legend class="history-weight-strategy__legend">{{ t("missingWeightStrategy") }}</legend>
+
+      <label class="history-weight-strategy__option">
+        <input
+          type="radio"
+          name="historyWeightStrategy"
+          value="previousDay"
+          :checked="weightMissingStrategy === 'previousDay'"
+          @change="emit('update:weight-missing-strategy', 'previousDay')"
+        />
+        <span>{{ t("weightStrategyPreviousDay") }}</span>
+      </label>
+
+      <label class="history-weight-strategy__option">
+        <input
+          type="radio"
+          name="historyWeightStrategy"
+          value="deducedWeight"
+          :checked="weightMissingStrategy === 'deducedWeight'"
+          @change="emit('update:weight-missing-strategy', 'deducedWeight')"
+        />
+        <span>{{ t("weightStrategyDeducedWeight") }}</span>
+      </label>
+    </fieldset>
+
     <div class="history-table-wrap">
       <table>
         <thead>
@@ -150,20 +179,23 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
           <td class="weight-cell">
             <HistoryWeightCell
               :value="entry.weight"
-              :fallback-value="deducedWeightFromEntries(entries, entry.date)"
+              :fallback-value="deducedWeightFromEntries(entries, entry.date, weightMissingStrategy)"
               :is-saving="Boolean(savingWeight[entry.date])"
               @save="emit('save-weight', entry.date, $event)"
             />
           </td>
           <td class="calories-column">
-            <div class="calories-inline">
+            <div class="calories-inline" dir="ltr">
               <HistoryCaloriesCell
                 :value="entry.manualCalories"
                 :fallback-value="resolvedDailyCalories(entry)"
                 :is-saving="Boolean(savingCalories[entry.date])"
                 @save="emit('save-calories', entry.date, $event)"
               />
-              <small v-if="tdeeReference != null" class="tdee-footnote">/ {{ tdeeReference }}</small>
+              <small v-if="tdeeReference != null" class="tdee-footnote" dir="ltr">
+                <span class="tdee-divider">/</span>
+                <span class="tdee-value">{{ tdeeReference }}</span>
+              </small>
             </div>
           </td>
 	          <td class="numeric-pair">{{ caloriesRemainingToTarget(entry) }}</td>
@@ -231,7 +263,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
           <div class="v">
             <HistoryWeightCell
               :value="entry.weight"
-              :fallback-value="deducedWeightFromEntries(entries, entry.date)"
+              :fallback-value="deducedWeightFromEntries(entries, entry.date, weightMissingStrategy)"
               :is-saving="Boolean(savingWeight[entry.date])"
               @save="emit('save-weight', entry.date, $event)"
             />
@@ -239,14 +271,17 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("calories") }}</div>
-          <div class="v v--calories">
+          <div class="v v--calories" dir="ltr">
             <HistoryCaloriesCell
               :value="entry.manualCalories"
               :fallback-value="resolvedDailyCalories(entry)"
               :is-saving="Boolean(savingCalories[entry.date])"
               @save="emit('save-calories', entry.date, $event)"
             />
-            <small v-if="tdeeReference != null" class="tdee-footnote">/ {{ tdeeReference }}</small>
+            <small v-if="tdeeReference != null" class="tdee-footnote" dir="ltr">
+              <span class="tdee-divider">/</span>
+              <span class="tdee-value">{{ tdeeReference }}</span>
+            </small>
           </div>
         </div>
         <div class="history-card__row">
@@ -283,6 +318,32 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
 .history-table-wrap {
   overflow-x: auto;
+}
+
+.history-weight-strategy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem 1rem;
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  box-shadow: var(--bevel-sunken);
+}
+
+.history-weight-strategy__legend {
+  padding: 0 0.45rem;
+  background: var(--panel);
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.history-weight-strategy__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
 }
 
 .history-cards {
@@ -335,14 +396,28 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   gap: 4px;
   flex-wrap: nowrap;
   white-space: nowrap;
+  unicode-bidi: isolate;
 }
 
 .tdee-footnote {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 1rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.32rem;
+  unicode-bidi: isolate;
+}
+
+.tdee-divider {
+  font-size: 0.92rem;
+}
+
+.tdee-value {
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 @media (max-width: 640px) {
@@ -410,6 +485,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
     justify-content: flex-end;
     gap: 4px;
     flex-wrap: nowrap;
+    unicode-bidi: isolate;
   }
 
   .v--calories :deep(.field-control) {

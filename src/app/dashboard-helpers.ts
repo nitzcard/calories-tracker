@@ -72,6 +72,7 @@ export function readStoredThemeMode(): ThemeMode | null {
     value === "light" ||
     value === "dark" ||
     value === "purple-dark" ||
+    value === "jasmine" ||
     value === "cs16" ||
     value === "steam" ||
     value === "cyberpunk-2077"

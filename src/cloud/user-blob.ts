@@ -65,3 +65,27 @@ export async function upsertUserBlob(
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export async function createUserBlob(
+  username: string,
+  raw: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const client = supabaseClient();
+    const { error } = await client
+      .from("user_blobs")
+      .insert({
+        username,
+        data: raw,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

@@ -51,7 +51,10 @@ interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   targetWeight: number | null;
+  customTdee: number | null;
   bodyFat: number | null;
+  goalMode: "cut" | "leanMass" | "maingain";
+  weightMissingStrategy: "previousDay" | "deducedWeight";
   tdeeEquation: "mifflinStJeor" | "harrisBenedict" | "cunningham" | "observedTdee";
   activityPrompt: string;
   foodInstructions: string;
@@ -62,6 +65,7 @@ interface Profile {
     | "light"
     | "dark"
     | "purple-dark"
+    | "jasmine"
     | "cs16"
     | "steam"
     | "cyberpunk-2077";

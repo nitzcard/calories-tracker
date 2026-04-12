@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "./components/base/BasePanel.vue";
 import MetricChart from "./components/charts/MetricChart.vue";
 import AppHeader from "./components/header/AppHeader.vue";
+import JasmineThemePrompt from "./components/JasmineThemePrompt.vue";
 import ApiKeysPanel from "./components/panels/ApiKeysPanel.vue";
 import CloudSyncPanel from "./components/panels/CloudSyncPanel.vue";
 import DataTransferPanel from "./components/panels/DataTransferPanel.vue";
@@ -141,6 +142,7 @@ const hasEffectiveGeminiKey = computed(() =>
 );
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
+const isJasmineThemeActive = computed(() => themeMode.value === "jasmine");
 const averageCalories = computed(() => {
   const ys = (caloriePoints.value ?? [])
     .map((point) => point.y)
@@ -189,6 +191,10 @@ function scheduleActiveToastHide(kind: "local" | "cloud") {
   };
 
   clear();
+}
+
+async function applyJasmineThemeFromDialog() {
+  await onThemeChange("jasmine");
 }
 
 const canAutoCloudSync = computed(() => {
@@ -417,6 +423,16 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   await saveProfileDraft(nextProfile ?? undefined);
   tdeeHighlightToken.value += 1;
 }
+
+function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
+  if (!profile.value) {
+    return;
+  }
+
+  const nextProfile = { ...profile.value, weightMissingStrategy: value };
+  profile.value = nextProfile;
+  void saveProfileAndHighlight(nextProfile);
+}
 </script>
 
 <template>
@@ -429,6 +445,13 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       </div>
     </div>
   </div>
+
+  <JasmineThemePrompt
+    :confirmed-username="cloudConfirmedUsername"
+    :is-theme-active="isJasmineThemeActive"
+    @apply="applyJasmineThemeFromDialog"
+  />
+
   <main class="app-shell">
     <AppHeader
       :locale="locale"
@@ -646,6 +669,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :saving-weight="savingHistoryWeight"
           :tdee-reference="tdee.selectedValue"
           :target-weight-reference="tdee.targetWeight"
+          :weight-missing-strategy="profile.weightMissingStrategy"
+          @update:weight-missing-strategy="onWeightMissingStrategyChange"
           @save-calories="saveHistoryCalories"
           @save-weight="saveHistoryWeight"
         />

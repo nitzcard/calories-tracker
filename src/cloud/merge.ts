@@ -50,6 +50,7 @@ function mergeProfilePreservingData(
 	    locale: "en" as const,
 	    themeMode: "system" as const,
       goalMode: "maingain" as const,
+      weightMissingStrategy: "previousDay" as const,
       customTdee: null as number | null,
 	  };
 
@@ -102,6 +103,11 @@ function mergeProfilePreservingData(
     other.goalMode ?? DEFAULT.goalMode,
     DEFAULT.goalMode,
   );
+  const mergedWeightMissingStrategy = pickEnumWithWeakDefault(
+    preferred.weightMissingStrategy ?? DEFAULT.weightMissingStrategy,
+    other.weightMissingStrategy ?? DEFAULT.weightMissingStrategy,
+    DEFAULT.weightMissingStrategy,
+  );
 
 	  return {
 	    ...other,
@@ -113,6 +119,7 @@ function mergeProfilePreservingData(
 	    themeMode: mergedTheme,
 	    aiModel: mergedModel,
       goalMode: mergedGoalMode,
+      weightMissingStrategy: mergedWeightMissingStrategy,
 	    age: pickNullableNumber(preferred.age, other.age),
 	    height: pickNullableNumber(preferred.height, other.height),
 	    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),

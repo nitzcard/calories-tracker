@@ -33,6 +33,7 @@ const DEFAULT_PROFILE: Profile = {
   customTdee: null,
   bodyFat: null,
   goalMode: "maingain",
+  weightMissingStrategy: "previousDay",
   tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
   foodInstructions: "",
@@ -64,6 +65,15 @@ export async function ensureDefaultProfile(
       legacyGoalMode === "cut" || legacyGoalMode === "leanMass" || legacyGoalMode === "maingain"
         ? legacyGoalMode
         : DEFAULT_PROFILE.goalMode;
+    const legacyWeightMissingStrategy = (existing as any).weightMissingStrategy as
+      | Profile["weightMissingStrategy"]
+      | undefined;
+    const normalizedWeightMissingStrategy =
+      legacyWeightMissingStrategy === "previousDay" || legacyWeightMissingStrategy === "deducedWeight"
+        ? legacyWeightMissingStrategy
+        : legacyWeightMissingStrategy === "carryForward" || legacyWeightMissingStrategy === "loggedOnly"
+          ? "previousDay"
+          : DEFAULT_PROFILE.weightMissingStrategy;
 
     let migratedCustomTdee: number | null = null;
     const existingCustomTdee = (existing as any).customTdee as number | null | undefined;
@@ -91,6 +101,7 @@ export async function ensureDefaultProfile(
       customTdee: migratedCustomTdee ?? DEFAULT_PROFILE.customTdee,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       goalMode: normalizedGoalMode,
+      weightMissingStrategy: normalizedWeightMissingStrategy,
       tdeeEquation: normalizedEquation,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };

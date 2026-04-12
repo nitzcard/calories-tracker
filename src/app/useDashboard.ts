@@ -36,7 +36,7 @@ import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
 import { applyTheme, detectThemeMode } from "../theme";
 import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation, ThemeMode } from "../types";
-import { fetchUserBlob, upsertUserBlob } from "../cloud/user-blob";
+import { createUserBlob, fetchUserBlob, upsertUserBlob } from "../cloud/user-blob";
 import { isSupabaseConfigured } from "../cloud/supabase";
 import {
   decryptJsonWithPassphrase,
@@ -98,11 +98,43 @@ export function useDashboard() {
     return normalizeUsername(value).length >= 3;
   }
 
+  function applyUsernameThemeDefault(username: string, payload: ExportedAppData): ExportedAppData {
+    if (normalizeUsername(username) !== "jasmine") {
+      return payload;
+    }
+
+    if (!payload.profile.length) {
+      return payload;
+    }
+
+    const activeProfile = payload.profile[0];
+    if (activeProfile.themeMode !== "system") {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      profile: payload.profile.map((item, index) =>
+        index === 0
+          ? {
+              ...item,
+              themeMode: "jasmine" as const,
+            }
+          : item,
+      ),
+    };
+  }
+
   const cloudPassword = ref("");
+  const savedCloudPasswordVersion = ref(0);
   const cloudPasswordStorageKeyPrefix = "calorie-tracker.cloud-password::";
 
   function cloudPasswordStorageKey(username: string) {
     return `${cloudPasswordStorageKeyPrefix}${normalizeUsername(username)}`;
+  }
+
+  function bumpSavedCloudPasswordVersion() {
+    savedCloudPasswordVersion.value += 1;
   }
 
   function loadCloudPasswordFromStorage(username: string) {
@@ -110,6 +142,7 @@ export function useDashboard() {
       const stored = localStorage.getItem(cloudPasswordStorageKey(username)) ?? "";
       if (stored.trim()) {
         cloudPassword.value = stored;
+        bumpSavedCloudPasswordVersion();
         return true;
       }
     } catch {
@@ -121,6 +154,7 @@ export function useDashboard() {
   function saveCloudPasswordToStorage(username: string, password: string) {
     try {
       localStorage.setItem(cloudPasswordStorageKey(username), password);
+      bumpSavedCloudPasswordVersion();
     } catch {
       // Ignore; storage may be unavailable in some contexts.
     }
@@ -129,12 +163,14 @@ export function useDashboard() {
   function removeCloudPasswordFromStorage(username: string) {
     try {
       localStorage.removeItem(cloudPasswordStorageKey(username));
+      bumpSavedCloudPasswordVersion();
     } catch {
       // Ignore; storage may be unavailable in some contexts.
     }
   }
 
   const hasSavedCloudPassword = computed(() => {
+    void savedCloudPasswordVersion.value;
     const normalized = normalizeUsername(cloudUsername.value);
     if (!normalized) return false;
     try {
@@ -323,7 +359,11 @@ export function useDashboard() {
         },
   );
   const deducedWeight = computed(() =>
-    deducedWeightFromEntries(displayEntries.value, selectedDate.value),
+    deducedWeightFromEntries(
+      displayEntries.value,
+      selectedDate.value,
+      "deducedWeight",
+    ),
   );
   const estimatedLeanWeight = computed(() => {
     const weight = profile.value?.estimatedWeight;
@@ -557,7 +597,11 @@ export function useDashboard() {
     return `calorie-tracker-backup-${day}-after-${date}.json`;
   }
 
-  type CloudEncryptedEnvelopeV1 = { kind: "encrypted-v1"; box: EncryptedSecretBoxV1 };
+  type CloudEncryptedEnvelopeV1 = {
+    kind: "encrypted-v1";
+    box: EncryptedSecretBoxV1;
+    email?: string;
+  };
   type CloudDecodedBlob = { payload: ExportedAppData; aiKeys?: StoredAiKeys };
 
   function isEncryptedSecretBox(raw: unknown): raw is EncryptedSecretBoxV1 {
@@ -572,6 +616,47 @@ export function useDashboard() {
 
   function isEncryptedEnvelope(raw: unknown): raw is CloudEncryptedEnvelopeV1 {
     return Boolean(raw) && typeof raw === "object" && (raw as CloudEncryptedEnvelopeV1).kind === "encrypted-v1";
+  }
+
+  function normalizeCloudEmail(value: string | undefined | null) {
+    return value?.trim() ? value.trim() : "";
+  }
+
+  function stripEmailFromPayload(payload: ExportedAppData): ExportedAppData {
+    if (!payload.profile.length) {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      profile: payload.profile.map((item, index) =>
+        index === 0
+          ? {
+              ...item,
+              email: "",
+            }
+          : item,
+      ),
+    };
+  }
+
+  function applyCloudEmailToPayload(payload: ExportedAppData, email?: string): ExportedAppData {
+    const normalizedEmail = normalizeCloudEmail(email);
+    if (!normalizedEmail || !payload.profile.length) {
+      return payload;
+    }
+
+    return {
+      ...payload,
+      profile: payload.profile.map((item, index) =>
+        index === 0
+          ? {
+              ...item,
+              email: normalizedEmail,
+            }
+          : item,
+      ),
+    };
   }
 
   function toArray<T>(value: unknown): T[] {
@@ -644,7 +729,10 @@ export function useDashboard() {
         raw.box,
         secret,
       );
-      return { payload: normalizeExportedAppDataLoose(decrypted.payload), aiKeys: decrypted.aiKeys };
+      return {
+        payload: applyCloudEmailToPayload(normalizeExportedAppDataLoose(decrypted.payload), raw.email),
+        aiKeys: decrypted.aiKeys,
+      };
     }
 
     if (isEncryptedSecretBox(raw)) {
@@ -662,8 +750,36 @@ export function useDashboard() {
   }
 
   async function encodeCloudBlob(payload: ExportedAppData, secret: string): Promise<CloudEncryptedEnvelopeV1> {
-    const box = await encryptJsonWithPassphrase({ payload, aiKeys: aiKeys.value }, secret);
-    return { kind: "encrypted-v1", box };
+    const publicEmail = normalizeCloudEmail(payload.profile[0]?.email);
+    const box = await encryptJsonWithPassphrase({ payload: stripEmailFromPayload(payload), aiKeys: aiKeys.value }, secret);
+    return { kind: "encrypted-v1", box, email: publicEmail || undefined };
+  }
+
+  async function clearPublicCloudEmail(username: string) {
+    const secret = getCloudSecret(username);
+    if (!secret) {
+      return;
+    }
+
+    const remote = await fetchUserBlob(username);
+    if (!remote.ok || !remote.data?.raw) {
+      return;
+    }
+
+    const raw = remote.data.raw;
+    if (!isEncryptedEnvelope(raw)) {
+      return;
+    }
+
+    const updatedRaw: CloudEncryptedEnvelopeV1 = {
+      kind: raw.kind,
+      box: raw.box,
+    };
+
+    const result = await upsertUserBlob(username, updatedRaw);
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
   }
 
   async function cloudSyncNow(options?: { backupBeforePull?: boolean; username?: string; password?: string }) {
@@ -739,7 +855,7 @@ export function useDashboard() {
       }
 
       // Two-way merge: keep newer daily entries on either side.
-      const merged = mergeExportedAppData(localBefore, remotePayload);
+      const merged = applyUsernameThemeDefault(username, mergeExportedAppData(localBefore, remotePayload));
       // Defensive: never let a cloud login wipe local data.
       if (localBefore.dailyEntries.length > 0 && merged.dailyEntries.length === 0) {
         merged.dailyEntries = localBefore.dailyEntries;
@@ -776,9 +892,16 @@ export function useDashboard() {
         syncChrome();
       }
 
-      const pushed = await upsertUserBlob(username, await encodeCloudBlob(merged, secret));
+      const encoded = await encodeCloudBlob(merged, secret);
+      const pushed = remote.data?.raw
+        ? await upsertUserBlob(username, encoded)
+        : await createUserBlob(username, encoded);
       if (!pushed.ok) {
-        throw new Error(pushed.error);
+        throw new Error(
+          remote.data?.raw
+            ? pushed.error
+            : "This username already exists. Use the correct password to log in instead of creating it again.",
+        );
       }
 
       cloudStatus.value = "synced";
@@ -858,7 +981,7 @@ export function useDashboard() {
         saveStoredAiKeys(aiKeys.value);
         await saveStoredAiKeysToDb(aiKeys.value);
       }
-      const merged = mergeExportedAppData(local, remotePayload);
+      const merged = applyUsernameThemeDefault(normalized, mergeExportedAppData(local, remotePayload));
 
       const pushed = await upsertUserBlob(normalized, await encodeCloudBlob(merged, secret));
       if (!pushed.ok) throw new Error(pushed.error);
@@ -896,7 +1019,23 @@ export function useDashboard() {
     }
   }
 
-  function cloudLogout() {
+  async function cloudLogout() {
+    const username = normalizeUsername(cloudConfirmedUsername.value || cloudUsername.value);
+
+    if (profile.value?.email?.trim()) {
+      const nextProfile = { ...profile.value, email: "" };
+      profile.value = nextProfile;
+      await saveProfile(nextProfile);
+    }
+
+    if (username && cloudConfirmedUsername.value === username && cloudPassword.value.trim()) {
+      try {
+        await clearPublicCloudEmail(username);
+      } catch {
+        // Best-effort cleanup only; logout should still complete locally.
+      }
+    }
+
     cloudPassword.value = "";
     cloudConfirmedUsername.value = "";
     localStorage.removeItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername);

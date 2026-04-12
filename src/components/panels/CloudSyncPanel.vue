@@ -89,6 +89,23 @@ const draftDiffersFromConfirmed = computed(
     confirmedNormalized.value !== usernameNormalized.value,
 );
 const isLoggedIn = computed(() => hasConfirmedUser.value && confirmedNormalized.value === usernameNormalized.value);
+const canLogin = computed(
+  () =>
+    !props.isCloudBusy &&
+    props.cloudMode === "cloud" &&
+    !isLoggedIn.value &&
+    usernameNormalized.value.length >= 3 &&
+    (Boolean(draftPassword.value.trim()) || props.hasSavedCloudPassword) &&
+    props.supabaseConfigured &&
+    isOnline.value,
+);
+const canSyncExistingUser = computed(
+  () =>
+    !props.isCloudBusy &&
+    props.cloudMode === "cloud" &&
+    props.supabaseConfigured &&
+    isOnline.value,
+);
 
 function scheduleProfileSave(nextProfile: Profile) {
   latestProfileToSave = nextProfile;
@@ -124,6 +141,17 @@ function logout() {
   draftPassword.value = "";
   emit("logout");
 }
+
+function onSubmit() {
+  if (canLogin.value) {
+    syncNow();
+    return;
+  }
+
+  if (isLoggedIn.value && canSyncExistingUser.value) {
+    syncExistingUser();
+  }
+}
 </script>
 
 <template>
@@ -139,8 +167,8 @@ function logout() {
         </select>
       </FormField>
 
-      <div class="auth-block" :class="{ 'auth-block--disabled': cloudMode !== 'cloud' }">
-        <FormField :label="t('cloudUsername')">
+      <form class="auth-block" :class="{ 'auth-block--disabled': cloudMode !== 'cloud' }" @submit.prevent="onSubmit">
+        <FormField :label="t('cloudUsername')" reserve-helper-space>
           <input
             :disabled="cloudMode !== 'cloud' || isLoggedIn"
             :value="draftUsername"
@@ -148,6 +176,20 @@ function logout() {
             @input="draftUsername = ($event.target as HTMLInputElement).value"
           />
         </FormField>
+
+        <FormField
+          :label="t('cloudPassword')"
+          :helper="cloudMode === 'cloud' ? (hasSavedCloudPassword ? t('cloudPasswordSaved') : t('cloudPasswordHint')) : ''"
+        >
+	          <input
+	            type="password"
+	            autocomplete="current-password"
+	            :disabled="cloudMode !== 'cloud' || isCloudBusy || hasSavedCloudPassword"
+	            :value="draftPassword"
+              :placeholder="hasSavedCloudPassword ? t('cloudPasswordSavedPlaceholder') : ''"
+	            @input="draftPassword = ($event.target as HTMLInputElement).value"
+	          />
+	        </FormField>
 
         <FormField :helper="t('emailHelper')">
           <template #label>
@@ -166,33 +208,11 @@ function logout() {
           />
         </FormField>
 
-        <FormField
-          :label="t('cloudPassword')"
-          :helper="cloudMode === 'cloud' ? (hasSavedCloudPassword ? t('cloudPasswordSaved') : t('cloudPasswordHint')) : ''"
-        >
-	          <input
-	            type="password"
-	            autocomplete="current-password"
-	            :disabled="cloudMode !== 'cloud' || isCloudBusy || hasSavedCloudPassword"
-	            :value="draftPassword"
-              :placeholder="hasSavedCloudPassword ? t('cloudPasswordSavedPlaceholder') : ''"
-	            @input="draftPassword = ($event.target as HTMLInputElement).value"
-	          />
-	        </FormField>
-
 	        <div class="cloud-actions">
 	          <button
+	            type="submit"
 	            class="secondary-action"
-	            :disabled="
-	              isCloudBusy ||
-	              cloudMode !== 'cloud' ||
-	              isLoggedIn ||
-	              usernameNormalized.length < 3 ||
-	              (!draftPassword.trim() && !hasSavedCloudPassword) ||
-	              !supabaseConfigured ||
-	              !isOnline
-	            "
-	            @click="syncNow"
+	            :disabled="!canLogin"
 	          >
             <span v-if="isCloudBusy" class="button-feedback" aria-hidden="true"></span>
             {{ t("cloudLogin") }}
@@ -200,8 +220,9 @@ function logout() {
 
           <button
             v-if="isLoggedIn"
+            type="button"
             class="secondary-action"
-            :disabled="isCloudBusy || cloudMode !== 'cloud' || !supabaseConfigured || !isOnline"
+            :disabled="!canSyncExistingUser"
             @click="syncExistingUser"
           >
             <span v-if="isCloudBusy" class="button-feedback" aria-hidden="true"></span>
@@ -210,6 +231,7 @@ function logout() {
 
           <button
             v-if="hasConfirmedUser"
+            type="button"
             class="secondary-action logout-action"
             :disabled="isCloudBusy"
             @click="logout"
@@ -217,7 +239,7 @@ function logout() {
             {{ t("cloudLogout") }}
 	          </button>
 	        </div>
-	      </div>
+	      </form>
 	    </div>
 
       <details class="merge-rules">
@@ -260,6 +282,23 @@ function logout() {
 .auth-block {
   display: grid;
   gap: 8px;
+}
+
+@media (min-width: 860px) {
+  .auth-block {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .cloud-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 859px) {
+  .auth-block {
+    grid-template-columns: 1fr;
+  }
 }
 
 .field-label-with-pill {

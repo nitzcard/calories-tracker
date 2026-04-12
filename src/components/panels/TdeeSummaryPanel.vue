@@ -3,7 +3,6 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 	import type { AppLocale, Profile, TdeeEquation, TdeeSnapshot } from "../../types";
-	import { formatEntryDate } from "../../domain/entries";
 
 	const props = defineProps<{
 	  locale: AppLocale;
@@ -185,6 +184,14 @@ function observedEmptyText() {
     count: props.tdee.observedValidEntryCount,
   });
 }
+
+function formatObservedRangeDate(date: string, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "numeric",
+    year: "2-digit",
+  }).format(new Date(`${date}T00:00:00`));
+}
 </script>
 
 	<template>
@@ -282,8 +289,8 @@ function observedEmptyText() {
 	              <span v-if="tdee.observedFromDate && tdee.observedToDate">
 	                <br />
 	                {{ t("observedTdeeRange") }}:
-	                {{ formatEntryDate(tdee.observedFromDate, locale) }} -
-                {{ formatEntryDate(tdee.observedToDate, locale) }}
+                  {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
+                {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
               </span>
             </td>
           </tr>
@@ -390,8 +397,8 @@ function observedEmptyText() {
             <span v-if="tdee.observedFromDate && tdee.observedToDate">
               <br />
               {{ t("observedTdeeRange") }}:
-              {{ formatEntryDate(tdee.observedFromDate, locale) }} -
-              {{ formatEntryDate(tdee.observedToDate, locale) }}
+              {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
+              {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
             </span>
           </div>
         </div>
