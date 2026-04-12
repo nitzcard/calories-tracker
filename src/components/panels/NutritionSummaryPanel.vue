@@ -255,20 +255,34 @@ function macroGoalTargets(mode: "cut" | "leanMass" | "maingain") {
   };
 }
 
+function goalModeLabel(mode: "cut" | "leanMass" | "maingain") {
+  const labels: Record<typeof mode, string> = {
+    cut: t("goalModeCut"),
+    leanMass: t("goalModeLeanMass"),
+    maingain: t("goalModeMaingain"),
+  };
+  return labels[mode];
+}
+
+function formatGoalRange(goalLabel: string, min: number, max: number, unit: string) {
+  return `${goalLabel}: ${min}-${max} ${unit}`;
+}
+
 function macroTargetText(macro: "protein" | "carbs" | "fat" | "fiber") {
   const mode = props.profile?.goalMode ?? "maingain";
   const targets = macroGoalTargets(mode);
+  const goalLabel = goalModeLabel(mode);
 
   if (macro === "protein") {
-    return `${targets.protein.min}-${targets.protein.max} ${t("unitProteinPerKg")}`;
+    return formatGoalRange(goalLabel, targets.protein.min, targets.protein.max, t("unitProteinPerKg"));
   }
 
   if (macro === "carbs") {
-    return `${targets.carbsPct.min}-${targets.carbsPct.max}% ${t("macroShareOfCalories")}`;
+    return formatGoalRange(goalLabel, targets.carbsPct.min, targets.carbsPct.max, `% ${t("macroShareOfCalories")}`);
   }
 
   if (macro === "fat") {
-    return `${targets.fatPct.min}-${targets.fatPct.max}% ${t("macroShareOfCalories")}`;
+    return formatGoalRange(goalLabel, targets.fatPct.min, targets.fatPct.max, `% ${t("macroShareOfCalories")}`);
   }
 
   return `25-38 ${t("unitG")}/${props.locale === "he" ? "יום" : "day"}`;
@@ -288,10 +302,6 @@ function resolveTotalCalories() {
 function formatRecommendedRange(min: number, max: number) {
   const fmt = (n: number) => Math.round(n);
   return `${fmt(min)}-${fmt(max)}`;
-}
-
-function formatRecommendedMin(min: number) {
-  return `${Math.round(min)}+`;
 }
 
 function macroRecommendedRange(macro: "protein" | "carbs" | "fat" | "fiber") {
@@ -331,13 +341,18 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
   const actual = dailyTotals.value?.[macro] ?? null;
   if (actual == null || !Number.isFinite(actual) || range.max <= 0) return null;
 
-  const scaleMax = macro === "protein" ? Math.max(range.min * 2, actual) : Math.max(range.max, actual);
+  // For protein, use 1.5× the max as the scale so the bar shows room beyond the recommended range
+  // (eating more protein than the max is generally fine). For other macros, scale to the max.
+  const scaleMax = macro === "protein" ? Math.max(range.max * 1.5, actual) : Math.max(range.max, actual);
   const actualPct = Math.min(100, Math.max(0, (actual / scaleMax) * 100));
   const minPct = Math.min(100, Math.max(0, (range.min / scaleMax) * 100));
-  const maxPct =
-    macro === "protein" ? 100 : Math.min(100, Math.max(0, (range.max / scaleMax) * 100));
+  const maxPct = Math.min(100, Math.max(0, (range.max / scaleMax) * 100));
   const state =
     actual < range.min ? "low" : macro !== "protein" && actual > range.max ? "high" : "ok";
+
+  // Compute tick label transforms to prevent overflow at bar edges
+  const minTickTransform = minPct <= 5 ? "translateX(0)" : "translateX(-50%)";
+  const maxTickTransform = maxPct >= 95 ? "translateX(-100%)" : "translateX(-50%)";
 
   return {
     actual,
@@ -346,8 +361,11 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
     minPct,
     maxPct,
     state,
-    label: macro === "protein" ? formatRecommendedMin(range.min) : formatRecommendedRange(range.min, range.max),
-    maxLabel: macro === "protein" ? "∞" : undefined,
+    // All macros now use a consistent min–max label; protein adds "+" to signal more is also fine
+    label: formatRecommendedRange(range.min, range.max),
+    maxLabel: macro === "protein" ? `${Math.round(range.max)}+` : undefined,
+    minTickTransform,
+    maxTickTransform,
   };
 }
 
@@ -584,10 +602,10 @@ const proteinPerLeanBodyWeight = computed(() => {
               <div class="macro-bar__marker" :style="{ left: `${proteinGauge.actualPct}%` }"></div>
             </div>
             <div class="macro-bar__ticks" aria-hidden="true">
-              <div class="macro-bar__tick" :style="{ left: `${proteinGauge.minPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${proteinGauge.minPct}%`, transform: proteinGauge.minTickTransform }">
                 <span>{{ Math.round(proteinGauge.min) }}</span>
               </div>
-              <div class="macro-bar__tick" :style="{ left: `${proteinGauge.maxPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${proteinGauge.maxPct}%`, transform: proteinGauge.maxTickTransform }">
                 <span>{{ proteinGauge.maxLabel ?? Math.round(proteinGauge.max) }}</span>
               </div>
             </div>
@@ -595,14 +613,14 @@ const proteinPerLeanBodyWeight = computed(() => {
               <small class="stat-meta">{{ formatActual(proteinGauge.actual, proteinGauge.unit) }}</small>
               <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(proteinGauge) }}</small>
               <small class="stat-meta">{{ macroTargetText("protein") }}</small>
+              <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
+                {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
+              </small>
+              <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
+                {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
+              </small>
             </div>
           </div>
-          <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
-            {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
-          </small>
-          <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
-            {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
-          </small>
         </div>
         <div class="compact-stat compact-stat--carbs">
           <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</strong>
@@ -622,10 +640,10 @@ const proteinPerLeanBodyWeight = computed(() => {
               <div class="macro-bar__marker" :style="{ left: `${carbsGauge.actualPct}%` }"></div>
             </div>
             <div class="macro-bar__ticks" aria-hidden="true">
-              <div class="macro-bar__tick" :style="{ left: `${carbsGauge.minPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${carbsGauge.minPct}%`, transform: carbsGauge.minTickTransform }">
                 <span>{{ Math.round(carbsGauge.min) }}</span>
               </div>
-              <div class="macro-bar__tick" :style="{ left: `${carbsGauge.maxPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${carbsGauge.maxPct}%`, transform: carbsGauge.maxTickTransform }">
                 <span>{{ carbsGauge.maxLabel ?? Math.round(carbsGauge.max) }}</span>
               </div>
             </div>
@@ -654,10 +672,10 @@ const proteinPerLeanBodyWeight = computed(() => {
               <div class="macro-bar__marker" :style="{ left: `${fatGauge.actualPct}%` }"></div>
             </div>
             <div class="macro-bar__ticks" aria-hidden="true">
-              <div class="macro-bar__tick" :style="{ left: `${fatGauge.minPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${fatGauge.minPct}%`, transform: fatGauge.minTickTransform }">
                 <span>{{ Math.round(fatGauge.min) }}</span>
               </div>
-              <div class="macro-bar__tick" :style="{ left: `${fatGauge.maxPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${fatGauge.maxPct}%`, transform: fatGauge.maxTickTransform }">
                 <span>{{ fatGauge.maxLabel ?? Math.round(fatGauge.max) }}</span>
               </div>
             </div>
@@ -683,10 +701,10 @@ const proteinPerLeanBodyWeight = computed(() => {
               <div class="macro-bar__marker" :style="{ left: `${fiberGauge.actualPct}%` }"></div>
             </div>
             <div class="macro-bar__ticks" aria-hidden="true">
-              <div class="macro-bar__tick" :style="{ left: `${fiberGauge.minPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${fiberGauge.minPct}%`, transform: fiberGauge.minTickTransform }">
                 <span>{{ Math.round(fiberGauge.min) }}</span>
               </div>
-              <div class="macro-bar__tick" :style="{ left: `${fiberGauge.maxPct}%` }">
+              <div class="macro-bar__tick" :style="{ left: `${fiberGauge.maxPct}%`, transform: fiberGauge.maxTickTransform }">
                 <span>{{ fiberGauge.maxLabel ?? Math.round(fiberGauge.max) }}</span>
               </div>
             </div>
@@ -1141,6 +1159,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 .macro-bar__ticks {
   position: relative;
   block-size: 1rem;
+  /* Prevent tick labels that sit at the bar edges from overflowing into the page
+     scroll area (especially noticeable in RTL/Hebrew where physical-left overflow
+     is the natural scroll direction). The tick transforms already align edge ticks
+     inside the bar; this clip is a safety net for any remaining sub-pixel bleed. */
+  overflow-x: clip;
 }
 
 .macro-bar__tick {
