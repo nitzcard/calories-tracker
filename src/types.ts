@@ -28,6 +28,7 @@ export interface AiProviderOption {
 export interface Profile {
   id: "default";
   sex: BiologicalSex;
+  email?: string;
   age: number | null;
   height: number | null;
   estimatedWeight: number | null;

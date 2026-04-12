@@ -44,6 +44,7 @@ const importFormat = `interface ExportedAppData {
 interface Profile {
   id: "default";
   sex: "female" | "male" | "other";
+  email?: string;
   age: number | null;
   height: number | null;
   estimatedWeight: number | null;

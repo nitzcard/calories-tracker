@@ -25,6 +25,7 @@ export interface ExportedAppData {
 const DEFAULT_PROFILE: Profile = {
   id: "default",
   sex: "male",
+  email: "",
   age: null,
   height: null,
   estimatedWeight: null,

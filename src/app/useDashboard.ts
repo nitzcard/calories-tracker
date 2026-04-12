@@ -877,7 +877,11 @@ export function useDashboard() {
 
   function setCloudUsername(next: string) {
     cloudUsername.value = next;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, next);
+    if (next.trim()) {
+      localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, next);
+    } else {
+      localStorage.removeItem(DASHBOARD_STORAGE_KEYS.cloudUsername);
+    }
     const normalized = normalizeUsername(next);
     if (cloudConfirmedUsername.value && cloudConfirmedUsername.value !== normalized) {
       cloudStatus.value = "idle";
@@ -896,7 +900,9 @@ export function useDashboard() {
     cloudStatus.value = "idle";
     cloudLastSyncedAt.value = "";
     cloudError.value = "";
-    // Keep the typed username for convenience, but switch to offline to stop cloud pushes.
+    // On shared devices (especially mobile), leaving the previous username visible is confusing.
+    // Clear the username and switch to offline to stop cloud pushes.
+    setCloudUsername("");
     setCloudMode("offline");
   }
 

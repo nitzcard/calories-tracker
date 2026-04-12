@@ -58,6 +58,11 @@ function saveImmediateProfile(profile: Profile) {
   emit("update:profile", profile);
   scheduleProfileSave(profile);
 }
+
+function saveEmail(event: Event) {
+  const email = (event.target as HTMLInputElement).value;
+  saveImmediateProfile({ ...props.profile, email });
+}
 </script>
 
 <template>
@@ -99,6 +104,22 @@ function saveImmediateProfile(profile: Profile) {
           />
           <span class="field-unit">{{ t("unitCm") }}</span>
         </div>
+      </FormField>
+      <FormField :helper="t('emailHelper')">
+        <template #label>
+          <span class="bodyfat-label">
+            <span>{{ t("email") }}</span>
+            <span class="optional-pill">{{ t("optionalLabel") }}</span>
+          </span>
+        </template>
+        <input
+          :value="profile.email ?? ''"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          :placeholder="t('emailPlaceholder')"
+          @input="saveEmail"
+        />
       </FormField>
       <FormField :label="t('estimatedWeight')">
         <div class="unit-field">
