@@ -98,7 +98,7 @@ export function useAnalysisFlow(args: {
     isAnalyzing.value = true;
 
     const primaryController = new AbortController();
-    let timeoutHandle: ReturnType<typeof window.setTimeout> | null = null;
+    let timeoutHandle: number | undefined;
     let didTimeOut = false;
 
     timeoutHandle = window.setTimeout(() => {
@@ -113,7 +113,7 @@ export function useAnalysisFlow(args: {
 
       // Clear timeout immediately — don't let it fire after a fast success.
       clearTimeout(timeoutHandle);
-      timeoutHandle = null;
+      timeoutHandle = undefined;
 
       if (didTimeOut) {
         // Primary request timed out — clean up queue and retry with the lite model.
@@ -125,7 +125,7 @@ export function useAnalysisFlow(args: {
 
       await args.refreshState();
     } finally {
-      if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
       isAnalyzing.value = false;
       isFallingBackToLite.value = false;
     }
