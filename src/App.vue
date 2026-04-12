@@ -418,6 +418,10 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 </script>
 
 <template>
+  <div v-if="isAnalyzing" class="global-analyzing-bar" role="status" aria-label="Analyzing…">
+    <span class="global-analyzing-spinner" aria-hidden="true"></span>
+    <span class="global-analyzing-label">{{ t("analyzingNow") }}</span>
+  </div>
   <main class="app-shell">
     <AppHeader
       :locale="locale"
@@ -639,6 +643,42 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 </template>
 
 <style scoped>
+.global-analyzing-bar {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  background: color-mix(in srgb, var(--accent, #0a6f63) 90%, black 10%);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.global-analyzing-spinner {
+  inline-size: 1rem;
+  block-size: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-inline-end-color: #fff;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  animation: global-spin 650ms linear infinite;
+}
+
+.global-analyzing-label {
+  white-space: nowrap;
+}
+
+@keyframes global-spin {
+  to { transform: rotate(360deg); }
+}
+
 .app-shell {
   padding: var(--space-4);
   max-inline-size: 1400px;
