@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PanelHeader from "./PanelHeader.vue";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -40,6 +40,23 @@ if (storageKey.value) {
     // Ignore environments where localStorage is unavailable.
   }
 }
+
+// Auto-open when loading starts so the spinner is always visible.
+watch(
+  () => props.loading,
+  (isLoading) => {
+    if (isLoading && props.collapsible) {
+      isOpen.value = true;
+      if (storageKey.value) {
+        try {
+          localStorage.setItem(storageKey.value, "1");
+        } catch {
+          // Ignore write errors.
+        }
+      }
+    }
+  },
+);
 
 function onToggle(event: Event) {
   isOpen.value = (event.target as HTMLDetailsElement).open;
