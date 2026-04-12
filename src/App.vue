@@ -54,6 +54,7 @@ const {
   aiKeys,
   dataTransferStatus,
   isAnalyzing,
+  isFallingBackToLite,
   isAutoSaving,
   isTransferringData,
   isSavingWeight,
@@ -566,6 +567,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
           :current-weight="currentWeight"
           :food-log="currentFoodLog"
           :is-analyzing="isAnalyzing"
+          :is-falling-back-to-lite="isFallingBackToLite"
           :has-results="Boolean(currentEntry?.nutritionSnapshot)"
           :is-profile-ready="isProfileReady"
           :provider="provider"

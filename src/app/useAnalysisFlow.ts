@@ -1,6 +1,6 @@
 import { computed, ref, type Ref } from "vue";
 import { providerHasKey } from "../ai/registry";
-import { queueAnalysis, runPendingAnalysis } from "../ai/service";
+import { clearQueueForDate, queueAnalysis, runPendingAnalysis } from "../ai/service";
 import { buildAnalyzeIssue } from "./dashboard-helpers";
 import type { Profile } from "../types";
 
@@ -11,6 +11,11 @@ type AnalyzeGate =
       reason: "offline" | "missing-key" | "empty-food-log" | "incomplete-profile";
     };
 
+/** Abort the primary request after this many ms and retry with the lite model. */
+const SLOW_MODEL_TIMEOUT_MS = 30_000;
+/** Fallback provider used when the primary model exceeds SLOW_MODEL_TIMEOUT_MS. */
+const LITE_FALLBACK_PROVIDER = "gemini-2.5-flash-lite";
+
 export function useAnalysisFlow(args: {
   profile: Ref<Profile | null>;
   provider: Ref<string>;
@@ -20,6 +25,8 @@ export function useAnalysisFlow(args: {
   saveFoodDraft: () => Promise<void>;
 }) {
   const isAnalyzing = ref(false);
+  /** True while we have aborted the primary model and are re-running with the lite fallback. */
+  const isFallingBackToLite = ref(false);
 
   function getAnalyzeGate(activeProvider: string, foodLogText: string): AnalyzeGate {
     if (!args.profile.value?.age || !args.profile.value?.height || !args.profile.value.activityPrompt.trim()) {
@@ -87,12 +94,46 @@ export function useAnalysisFlow(args: {
       return;
     }
 
-    await queueAnalysis(args.selectedDate.value, args.provider.value);
-    await flushPendingAnalysis(true);
+    isFallingBackToLite.value = false;
+    isAnalyzing.value = true;
+
+    const primaryController = new AbortController();
+    let timeoutHandle: ReturnType<typeof window.setTimeout> | null = null;
+    let didTimeOut = false;
+
+    timeoutHandle = window.setTimeout(() => {
+      didTimeOut = true;
+      primaryController.abort();
+    }, SLOW_MODEL_TIMEOUT_MS);
+
+    try {
+      // Queue and run with the selected provider; abort signal cuts it short on timeout.
+      await queueAnalysis(args.selectedDate.value, args.provider.value);
+      await runPendingAnalysis(primaryController.signal);
+
+      // Clear timeout immediately — don't let it fire after a fast success.
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+
+      if (didTimeOut) {
+        // Primary request timed out — clean up queue and retry with the lite model.
+        isFallingBackToLite.value = true;
+        await clearQueueForDate(args.selectedDate.value);
+        await queueAnalysis(args.selectedDate.value, LITE_FALLBACK_PROVIDER);
+        await runPendingAnalysis();
+      }
+
+      await args.refreshState();
+    } finally {
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+      isAnalyzing.value = false;
+      isFallingBackToLite.value = false;
+    }
   }
 
   return {
     isAnalyzing,
+    isFallingBackToLite,
     analyzeIssue,
     flushPendingAnalysis,
     analyzeCurrentDay,

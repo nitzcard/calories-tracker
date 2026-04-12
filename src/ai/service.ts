@@ -1,5 +1,6 @@
 import { getProvider } from "./registry";
 import {
+  clearQueueItemsByDate,
   enqueueSync,
   getEntry,
   getPendingQueue,
@@ -28,7 +29,11 @@ export async function queueAnalysis(date: string, provider = "gemini-2.5-flash")
   });
 }
 
-export async function runPendingAnalysis(): Promise<void> {
+export async function clearQueueForDate(date: string): Promise<void> {
+  await clearQueueItemsByDate(date);
+}
+
+export async function runPendingAnalysis(signal?: AbortSignal): Promise<void> {
   const queue = await getPendingQueue();
   const profile = await getProfile();
   if (!profile) {
@@ -64,7 +69,7 @@ export async function runPendingAnalysis(): Promise<void> {
               },
             ]
           : [],
-      });
+      }, signal);
 
       await saveNutritionResult(item.date, {
         nutritionSnapshot: result,

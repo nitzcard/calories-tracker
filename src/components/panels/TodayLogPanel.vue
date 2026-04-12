@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
@@ -12,6 +12,7 @@ const props = defineProps<{
   currentWeight: string;
   foodLog: string;
   isAnalyzing: boolean;
+  isFallingBackToLite?: boolean;
   hasResults: boolean;
   isProfileReady: boolean;
   provider: string;
@@ -64,35 +65,10 @@ function missingKeyText(provider: string) {
   return t("missingGeminiKeyNotice");
 }
 
-// Slow-model notice: show after 8 seconds of continuous analysis.
-const analysisElapsed = ref(0);
-let analysisTimer: ReturnType<typeof setInterval> | null = null;
-
-watch(
-  () => props.isAnalyzing,
-  (analyzing) => {
-    if (analyzing) {
-      analysisElapsed.value = 0;
-      analysisTimer = setInterval(() => {
-        analysisElapsed.value++;
-      }, 1000);
-    } else {
-      if (analysisTimer) {
-        clearInterval(analysisTimer);
-        analysisTimer = null;
-      }
-      analysisElapsed.value = 0;
-    }
-  },
-);
-
-onUnmounted(() => {
-  if (analysisTimer) {
-    clearInterval(analysisTimer);
-  }
-});
-
-const showSlowNotice = computed(() => props.isAnalyzing && analysisElapsed.value >= 8);
+// Show the calming notice immediately when analysis starts.
+// A separate "falling back" notice appears when the 30s timeout is hit.
+const showAnalyzingNotice = computed(() => props.isAnalyzing && !props.isFallingBackToLite);
+const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBackToLite);
 </script>
 
 <template>
@@ -166,8 +142,11 @@ const showSlowNotice = computed(() => props.isAnalyzing && analysisElapsed.value
         <p v-if="analyzeIssue" class="analyze-issue">
           {{ issueText }}
         </p>
-        <p v-if="showSlowNotice" class="slow-notice">
+        <p v-if="showAnalyzingNotice" class="slow-notice">
           {{ t("analyzeSlowNotice") }}
+        </p>
+        <p v-if="showFallbackNotice" class="slow-notice slow-notice--fallback">
+          {{ t("analyzeFallbackToLite") }}
         </p>
       </div>
     </div>
@@ -240,8 +219,11 @@ const showSlowNotice = computed(() => props.isAnalyzing && analysisElapsed.value
       <p v-else-if="analyzeIssue" class="analyze-issue">
         {{ issueText }}
       </p>
-      <p v-if="showSlowNotice" class="slow-notice">
+      <p v-if="showAnalyzingNotice" class="slow-notice">
         {{ t("analyzeSlowNotice") }}
+      </p>
+      <p v-if="showFallbackNotice" class="slow-notice slow-notice--fallback">
+        {{ t("analyzeFallbackToLite") }}
       </p>
     </div>
   </div>
@@ -386,6 +368,11 @@ const showSlowNotice = computed(() => props.isAnalyzing && analysisElapsed.value
   background: color-mix(in srgb, #b87a1a 12%, var(--surface-2));
   border: 1px solid color-mix(in srgb, #b87a1a 50%, var(--border-strong));
   box-shadow: var(--bevel-raised);
+}
+
+.slow-notice--fallback {
+  background: color-mix(in srgb, #1a7ab8 14%, var(--surface-2));
+  border-color: color-mix(in srgb, #1a7ab8 50%, var(--border-strong));
 }
 
 @media (max-width: 640px) {

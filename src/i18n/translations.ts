@@ -99,7 +99,9 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     analyzeHelper:
       "Draft text saves automatically. Use the button only when you want a fresh analysis.",
     analyzeSlowNotice:
-      "⏳ Still working… AI models can take 15–30 seconds for a detailed food log. Please hang tight.",
+      "⏳ Request sent — AI is working on your food log. This usually takes 10–30 seconds.",
+    analyzeFallbackToLite:
+      "⏳ Taking longer than usual… switching to the lite model and retrying automatically.",
     resultsUpdated: "Results updated.",
     resultsUpdatedForDate: "Analysis updated for this date.",
     resultsQueued: "Saved locally. Analysis will run automatically when the app can reach AI.",
@@ -455,7 +457,9 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     jumpToResults: "קפוץ לתוצאות",
     analyzeHelper: "טיוטת הטקסט נשמרת אוטומטית. השתמש בכפתור רק כשרוצים ניתוח חדש.",
     analyzeSlowNotice:
-      "⏳ עדיין מעבד… מודלי AI יכולים לקחת 15–30 שניות לניתוח יומן אוכל מפורט. אנא המתן.",
+      "⏳ הבקשה נשלחה — ה-AI מעבד את יומן האוכל שלך. בדרך כלל לוקח 10–30 שניות.",
+    analyzeFallbackToLite:
+      "⏳ לוקח יותר זמן מהרגיל… עובר למודל מהיר יותר ומנסה שוב אוטומטית.",
     resultsUpdated: "התוצאות עודכנו.",
     resultsUpdatedForDate: "הניתוח עודכן עבור התאריך הזה.",
     resultsQueued: "נשמר מקומית. הניתוח ירוץ אוטומטית כשהאפליקציה תוכל להגיע ל-AI.",

@@ -1078,6 +1078,7 @@ export function useDashboard() {
     providerOptions,
     aiKeys,
     isAnalyzing: analysis.isAnalyzing,
+    isFallingBackToLite: analysis.isFallingBackToLite,
     isAutoSaving: autoSave.isAutoSaving,
     isSavingWeight: autoSave.isSavingWeight,
     isSavingFoodLog: autoSave.isSavingFoodLog,
