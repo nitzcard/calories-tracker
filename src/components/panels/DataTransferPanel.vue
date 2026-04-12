@@ -8,11 +8,13 @@ const props = defineProps<{
   locale: AppLocale;
   isBusy: boolean;
   status: "idle" | "exported" | "imported" | "failed";
+  autoBackupAfterAnalyze: boolean;
 }>();
 
 const emit = defineEmits<{
   "export-data": [];
   "import-data": [payload: string];
+  "update:auto-backup-after-analyze": [value: boolean];
 }>();
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -116,6 +118,18 @@ async function handleFilePick(event: Event) {
       <summary class="transfer-summary">{{ t("dataToolsToggle") }}</summary>
 
       <div class="transfer-body">
+        <label class="backup-toggle">
+          <input
+            type="checkbox"
+            :checked="autoBackupAfterAnalyze"
+            @change="emit('update:auto-backup-after-analyze', ($event.target as HTMLInputElement).checked)"
+          />
+          <span class="backup-toggle__copy">
+            <strong>{{ t("autoBackupAfterAnalyze") }}</strong>
+            <small>{{ t("autoBackupAfterAnalyzeHelper") }}</small>
+          </span>
+        </label>
+
         <div class="actions-row">
           <button class="secondary-action" :disabled="isBusy" @click="emit('export-data')">
             {{ t("exportData") }}
@@ -162,6 +176,36 @@ async function handleFilePick(event: Event) {
   display: grid;
   gap: 0;
   padding: 0 8px 8px;
+}
+
+.backup-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  margin-block-start: 10px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-1) 78%, var(--surface-2) 22%);
+  box-shadow: var(--bevel-raised);
+}
+
+.backup-toggle input {
+  margin-block-start: 0.15rem;
+}
+
+.backup-toggle__copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.backup-toggle__copy strong {
+  line-height: 1.2;
+}
+
+.backup-toggle__copy small {
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 .actions-row {

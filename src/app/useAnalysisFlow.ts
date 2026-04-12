@@ -1,6 +1,7 @@
 import { computed, ref, type Ref } from "vue";
 import { providerHasKey } from "../ai/registry";
 import { clearQueueForDate, queueAnalysis, runPendingAnalysis } from "../ai/service";
+import { getPendingQueue } from "../storage/repository";
 import { buildAnalyzeIssue } from "./dashboard-helpers";
 import type { Profile } from "../types";
 
@@ -64,6 +65,11 @@ export function useAnalysisFlow(args: {
   async function flushPendingAnalysis(showBusy = false) {
     const gate = getAnalyzeGate(args.provider.value, args.currentFoodLog.value);
     if (!gate.ok && gate.reason !== "empty-food-log") {
+      return;
+    }
+
+    const queue = await getPendingQueue();
+    if (!queue.length) {
       return;
     }
 

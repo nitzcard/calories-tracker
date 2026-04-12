@@ -3,10 +3,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FormField from "../base/FormField.vue";
-import type { AppLocale } from "../../types";
+import type { AppLocale, Profile } from "../../types";
 
 	const props = defineProps<{
 	  locale: AppLocale;
+    profile: Profile;
 	  cloudMode: "offline" | "cloud";
 	  cloudUsername: string;
 	  cloudConfirmedUsername?: string;
@@ -21,6 +22,8 @@ import type { AppLocale } from "../../types";
 const emit = defineEmits<{
   "update:cloudMode": [value: "offline" | "cloud"];
   "update:cloudUsername": [value: string];
+  "update:profile": [profile: Profile];
+  save: [profile: Profile];
   sync: [payload: { username: string; password?: string }];
   logout: [];
 }>();
@@ -29,6 +32,9 @@ const { t } = useI18n();
 const isOnline = ref(typeof navigator === "undefined" ? true : navigator.onLine);
 const draftUsername = ref(props.cloudUsername);
 const draftPassword = ref("");
+let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+let latestProfileToSave: Profile | null = null;
+const PROFILE_SAVE_DEBOUNCE_MS = 2000;
 
 watch(
   () => props.cloudUsername,
@@ -84,6 +90,23 @@ const draftDiffersFromConfirmed = computed(
 );
 const isLoggedIn = computed(() => hasConfirmedUser.value && confirmedNormalized.value === usernameNormalized.value);
 
+function scheduleProfileSave(nextProfile: Profile) {
+  latestProfileToSave = nextProfile;
+  if (profileSaveTimeout) clearTimeout(profileSaveTimeout);
+  profileSaveTimeout = setTimeout(() => {
+    if (!latestProfileToSave) return;
+    emit("save", latestProfileToSave);
+    profileSaveTimeout = null;
+  }, PROFILE_SAVE_DEBOUNCE_MS);
+}
+
+function saveEmail(event: Event) {
+  const email = (event.target as HTMLInputElement).value;
+  const nextProfile = { ...props.profile, email };
+  emit("update:profile", nextProfile);
+  scheduleProfileSave(nextProfile);
+}
+
 	function syncNow() {
 	  // Only commit the username when the user explicitly approves sync.
 	  emit("update:cloudUsername", draftUsername.value);
@@ -123,6 +146,23 @@ function logout() {
             :value="draftUsername"
             autocomplete="username"
             @input="draftUsername = ($event.target as HTMLInputElement).value"
+          />
+        </FormField>
+
+        <FormField :helper="t('emailHelper')">
+          <template #label>
+            <span class="field-label-with-pill">
+              <span>{{ t("email") }}</span>
+              <span class="optional-pill">{{ t("optionalLabel") }}</span>
+            </span>
+          </template>
+          <input
+            :value="profile.email ?? ''"
+            type="email"
+            inputmode="email"
+            autocomplete="email"
+            :placeholder="t('emailPlaceholder')"
+            @input="saveEmail"
           />
         </FormField>
 
@@ -220,6 +260,25 @@ function logout() {
 .auth-block {
   display: grid;
   gap: 8px;
+}
+
+.field-label-with-pill {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.optional-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1;
+  box-shadow: var(--bevel-raised);
 }
 
 	.auth-block--disabled {

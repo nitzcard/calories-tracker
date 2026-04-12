@@ -520,8 +520,8 @@ const proteinPerLeanBodyWeight = computed(() => {
     :helper="t('nutritionHelper')"
     collapsible
     :loading="isAnalyzing && !entry?.aiError"
-    :loading-title="t('analyzingNow')"
-    :loading-helper="t('nutritionLoadingHelper')"
+    :loading-title="t('analysisInProgressTitle')"
+    :loading-helper="t('analyzeSlowNotice')"
   >
     <template #meta>
       <div class="meta-row">

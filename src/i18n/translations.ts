@@ -20,9 +20,12 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     dataToolsHelper:
       "Export your local app data to a JSON backup, or import a backup file back into this browser.",
     dataToolsToggle: "Show export and import tools",
+    autoBackupAfterAnalyze: "Download backup after analysis",
+    autoBackupAfterAnalyzeHelper:
+      "Optional. When enabled, a local JSON backup is downloaded automatically after a successful analysis.",
     cloudSyncTitle: "Cloud sync (username)",
     cloudSyncHelper:
-      "Two-way cloud sync by username (no login). Data is merged on both sides based on last-updated time per day.",
+      "Two-way cloud sync with username + password login in this browser. Data is merged on both sides based on last-updated time per day.",
     cloudMode: "Mode",
     cloudModeOffline: "Offline only",
     cloudModeCloud: "Cloud",
@@ -96,12 +99,14 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     analyzeFood: "Save and analyze this day",
     saveOnly: "Save only",
     jumpToResults: "Jump to results",
+    analysisInProgressTitle: "Analysis in progress",
+    analysisFallbackTitle: "Retrying with a lighter model",
     analyzeHelper:
       "Draft text saves automatically. Use the button only when you want a fresh analysis.",
     analyzeSlowNotice:
-      "⏳ Request sent — AI is working on your food log. This usually takes 10–30 seconds.",
+      "Your food log is being processed now. This usually takes about 10-30 seconds.",
     analyzeFallbackToLite:
-      "⏳ Taking longer than usual… switching to the lite model and retrying automatically.",
+      "This is taking a bit longer than usual, so the app is retrying automatically with a lighter model.",
     resultsUpdated: "Results updated.",
     resultsUpdatedForDate: "Analysis updated for this date.",
     resultsQueued: "Saved locally. Analysis will run automatically when the app can reach AI.",
@@ -315,7 +320,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     age: "Age",
     email: "Email",
     emailPlaceholder: "name{'@'}example.com",
-    emailHelper: "Optional. Stored on this device to let me notify you if the app URL changes.",
+    emailHelper:
+      "So I can notify you if the app domain changes",
     estimatedWeight: "Estimated weight",
     targetWeight: "Target weight",
     targetWeightHelper: "Used to draw a target calories line in the graph and history.",
@@ -381,9 +387,12 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     dataToolsHelper:
       "אפשר לייצא את כל הנתונים המקומיים לקובץ גיבוי JSON, או לייבא קובץ גיבוי חזרה לדפדפן הזה.",
     dataToolsToggle: "הצג כלי ייצוא וייבוא",
+    autoBackupAfterAnalyze: "הורד גיבוי אחרי ניתוח",
+    autoBackupAfterAnalyzeHelper:
+      "אופציונלי. כשזה פעיל, קובץ גיבוי JSON מקומי יורד אוטומטית אחרי ניתוח שהצליח.",
     cloudSyncTitle: "סנכרון ענן (שם משתמש)",
     cloudSyncHelper:
-      "סנכרון ענן דו-כיווני לפי שם משתמש (ללא התחברות). הנתונים מתמזגים לפי זמן עדכון לכל יום.",
+      "סנכרון ענן דו-כיווני עם התחברות של שם משתמש + סיסמה בתוך הדפדפן. הנתונים מתמזגים לפי זמן עדכון לכל יום.",
     cloudMode: "מצב",
     cloudModeOffline: "אופליין בלבד",
     cloudModeCloud: "ענן",
@@ -455,11 +464,13 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     analyzeFood: "שמור ונתח את היום",
     saveOnly: "שמור בלבד",
     jumpToResults: "קפוץ לתוצאות",
+    analysisInProgressTitle: "הניתוח בתהליך",
+    analysisFallbackTitle: "מנסה שוב עם מודל קל יותר",
     analyzeHelper: "טיוטת הטקסט נשמרת אוטומטית. השתמש בכפתור רק כשרוצים ניתוח חדש.",
     analyzeSlowNotice:
-      "⏳ הבקשה נשלחה — ה-AI מעבד את יומן האוכל שלך. בדרך כלל לוקח 10–30 שניות.",
+      "יומן האוכל שלך נמצא עכשיו בעיבוד. בדרך כלל זה לוקח בערך 10-30 שניות.",
     analyzeFallbackToLite:
-      "⏳ לוקח יותר זמן מהרגיל… עובר למודל מהיר יותר ומנסה שוב אוטומטית.",
+      "זה לוקח קצת יותר זמן מהרגיל, ולכן האפליקציה מנסה שוב אוטומטית עם מודל קל יותר.",
     resultsUpdated: "התוצאות עודכנו.",
     resultsUpdatedForDate: "הניתוח עודכן עבור התאריך הזה.",
     resultsQueued: "נשמר מקומית. הניתוח ירוץ אוטומטית כשהאפליקציה תוכל להגיע ל-AI.",
@@ -666,7 +677,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     age: "גיל",
     email: "אימייל",
     emailPlaceholder: "name{'@'}example.com",
-    emailHelper: "אופציונלי. נשמר רק במכשיר הזה כדי שאוכל לעדכן אם כתובת האתר משתנה.",
+    emailHelper:
+    "כדי שאכתוב לך אם כתובת האתר תשתנה",
     estimatedWeight: "משקל משוער",
     targetWeight: "משקל יעד",
     targetWeightHelper: "משמש לקו יעד בגרף ובטבלת ההיסטוריה.",

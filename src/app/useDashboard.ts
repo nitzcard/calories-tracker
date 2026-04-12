@@ -77,6 +77,9 @@ export function useDashboard() {
   const cloudConfirmedUsername = ref(
     localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername) ?? "",
   );
+  const autoBackupAfterAnalyze = ref(
+    localStorage.getItem(DASHBOARD_STORAGE_KEYS.autoBackupAfterAnalyze) === "1",
+  );
   const isCloudBusy = ref(false);
   const cloudStatus = ref<"idle" | "synced" | "failed">("idle");
   const cloudLastSyncedAt = ref("");
@@ -909,10 +912,17 @@ export function useDashboard() {
     await analysis.analyzeCurrentDay();
     const finished = findEntryByDate(entries.value, selectedDate.value);
     if (finished?.aiStatus === "done" && finished.nutritionSnapshot) {
-      // Best-effort: some browsers may block non-user-gesture downloads.
-      await dataTransfer.exportData({ filename: autoExportFilename(selectedDate.value) });
+      if (autoBackupAfterAnalyze.value) {
+        // Best-effort: some browsers may block non-user-gesture downloads.
+        await dataTransfer.exportData({ filename: autoExportFilename(selectedDate.value) });
+      }
       scheduleCloudPush("analysis.done");
     }
+  }
+
+  function setAutoBackupAfterAnalyze(nextValue: boolean) {
+    autoBackupAfterAnalyze.value = nextValue;
+    localStorage.setItem(DASHBOARD_STORAGE_KEYS.autoBackupAfterAnalyze, nextValue ? "1" : "0");
   }
 
   watch(
@@ -1104,6 +1114,7 @@ export function useDashboard() {
     cloudMode,
     cloudUsername,
     cloudConfirmedUsername,
+    autoBackupAfterAnalyze,
     hasSavedCloudPassword,
     isCloudBusy,
     isCloudSyncing: cloudIsSyncing,
@@ -1141,6 +1152,7 @@ export function useDashboard() {
     },
     exportData: dataTransfer.exportData,
     importData: dataTransfer.importData,
+    setAutoBackupAfterAnalyze,
     setCloudMode,
     setCloudUsername,
     cloudLogout,

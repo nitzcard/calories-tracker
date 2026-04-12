@@ -95,9 +95,11 @@ const {
   saveFoodCorrection,
 	  exportData,
 	  importData,
+    setAutoBackupAfterAnalyze,
 	  cloudMode,
 	  cloudUsername,
 	  cloudConfirmedUsername,
+    autoBackupAfterAnalyze,
     hasSavedCloudPassword,
 	  isCloudBusy,
     isCloudSyncing,
@@ -418,9 +420,14 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 </script>
 
 <template>
-  <div v-if="isAnalyzing" class="global-analyzing-bar" role="status" aria-label="Analyzing…">
-    <span class="global-analyzing-spinner" aria-hidden="true"></span>
-    <span class="global-analyzing-label">{{ t("analyzingNow") }}</span>
+  <div v-if="isAnalyzing" class="global-analyzing-overlay" role="status" :aria-label="t('analysisInProgressTitle')">
+    <div class="global-analyzing-bar">
+      <span class="global-analyzing-spinner" aria-hidden="true"></span>
+      <div class="global-analyzing-copy">
+        <strong class="global-analyzing-label">{{ t("analysisInProgressTitle") }}</strong>
+        <span class="global-analyzing-helper">{{ t("analyzeSlowNotice") }}</span>
+      </div>
+    </div>
   </div>
   <main class="app-shell">
     <AppHeader
@@ -480,6 +487,7 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
       <div class="constant-data-grid">
 	        <CloudSyncPanel
 	          :locale="locale"
+            :profile="profile"
 	          :cloud-mode="cloudMode"
 	          :cloud-username="cloudUsername"
 	          :cloud-confirmed-username="cloudConfirmedUsername"
@@ -489,6 +497,8 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 	          :cloud-last-synced-at="cloudLastSyncedAt"
 	          :cloud-error="cloudError"
 	          :supabase-configured="supabaseConfigured"
+          @update:profile="profile = $event"
+          @save="saveProfileAndHighlight"
           @update:cloud-mode="setCloudMode"
           @update:cloud-username="setCloudUsername"
           @sync="cloudSyncNow($event)"
@@ -507,8 +517,10 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
             :locale="locale"
             :is-busy="isTransferringData"
             :status="dataTransferStatus"
+            :auto-backup-after-analyze="autoBackupAfterAnalyze"
             @export-data="exportData"
             @import-data="importData"
+            @update:auto-backup-after-analyze="setAutoBackupAfterAnalyze"
           />
         </div>
       </div>
@@ -643,38 +655,61 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 </template>
 
 <style scoped>
-.global-analyzing-bar {
+.global-analyzing-overlay {
   position: fixed;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
   z-index: 9999;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 1.2rem;
-  background: color-mix(in srgb, var(--accent, #0a6f63) 90%, black 10%);
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
   pointer-events: none;
-  white-space: nowrap;
+}
+
+.global-analyzing-bar {
+  inline-size: min(32rem, calc(100vw - 2rem));
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-strong));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-1) 88%, var(--accent) 12%) 0%,
+      color-mix(in srgb, var(--surface-2) 92%, var(--accent) 8%) 100%
+    );
+  color: var(--text-primary);
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24), var(--bevel-raised);
+  text-align: center;
+  backdrop-filter: blur(10px);
 }
 
 .global-analyzing-spinner {
-  inline-size: 1rem;
-  block-size: 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  border-inline-end-color: #fff;
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-inline-end-color: var(--accent);
   border-radius: 50%;
   flex: 0 0 auto;
-  animation: global-spin 650ms linear infinite;
+  animation: global-spin 850ms linear infinite;
+}
+
+.global-analyzing-copy {
+  display: grid;
+  gap: 0.22rem;
+  justify-items: center;
 }
 
 .global-analyzing-label {
-  white-space: nowrap;
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.global-analyzing-helper {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 @keyframes global-spin {

@@ -143,32 +143,45 @@ function onToggle(event: Event) {
   display: grid;
   place-items: center;
   text-align: center;
-  gap: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  padding: 16px;
-  box-shadow: var(--bevel-sunken);
+  gap: 12px;
+  inline-size: min(100%, 42rem);
+  justify-self: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-strong));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-1) 90%, var(--accent) 10%) 0%,
+      color-mix(in srgb, var(--surface-2) 94%, var(--accent) 6%) 100%
+    );
+  padding: 22px 18px;
+  box-shadow: var(--bevel-raised);
 }
 
 .panel-loading-spinner {
-  inline-size: 1.7rem;
-  block-size: 1.7rem;
-  border: 3px solid currentColor;
-  border-inline-end-color: transparent;
+  inline-size: 1.85rem;
+  block-size: 1.85rem;
+  border: 3px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-inline-end-color: var(--accent);
   border-radius: 50%;
-  animation: spin 650ms linear infinite;
+  animation: spin 850ms linear infinite;
 }
 
 .panel-loading-copy {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   justify-items: center;
+}
+
+.panel-loading-copy strong {
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .panel-loading-copy p {
   margin: 0;
   color: var(--text-muted);
-  max-inline-size: 38rem;
+  max-inline-size: 32rem;
+  line-height: 1.4;
 }
 
 @keyframes spin {

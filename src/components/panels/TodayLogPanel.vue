@@ -142,12 +142,20 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
         <p v-if="analyzeIssue" class="analyze-issue">
           {{ issueText }}
         </p>
-        <p v-if="showAnalyzingNotice" class="slow-notice">
-          {{ t("analyzeSlowNotice") }}
-        </p>
-        <p v-if="showFallbackNotice" class="slow-notice slow-notice--fallback">
-          {{ t("analyzeFallbackToLite") }}
-        </p>
+        <div v-if="showAnalyzingNotice" class="analysis-notice" role="status" aria-live="polite">
+          <span class="analysis-notice__spinner" aria-hidden="true"></span>
+          <div class="analysis-notice__copy">
+            <strong>{{ t("analysisInProgressTitle") }}</strong>
+            <p>{{ t("analyzeSlowNotice") }}</p>
+          </div>
+        </div>
+        <div v-if="showFallbackNotice" class="analysis-notice analysis-notice--fallback" role="status" aria-live="polite">
+          <span class="analysis-notice__spinner" aria-hidden="true"></span>
+          <div class="analysis-notice__copy">
+            <strong>{{ t("analysisFallbackTitle") }}</strong>
+            <p>{{ t("analyzeFallbackToLite") }}</p>
+          </div>
+        </div>
       </div>
     </div>
   </BasePanel>
@@ -219,12 +227,20 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
       <p v-else-if="analyzeIssue" class="analyze-issue">
         {{ issueText }}
       </p>
-      <p v-if="showAnalyzingNotice" class="slow-notice">
-        {{ t("analyzeSlowNotice") }}
-      </p>
-      <p v-if="showFallbackNotice" class="slow-notice slow-notice--fallback">
-        {{ t("analyzeFallbackToLite") }}
-      </p>
+      <div v-if="showAnalyzingNotice" class="analysis-notice" role="status" aria-live="polite">
+        <span class="analysis-notice__spinner" aria-hidden="true"></span>
+        <div class="analysis-notice__copy">
+          <strong>{{ t("analysisInProgressTitle") }}</strong>
+          <p>{{ t("analyzeSlowNotice") }}</p>
+        </div>
+      </div>
+      <div v-if="showFallbackNotice" class="analysis-notice analysis-notice--fallback" role="status" aria-live="polite">
+        <span class="analysis-notice__spinner" aria-hidden="true"></span>
+        <div class="analysis-notice__copy">
+          <strong>{{ t("analysisFallbackTitle") }}</strong>
+          <p>{{ t("analyzeFallbackToLite") }}</p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -359,20 +375,58 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
   white-space: pre-wrap;
 }
 
-.slow-notice {
-  margin: 6px 0 0;
-  color: var(--text-muted);
-  max-inline-size: 46rem;
-  display: inline-block;
-  padding: 0.35rem 0.55rem;
-  background: color-mix(in srgb, #b87a1a 12%, var(--surface-2));
-  border: 1px solid color-mix(in srgb, #b87a1a 50%, var(--border-strong));
+.analysis-notice {
+  margin: 6px auto 0;
+  inline-size: min(100%, 42rem);
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  padding: 0.95rem 1rem;
+  color: var(--text-primary);
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-1) 90%, var(--accent) 10%) 0%,
+      color-mix(in srgb, var(--surface-2) 95%, var(--accent) 5%) 100%
+    );
   box-shadow: var(--bevel-raised);
 }
 
-.slow-notice--fallback {
-  background: color-mix(in srgb, #1a7ab8 14%, var(--surface-2));
-  border-color: color-mix(in srgb, #1a7ab8 50%, var(--border-strong));
+.analysis-notice--fallback {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-strong));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-1) 86%, var(--accent) 14%) 0%,
+      color-mix(in srgb, var(--surface-2) 92%, var(--accent) 8%) 100%
+    );
+}
+
+.analysis-notice__spinner {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-inline-end-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 850ms linear infinite;
+}
+
+.analysis-notice__copy {
+  display: grid;
+  gap: 0.24rem;
+  justify-items: center;
+}
+
+.analysis-notice__copy strong {
+  line-height: 1.2;
+}
+
+.analysis-notice__copy p {
+  color: var(--text-muted);
+  max-inline-size: 34rem;
+  line-height: 1.4;
 }
 
 @media (max-width: 640px) {
