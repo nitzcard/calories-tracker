@@ -900,10 +900,9 @@ export function useDashboard() {
     cloudStatus.value = "idle";
     cloudLastSyncedAt.value = "";
     cloudError.value = "";
-    // On shared devices (especially mobile), leaving the previous username visible is confusing.
-    // Clear the username and switch to offline to stop cloud pushes.
+    // Keep cloud mode so the user can log back in without switching modes again.
+    // Only clear the username and password so the login form is ready for re-entry.
     setCloudUsername("");
-    setCloudMode("offline");
   }
 
   async function analyzeCurrentDay() {

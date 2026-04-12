@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
@@ -63,6 +63,36 @@ function missingKeyText(provider: string) {
 
   return t("missingGeminiKeyNotice");
 }
+
+// Slow-model notice: show after 8 seconds of continuous analysis.
+const analysisElapsed = ref(0);
+let analysisTimer: ReturnType<typeof setInterval> | null = null;
+
+watch(
+  () => props.isAnalyzing,
+  (analyzing) => {
+    if (analyzing) {
+      analysisElapsed.value = 0;
+      analysisTimer = setInterval(() => {
+        analysisElapsed.value++;
+      }, 1000);
+    } else {
+      if (analysisTimer) {
+        clearInterval(analysisTimer);
+        analysisTimer = null;
+      }
+      analysisElapsed.value = 0;
+    }
+  },
+);
+
+onUnmounted(() => {
+  if (analysisTimer) {
+    clearInterval(analysisTimer);
+  }
+});
+
+const showSlowNotice = computed(() => props.isAnalyzing && analysisElapsed.value >= 8);
 </script>
 
 <template>
@@ -136,6 +166,9 @@ function missingKeyText(provider: string) {
         <p v-if="analyzeIssue" class="analyze-issue">
           {{ issueText }}
         </p>
+        <p v-if="showSlowNotice" class="slow-notice">
+          {{ t("analyzeSlowNotice") }}
+        </p>
       </div>
     </div>
   </BasePanel>
@@ -206,6 +239,9 @@ function missingKeyText(provider: string) {
       </p>
       <p v-else-if="analyzeIssue" class="analyze-issue">
         {{ issueText }}
+      </p>
+      <p v-if="showSlowNotice" class="slow-notice">
+        {{ t("analyzeSlowNotice") }}
       </p>
     </div>
   </div>
@@ -339,6 +375,17 @@ function missingKeyText(provider: string) {
   border: 1px solid #4e221d;
   box-shadow: var(--bevel-raised);
   white-space: pre-wrap;
+}
+
+.slow-notice {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  max-inline-size: 46rem;
+  display: inline-block;
+  padding: 0.35rem 0.55rem;
+  background: color-mix(in srgb, #b87a1a 12%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, #b87a1a 50%, var(--border-strong));
+  box-shadow: var(--bevel-raised);
 }
 
 @media (max-width: 640px) {

@@ -746,10 +746,10 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <th>{{ t("grams") }}</th>
                   <th>{{ t("calories") }}</th>
                   <th>{{ t("kcalPer100g") }}</th>
-                  <th>{{ t("protein") }}</th>
-                  <th>{{ t("carbs") }}</th>
-                  <th>{{ t("fat") }}</th>
-                  <th>{{ t("fiber") }}</th>
+                  <th><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</th>
+                  <th><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</th>
+                  <th><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</th>
+                  <th><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -876,19 +876,19 @@ const proteinPerLeanBodyWeight = computed(() => {
                   </label>
 
                   <div class="kv">
-                    <div class="k">{{ t("protein") }}</div>
+                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</div>
                     <div class="v">{{ food.protein ?? "-" }}</div>
                   </div>
                   <div class="kv">
-                    <div class="k">{{ t("carbs") }}</div>
+                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</div>
                     <div class="v">{{ food.carbs ?? "-" }}</div>
                   </div>
                   <div class="kv">
-                    <div class="k">{{ t("fat") }}</div>
+                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</div>
                     <div class="v">{{ food.fat ?? "-" }}</div>
                   </div>
                   <div class="kv">
-                    <div class="k">{{ t("fiber") }}</div>
+                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</div>
                     <div class="v">{{ food.fiber ?? "-" }}</div>
                   </div>
                 </div>
@@ -905,9 +905,10 @@ const proteinPerLeanBodyWeight = computed(() => {
           <div class="meal-footer">
             <span class="meal-total">
               {{ t("mealTotal") }}: {{ meal.totals.calories ?? "-" }} {{ t("unitKcal") }} /
-              {{ t("protein") }} {{ meal.totals.protein ?? "-" }} / {{ t("carbs") }}
-              {{ meal.totals.carbs ?? "-" }} / {{ t("fat") }} {{ meal.totals.fat ?? "-" }} /
-              {{ t("fiber") }} {{ meal.totals.fiber ?? "-" }}
+              {{ macroEmoji("protein") }} {{ t("protein") }} {{ meal.totals.protein ?? "-" }} /
+              {{ macroEmoji("carbs") }} {{ t("carbs") }} {{ meal.totals.carbs ?? "-" }} /
+              {{ macroEmoji("fat") }} {{ t("fat") }} {{ meal.totals.fat ?? "-" }} /
+              {{ macroEmoji("fiber") }} {{ t("fiber") }} {{ meal.totals.fiber ?? "-" }}
             </span>
           </div>
         </div>

@@ -156,13 +156,15 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             />
           </td>
           <td class="calories-column">
-            <HistoryCaloriesCell
-              :value="entry.manualCalories"
-              :fallback-value="resolvedDailyCalories(entry)"
-              :is-saving="Boolean(savingCalories[entry.date])"
-              @save="emit('save-calories', entry.date, $event)"
-            />
-            <small v-if="tdeeReference != null" class="tdee-footnote">/ {{ tdeeReference }}</small>
+            <div class="calories-inline">
+              <HistoryCaloriesCell
+                :value="entry.manualCalories"
+                :fallback-value="resolvedDailyCalories(entry)"
+                :is-saving="Boolean(savingCalories[entry.date])"
+                @save="emit('save-calories', entry.date, $event)"
+              />
+              <small v-if="tdeeReference != null" class="tdee-footnote">/ {{ tdeeReference }}</small>
+            </div>
           </td>
 	          <td class="numeric-pair">{{ caloriesRemainingToTarget(entry) }}</td>
 	          <td class="delta-cell">
@@ -327,12 +329,20 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
 
+.calories-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
 .tdee-footnote {
-  display: block;
   color: var(--text-muted);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 640px) {
