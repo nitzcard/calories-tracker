@@ -98,6 +98,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     jumpToResults: "Jump to results",
     analyzeHelper:
       "Draft text saves automatically. Use the button only when you want a fresh analysis.",
+    analyzeSlowNotice:
+      "⏳ Request sent — AI is working on your food log. This usually takes 10–30 seconds.",
+    analyzeFallbackToLite:
+      "⏳ Taking longer than usual… switching to the lite model and retrying automatically.",
     resultsUpdated: "Results updated.",
     resultsUpdatedForDate: "Analysis updated for this date.",
     resultsQueued: "Saved locally. Analysis will run automatically when the app can reach AI.",
@@ -150,11 +154,29 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     insightsNote:
       "Status uses rolling averages from analyzed days with available nutrient estimates. Missing days and missing values are not counted.",
     nutrientCalcium: "Calcium",
+    nutrientCalciumWhy:
+      "1,000 mg/day is the adult RDA (NIH). Supports bone density and nerve signalling. Dairy, leafy greens, and fortified foods are the main sources.",
+    nutrientCalciumLink: "https://ods.od.nih.gov/factsheets/Calcium-Consumer/",
     nutrientIron: "Iron",
+    nutrientIronWhy:
+      "8 mg/day for men, 18 mg/day for women of reproductive age (NIH RDA). Women need more because of monthly blood loss. Red meat, legumes, and spinach are rich sources.",
+    nutrientIronLink: "https://ods.od.nih.gov/factsheets/Iron-Consumer/",
     nutrientMagnesium: "Magnesium",
+    nutrientMagnesiumWhy:
+      "310 mg/day for women, 400 mg/day for men (NIH RDA). Involved in 300+ enzyme reactions including energy production and muscle function. Nuts, seeds, and whole grains are top sources.",
+    nutrientMagnesiumLink: "https://ods.od.nih.gov/factsheets/Magnesium-Consumer/",
     nutrientPotassium: "Potassium",
+    nutrientPotassiumWhy:
+      "3,500 mg/day Adequate Intake (WHO/NIH). Supports blood pressure regulation and heart rhythm. Most people fall short — bananas, potatoes, and beans are the best food sources.",
+    nutrientPotassiumLink: "https://ods.od.nih.gov/factsheets/Potassium-Consumer/",
     nutrientVitaminD: "Vitamin D",
+    nutrientVitaminDWhy:
+      "15 mcg (600 IU)/day RDA for adults (NIH). Critical for calcium absorption and immune function. Most people are deficient due to limited sun exposure and few dietary sources (fatty fish, fortified milk).",
+    nutrientVitaminDLink: "https://ods.od.nih.gov/factsheets/VitaminD-Consumer/",
     nutrientVitaminB12: "Vitamin B12",
+    nutrientVitaminB12Why:
+      "2.4 mcg/day RDA (NIH). Essential for nerve function and red blood cell production. Found almost exclusively in animal products — vegans and older adults are at highest risk of deficiency.",
+    nutrientVitaminB12Link: "https://ods.od.nih.gov/factsheets/VitaminB12-Consumer/",
     insightStatusLikelyLow: "Likely low",
     insightStatusBorderline: "Borderline",
     insightStatusCovered: "Covered",
@@ -347,8 +369,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     headerHelper:
       "פשוט רושמים מה אכלת ואת המשקל שלך. האפליקציה שומרת את זה אוטומטית על המכשיר הזה, עוזרת לעקוב אחרי קלוריות ומשקל לאורך זמן, ואם רוצים אפשר גם לנתח ארוחות עם AI ולסנכרן לענן.",
     feedbackLabel: "משוב 💬",
-    syncIndicatorLocal: "מקומי",
-    syncIndicatorCloud: "ענן",
+    syncIndicatorLocal: "🏠 מקומי",
+    syncIndicatorCloud: "☁️ ענן",
     syncIndicatorCloudPending: "ענן (לא מסונכרן)",
     apiKeys: "מפתחות API",
     apiKeysHelper: "השתמש במפתח Gemini שלך. הוא נשאר פרטי, ועם סנכרון ענן הוא נשמר מוצפן.",
@@ -434,6 +456,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     saveOnly: "שמור בלבד",
     jumpToResults: "קפוץ לתוצאות",
     analyzeHelper: "טיוטת הטקסט נשמרת אוטומטית. השתמש בכפתור רק כשרוצים ניתוח חדש.",
+    analyzeSlowNotice:
+      "⏳ הבקשה נשלחה — ה-AI מעבד את יומן האוכל שלך. בדרך כלל לוקח 10–30 שניות.",
+    analyzeFallbackToLite:
+      "⏳ לוקח יותר זמן מהרגיל… עובר למודל מהיר יותר ומנסה שוב אוטומטית.",
     resultsUpdated: "התוצאות עודכנו.",
     resultsUpdatedForDate: "הניתוח עודכן עבור התאריך הזה.",
     resultsQueued: "נשמר מקומית. הניתוח ירוץ אוטומטית כשהאפליקציה תוכל להגיע ל-AI.",
@@ -486,11 +512,29 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     insightsNote:
       "הסטטוס מבוסס על ממוצעים מתגלגלים מתוך ימים שנותחו ויש בהם הערכת נוטריינטים זמינה. ימים חסרים וערכים חסרים לא נספרים.",
     nutrientCalcium: "סידן",
+    nutrientCalciumWhy:
+      "1,000 מ\"ג ליום — RDA למבוגרים (NIH). חיוני לצפיפות עצם ולהעברת אותות עצביים. מקורות עיקריים: מוצרי חלב, ירקות עלים, ומזונות מועשרים.",
+    nutrientCalciumLink: "https://ods.od.nih.gov/factsheets/Calcium-Consumer/",
     nutrientIron: "ברזל",
+    nutrientIronWhy:
+      "8 מ\"ג ליום לגברים ו-18 מ\"ג ליום לנשים בגיל הפוריות (NIH RDA). נשים זקוקות ליותר בגלל איבוד דם חודשי. מקורות עשירים: בשר אדום, קטניות ותרד.",
+    nutrientIronLink: "https://ods.od.nih.gov/factsheets/Iron-Consumer/",
     nutrientMagnesium: "מגנזיום",
+    nutrientMagnesiumWhy:
+      "310 מ\"ג ליום לנשים ו-400 מ\"ג ליום לגברים (NIH RDA). משתתף ביותר מ-300 תגובות אנזימטיות כולל ייצור אנרגיה ותפקוד שרירים. מקורות מובילים: אגוזים, זרעים ודגנים מלאים.",
+    nutrientMagnesiumLink: "https://ods.od.nih.gov/factsheets/Magnesium-Consumer/",
     nutrientPotassium: "אשלגן",
+    nutrientPotassiumWhy:
+      "3,500 מ\"ג ליום — Adequate Intake לפי WHO/NIH. תומך בוויסות לחץ דם ובקצב הלב. רוב האנשים לא מגיעים לכמות זו — בננות, תפוחי אדמה וקטניות הם המקורות הטובים ביותר.",
+    nutrientPotassiumLink: "https://ods.od.nih.gov/factsheets/Potassium-Consumer/",
     nutrientVitaminD: "ויטמין D",
+    nutrientVitaminDWhy:
+      "15 מק\"ג (600 IU) ליום — RDA למבוגרים (NIH). חיוני לספיגת סידן ולתפקוד מערכת החיסון. רוב האנשים חסרים בגלל חשיפה מוגבלת לשמש ומעט מקורות תזונתיים (דגים שמנים, חלב מועשר).",
+    nutrientVitaminDLink: "https://ods.od.nih.gov/factsheets/VitaminD-Consumer/",
     nutrientVitaminB12: "ויטמין B12",
+    nutrientVitaminB12Why:
+      "2.4 מק\"ג ליום — RDA (NIH). חיוני לתפקוד עצבי ולייצור תאי דם אדומים. נמצא כמעט אך ורק במוצרים מהחי — טבעונים ומבוגרים מבוגרים נמצאים בסיכון הגבוה ביותר לחסר.",
+    nutrientVitaminB12Link: "https://ods.od.nih.gov/factsheets/VitaminB12-Consumer/",
     insightStatusLikelyLow: "כנראה נמוך",
     insightStatusBorderline: "גבולי",
     insightStatusCovered: "מכוסה",

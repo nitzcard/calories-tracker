@@ -281,6 +281,10 @@ export async function enqueueSync(item: Omit<SyncQueueItem, "id">): Promise<numb
   return db.syncQueue.add(toPlain(item));
 }
 
+export async function clearQueueItemsByDate(date: string): Promise<void> {
+  await db.syncQueue.where("date").equals(date).delete();
+}
+
 export async function updateQueueStatus(
   id: number,
   status: SyncQueueItem["status"],

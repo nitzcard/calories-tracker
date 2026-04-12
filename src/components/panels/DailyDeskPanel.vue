@@ -11,6 +11,7 @@ defineProps<{
   currentWeight: string;
   foodLog: string;
   isAnalyzing: boolean;
+  isFallingBackToLite?: boolean;
   hasResults: boolean;
   isProfileReady: boolean;
   provider: string;
@@ -47,6 +48,7 @@ const { t } = useI18n();
           :current-weight="currentWeight"
           :food-log="foodLog"
           :is-analyzing="isAnalyzing"
+          :is-falling-back-to-lite="isFallingBackToLite"
           :has-results="hasResults"
           :is-profile-ready="isProfileReady"
           :provider="provider"

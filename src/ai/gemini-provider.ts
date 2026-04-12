@@ -28,7 +28,7 @@ export class GeminiProvider implements AIProvider {
     this.id = id;
   }
 
-  async analyzeDailyEntry(input: AiAnalysisInput): Promise<NormalizedNutritionResult> {
+  async analyzeDailyEntry(input: AiAnalysisInput, signal?: AbortSignal): Promise<NormalizedNutritionResult> {
     const apiKey = readApiKeyForProvider(this.id) || import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error(
@@ -57,6 +57,7 @@ export class GeminiProvider implements AIProvider {
         "Content-Type": "application/json",
       },
       body,
+      signal,
     });
 
     if (!response.ok) {

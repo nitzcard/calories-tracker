@@ -28,6 +28,34 @@ function nutrientLabel(
   return labels[nutrientKey];
 }
 
+function nutrientWhy(
+  nutrientKey: NutritionInsights["micronutrients"]["items"][number]["nutrientKey"],
+) {
+  const map: Record<typeof nutrientKey, string> = {
+    calciumMg: t("nutrientCalciumWhy"),
+    ironMg: t("nutrientIronWhy"),
+    magnesiumMg: t("nutrientMagnesiumWhy"),
+    potassiumMg: t("nutrientPotassiumWhy"),
+    vitaminDMcg: t("nutrientVitaminDWhy"),
+    vitaminB12Mcg: t("nutrientVitaminB12Why"),
+  };
+  return map[nutrientKey];
+}
+
+function nutrientLink(
+  nutrientKey: NutritionInsights["micronutrients"]["items"][number]["nutrientKey"],
+) {
+  const map: Record<typeof nutrientKey, string> = {
+    calciumMg: t("nutrientCalciumLink"),
+    ironMg: t("nutrientIronLink"),
+    magnesiumMg: t("nutrientMagnesiumLink"),
+    potassiumMg: t("nutrientPotassiumLink"),
+    vitaminDMcg: t("nutrientVitaminDLink"),
+    vitaminB12Mcg: t("nutrientVitaminB12Link"),
+  };
+  return map[nutrientKey];
+}
+
 function macroLabel(key: NutritionInsights["macros"][number]["key"]) {
   const labels: Record<typeof key, string> = {
     calories: t("calories"),
@@ -168,7 +196,16 @@ function formatSigned(value: number | null, unit: string) {
             </thead>
             <tbody>
               <tr v-for="item in insights.micronutrients.items" :key="item.nutrientKey">
-                <td>{{ nutrientLabel(item.nutrientKey) }}</td>
+                <td>
+                  <a
+                    class="nutrient-link"
+                    :href="nutrientLink(item.nutrientKey)"
+                    target="_blank"
+                    rel="noreferrer"
+                    :title="nutrientWhy(item.nutrientKey)"
+                  >{{ nutrientLabel(item.nutrientKey) }}</a>
+                  <small class="nutrient-why">{{ nutrientWhy(item.nutrientKey) }}</small>
+                </td>
                 <td>{{ formatNumber(item.target, unitLabel(item.unit)) }}</td>
                 <td>{{ formatNumber(item.average7d, unitLabel(item.unit)) }}</td>
                 <td>
@@ -219,7 +256,8 @@ function formatSigned(value: number | null, unit: string) {
 }
 
 .insights-table {
-  min-inline-size: 760px;
+  /* Increased from 760px to accommodate the new per-nutrient explanation text column. */
+  min-inline-size: 820px;
 }
 
 .status-box {
@@ -256,5 +294,25 @@ function formatSigned(value: number | null, unit: string) {
   box-shadow: none;
   font-style: italic;
   padding-inline: 0;
+}
+
+.nutrient-link {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-decoration: underline dotted;
+}
+
+.nutrient-link:hover {
+  text-decoration: underline;
+}
+
+.nutrient-why {
+  display: block;
+  margin-block-start: 3px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  max-inline-size: 28rem;
+  overflow-wrap: anywhere;
 }
 </style>

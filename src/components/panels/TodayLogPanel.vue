@@ -12,6 +12,7 @@ const props = defineProps<{
   currentWeight: string;
   foodLog: string;
   isAnalyzing: boolean;
+  isFallingBackToLite?: boolean;
   hasResults: boolean;
   isProfileReady: boolean;
   provider: string;
@@ -63,6 +64,11 @@ function missingKeyText(provider: string) {
 
   return t("missingGeminiKeyNotice");
 }
+
+// Show the calming notice immediately when analysis starts.
+// A separate "falling back" notice appears when the 30s timeout is hit.
+const showAnalyzingNotice = computed(() => props.isAnalyzing && !props.isFallingBackToLite);
+const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBackToLite);
 </script>
 
 <template>
@@ -136,6 +142,12 @@ function missingKeyText(provider: string) {
         <p v-if="analyzeIssue" class="analyze-issue">
           {{ issueText }}
         </p>
+        <p v-if="showAnalyzingNotice" class="slow-notice">
+          {{ t("analyzeSlowNotice") }}
+        </p>
+        <p v-if="showFallbackNotice" class="slow-notice slow-notice--fallback">
+          {{ t("analyzeFallbackToLite") }}
+        </p>
       </div>
     </div>
   </BasePanel>
@@ -206,6 +218,12 @@ function missingKeyText(provider: string) {
       </p>
       <p v-else-if="analyzeIssue" class="analyze-issue">
         {{ issueText }}
+      </p>
+      <p v-if="showAnalyzingNotice" class="slow-notice">
+        {{ t("analyzeSlowNotice") }}
+      </p>
+      <p v-if="showFallbackNotice" class="slow-notice slow-notice--fallback">
+        {{ t("analyzeFallbackToLite") }}
       </p>
     </div>
   </div>
@@ -339,6 +357,22 @@ function missingKeyText(provider: string) {
   border: 1px solid #4e221d;
   box-shadow: var(--bevel-raised);
   white-space: pre-wrap;
+}
+
+.slow-notice {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  max-inline-size: 46rem;
+  display: inline-block;
+  padding: 0.35rem 0.55rem;
+  background: color-mix(in srgb, #b87a1a 12%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, #b87a1a 50%, var(--border-strong));
+  box-shadow: var(--bevel-raised);
+}
+
+.slow-notice--fallback {
+  background: color-mix(in srgb, #1a7ab8 14%, var(--surface-2));
+  border-color: color-mix(in srgb, #1a7ab8 50%, var(--border-strong));
 }
 
 @media (max-width: 640px) {
