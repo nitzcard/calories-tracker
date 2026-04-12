@@ -645,20 +645,22 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 <style scoped>
 .global-analyzing-bar {
   position: fixed;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inset-inline-end: 0;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  translate: -50% -50%;
   z-index: 9999;
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.45rem 1rem;
+  padding: 0.6rem 1.2rem;
   background: color-mix(in srgb, var(--accent, #0a6f63) 90%, black 10%);
   color: #fff;
   font-size: 0.9rem;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .global-analyzing-spinner {
