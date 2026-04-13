@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "./components/base/BasePanel.vue";
-import MetricChart from "./components/charts/MetricChart.vue";
 import AppHeader from "./components/header/AppHeader.vue";
 import JasmineThemePrompt from "./components/JasmineThemePrompt.vue";
-import ApiKeysPanel from "./components/panels/ApiKeysPanel.vue";
-import CloudSyncPanel from "./components/panels/CloudSyncPanel.vue";
-import DataTransferPanel from "./components/panels/DataTransferPanel.vue";
-import HistoryPanel from "./components/panels/HistoryPanel.vue";
-import InsightsPanel from "./components/panels/InsightsPanel.vue";
 import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
-import ProfilePanel from "./components/panels/ProfilePanel.vue";
-import TdeeSummaryPanel from "./components/panels/TdeeSummaryPanel.vue";
-import DailyDeskPanel from "./components/panels/DailyDeskPanel.vue";
 import { useDashboard } from "./app/useDashboard";
+
+const MetricChart = defineAsyncComponent(() => import("./components/charts/MetricChart.vue"));
+const ApiKeysPanel = defineAsyncComponent(() => import("./components/panels/ApiKeysPanel.vue"));
+const CloudSyncPanel = defineAsyncComponent(() => import("./components/panels/CloudSyncPanel.vue"));
+const DataTransferPanel = defineAsyncComponent(() => import("./components/panels/DataTransferPanel.vue"));
+const HistoryPanel = defineAsyncComponent(() => import("./components/panels/HistoryPanel.vue"));
+const InsightsPanel = defineAsyncComponent(() => import("./components/panels/InsightsPanel.vue"));
+const ProfilePanel = defineAsyncComponent(() => import("./components/panels/ProfilePanel.vue"));
+const TdeeSummaryPanel = defineAsyncComponent(() => import("./components/panels/TdeeSummaryPanel.vue"));
+const DailyDeskPanel = defineAsyncComponent(() => import("./components/panels/DailyDeskPanel.vue"));
 
 const dashboard = useDashboard();
 const { t } = useI18n();
@@ -55,7 +56,8 @@ const {
   aiKeys,
   dataTransferStatus,
   isAnalyzing,
-  isFallingBackToLite,
+  showModelSwitchPrompt,
+  suggestedModelLabel,
   isAutoSaving,
   isTransferringData,
   isSavingWeight,
@@ -88,12 +90,15 @@ const {
   saveHistoryWeight,
   calculateCustomTdeeWithGemini,
   analyzeCurrentDay,
+  acceptSuggestedModelSwitch,
+  dismissSuggestedModelSwitch,
   saveProfileDraft,
   saveActivityPrompt,
   saveTdeeEquation,
   saveFoodInstructions,
   saveAiKey,
-  saveFoodCorrection,
+  saveFoodCorrectionInstruction,
+  applyFoodCorrectionToCurrentEntry,
 	  exportData,
 	  importData,
     setAutoBackupAfterAnalyze,
@@ -346,7 +351,22 @@ watch(
 
     if (next === "queued") {
       showTransientToast("local", `💾 ${t("resultsQueued")}`, 5000);
+      return;
     }
+
+    if (next === "instruction-pending") {
+      showTransientToast("local", `💾 ${t("instructionSavedNeedsReanalysis")}`, 5000);
+    }
+  },
+);
+
+watch(
+  showModelSwitchPrompt,
+  (active) => {
+    if (!active) return;
+    const model = suggestedModelLabel.value;
+    if (!model) return;
+    showTransientToast("local", t("analysisSwitchSuggestionToast", { model }), 6000);
   },
 );
 
@@ -403,14 +423,24 @@ function onConstantDataToggle(event: Event) {
   writeStoredOpen(PANEL_OPEN_KEYS.constantData, constantDataOpen.value);
 }
 
-async function saveFoodCorrectionAndRefresh(
+async function saveFoodCorrectionInstructionAndRefresh(
   foodId: string,
   foodName: string,
   grams: number | null,
   calories: number | null,
   caloriesPer100g: number | null,
 ) {
-  await saveFoodCorrection(foodId, foodName, grams, calories, caloriesPer100g);
+  await saveFoodCorrectionInstruction(foodId, foodName, grams, calories, caloriesPer100g);
+}
+
+async function applyFoodCorrectionForCurrentEntry(
+  foodId: string,
+  foodName: string,
+  grams: number | null,
+  calories: number | null,
+  caloriesPer100g: number | null,
+) {
+  await applyFoodCorrectionToCurrentEntry(foodId, foodName, grams, calories, caloriesPer100g);
   correctionNoticeToken.value += 1;
 }
 
@@ -456,18 +486,13 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
     <AppHeader
       :locale="locale"
       :theme-mode="themeMode"
-      :provider="provider"
-      :provider-options="providerOptions"
       :is-saving-locale="isSavingLocale"
       :is-saving-theme="isSavingTheme"
-      :is-saving-provider="isSavingProvider"
-      :can-select-provider="hasEffectiveGeminiKey"
       :cloud-mode="cloudMode"
       :cloud-confirmed-username="cloudConfirmedUsername"
       :is-cloud-busy="isCloudSyncing"
       @locale-change="onLocaleChange"
       @theme-change="onThemeChange"
-      @provider-change="onProviderChange"
     />
 
     <p v-if="notice === 'queued'" class="notice-banner">
@@ -606,10 +631,14 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
           :current-weight="currentWeight"
           :food-log="currentFoodLog"
           :is-analyzing="isAnalyzing"
-          :is-falling-back-to-lite="isFallingBackToLite"
+          :show-model-switch-prompt="showModelSwitchPrompt"
+          :suggested-model-label="suggestedModelLabel"
           :has-results="Boolean(currentEntry?.nutritionSnapshot)"
           :is-profile-ready="isProfileReady"
           :provider="provider"
+          :provider-options="providerOptions"
+          :is-saving-provider="isSavingProvider"
+          :can-select-provider="hasEffectiveGeminiKey"
           :analyze-issue="analyzeIssue"
           :analysis-error="currentEntry?.aiError ?? null"
           :is-saving-weight="isSavingWeight"
@@ -622,6 +651,9 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
           @save-weight="saveWeightDraft"
           @save-draft="saveFoodDraft"
           @analyze="analyzeCurrentDay"
+          @accept-model-switch="acceptSuggestedModelSwitch"
+          @dismiss-model-switch="dismissSuggestedModelSwitch"
+          @provider-change="onProviderChange"
           @save-instructions="saveFoodInstructions"
         />
       </div>
@@ -635,7 +667,8 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
           :is-stale="Boolean(currentEntry?.analysisStale)"
           :status-text="statusLabel((key: string) => t(key), currentEntry?.aiStatus ?? 'idle')"
           :correction-token="correctionNoticeToken"
-          @save-correction="saveFoodCorrectionAndRefresh"
+          @save-correction="saveFoodCorrectionInstructionAndRefresh"
+          @apply-correction="applyFoodCorrectionForCurrentEntry"
         />
       </div>
 

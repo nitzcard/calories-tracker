@@ -3,17 +3,13 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { AiProviderOption, AppLocale, ThemeMode } from "../../types";
+import type { AppLocale, ThemeMode } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
   themeMode: ThemeMode;
-  provider: string;
-  providerOptions: AiProviderOption[];
   isSavingLocale: boolean;
   isSavingTheme: boolean;
-  isSavingProvider: boolean;
-  canSelectProvider: boolean;
   cloudMode: "offline" | "cloud";
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
@@ -22,12 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "locale-change": [locale: AppLocale];
   "theme-change": [themeMode: ThemeMode];
-  "provider-change": [provider: string];
 }>();
-
-const activeProvider = computed(() =>
-  props.providerOptions.find((option) => option.id === props.provider),
-);
 
 const { t } = useI18n();
 
@@ -111,23 +102,6 @@ const confirmedUserTag = computed(() => {
               <option value="cs16">{{ t("cs16") }}</option>
               <option value="steam">{{ t("steam") }}</option>
               <option value="cyberpunk-2077">{{ t("cyberpunk2077") }}</option>
-            </select>
-          </FieldControl>
-        </FormField>
-        <FormField
-          class="provider-field"
-          :label="t('provider')"
-          :helper="canSelectProvider ? activeProvider?.helper : t('providerNeedsKey')"
-        >
-          <FieldControl as="select" :is-saving="isSavingProvider">
-            <select
-              :value="provider"
-              :disabled="!canSelectProvider"
-              @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="option in providerOptions" :key="option.id" :value="option.id">
-                {{ option.label }}
-              </option>
             </select>
           </FieldControl>
         </FormField>

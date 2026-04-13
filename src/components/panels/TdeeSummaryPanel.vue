@@ -200,8 +200,10 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
 	    :title="t('tdeeSummary')"
 	    :helper="t('tdeeHelper')"
 	  >
-    <div class="tdee-explainer">
-      <strong>{{ t("tdeePartsTitle") }}</strong>
+    <details class="tdee-explainer">
+      <summary class="tdee-explainer__summary">
+        <strong>{{ t("tdeePartsTitle") }}</strong>
+      </summary>
       <div class="tdee-parts-list">
         <div v-for="part in tdeeParts" :key="part.labelKey" class="tdee-part-row">
           <div class="tdee-part-heading">
@@ -215,7 +217,7 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
         </div>
       </div>
       <small class="tdee-parts-note">{{ t("tdeePartsNote") }}</small>
-    </div>
+    </details>
 
     <div class="table-container">
       <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
@@ -448,6 +450,10 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
   padding: 8px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 72%, var(--panel));
+}
+
+.tdee-explainer__summary {
+  cursor: pointer;
 }
 
 .tdee-parts-list {

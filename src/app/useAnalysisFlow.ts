@@ -12,10 +12,40 @@ type AnalyzeGate =
       reason: "offline" | "missing-key" | "empty-food-log" | "incomplete-profile";
     };
 
-/** Abort the primary request after this many ms and retry with the lite model. */
-const SLOW_MODEL_TIMEOUT_MS = 30_000;
-/** Fallback provider used when the primary model exceeds SLOW_MODEL_TIMEOUT_MS. */
-const LITE_FALLBACK_PROVIDER = "gemini-2.5-flash-lite";
+/** After this many ms, suggest switching models (no auto-abort). */
+const SUGGEST_SWITCH_AFTER_MS = 30_000;
+
+function friendlyModelLabel(providerId: string) {
+  if (!providerId.startsWith("gemini-")) return providerId;
+  const normalized = providerId.replace(/^gemini-/, "");
+  const parts = normalized.split("-");
+  const version = parts.shift();
+  const rest = parts.join("-");
+  const suffix = rest
+    .split("-")
+    .map((p) => (p.length ? p[0].toUpperCase() + p.slice(1) : p))
+    .join(" ");
+  return `Gemini ${version} ${suffix}`.trim();
+}
+
+function suggestedProviderFor(primaryProvider: string): string | null {
+  // Main desired flow: flash latest -> lite latest.
+  if (primaryProvider === "gemini-2.5-flash-latest") {
+    return "gemini-2.5-flash-lite-latest";
+  }
+
+  // Generic Gemini: if on flash (non-lite), suggest lite-latest; if already lite, suggest flash.
+  if (primaryProvider.startsWith("gemini-")) {
+    if (primaryProvider.includes("lite")) {
+      return "gemini-2.5-flash";
+    }
+    if (primaryProvider.includes("flash")) {
+      return "gemini-2.5-flash-lite-latest";
+    }
+  }
+
+  return null;
+}
 
 export function useAnalysisFlow(args: {
   profile: Ref<Profile | null>;
@@ -26,8 +56,15 @@ export function useAnalysisFlow(args: {
   saveFoodDraft: () => Promise<void>;
 }) {
   const isAnalyzing = ref(false);
-  /** True while we have aborted the primary model and are re-running with the lite fallback. */
-  const isFallingBackToLite = ref(false);
+  const suggestedProviderId = ref<string | null>(null);
+  const showModelSwitchPrompt = ref(false);
+  const suggestedModelLabel = computed(() =>
+    suggestedProviderId.value ? friendlyModelLabel(suggestedProviderId.value) : null,
+  );
+
+  const activeController = ref<AbortController | null>(null);
+  const activeRun = ref<Promise<void> | null>(null);
+  let suggestTimer: number | null = null;
 
   function getAnalyzeGate(activeProvider: string, foodLogText: string): AnalyzeGate {
     if (!args.profile.value?.age || !args.profile.value?.height || !args.profile.value.activityPrompt.trim()) {
@@ -100,48 +137,79 @@ export function useAnalysisFlow(args: {
       return;
     }
 
-    isFallingBackToLite.value = false;
+    suggestedProviderId.value = null;
+    showModelSwitchPrompt.value = false;
     isAnalyzing.value = true;
 
-    const primaryController = new AbortController();
-    let timeoutHandle: number | undefined;
-    let didTimeOut = false;
+    const controller = new AbortController();
+    activeController.value = controller;
 
-    timeoutHandle = window.setTimeout(() => {
-      didTimeOut = true;
-      primaryController.abort();
-    }, SLOW_MODEL_TIMEOUT_MS);
+    if (suggestTimer) window.clearTimeout(suggestTimer);
+    suggestTimer = window.setTimeout(() => {
+      const suggestion = suggestedProviderFor(args.provider.value);
+      if (!suggestion) return;
+      suggestedProviderId.value = suggestion;
+      showModelSwitchPrompt.value = true;
+    }, SUGGEST_SWITCH_AFTER_MS);
 
     try {
-      // Queue and run with the selected provider; abort signal cuts it short on timeout.
+      // Queue and run with selected provider. No auto-fallback; user can opt-in after 30s.
       await queueAnalysis(args.selectedDate.value, args.provider.value);
-      await runPendingAnalysis(primaryController.signal);
-
-      // Clear timeout immediately — don't let it fire after a fast success.
-      clearTimeout(timeoutHandle);
-      timeoutHandle = undefined;
-
-      if (didTimeOut) {
-        // Primary request timed out — clean up queue and retry with the lite model.
-        isFallingBackToLite.value = true;
-        await clearQueueForDate(args.selectedDate.value);
-        await queueAnalysis(args.selectedDate.value, LITE_FALLBACK_PROVIDER);
-        await runPendingAnalysis();
-      }
+      const run = runPendingAnalysis(controller.signal);
+      activeRun.value = run;
+      await run;
 
       await args.refreshState();
     } finally {
-      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      if (suggestTimer) window.clearTimeout(suggestTimer);
+      suggestTimer = null;
       isAnalyzing.value = false;
-      isFallingBackToLite.value = false;
+      showModelSwitchPrompt.value = false;
+      suggestedProviderId.value = null;
+      activeController.value = null;
+      activeRun.value = null;
     }
+  }
+
+  async function acceptSuggestedModelSwitch() {
+    const nextProvider = suggestedProviderId.value;
+    if (!nextProvider) return;
+    const controller = activeController.value;
+    const run = activeRun.value;
+
+    showModelSwitchPrompt.value = false;
+
+    // Abort in-flight request (if any) and wait for it to settle.
+    if (controller) {
+      controller.abort();
+    }
+    if (run) {
+      try {
+        await run;
+      } catch {
+        // Ignore; we'll restart immediately.
+      }
+    }
+
+    // Clear any stuck queue items (including "processing"), then retry with suggested model.
+    await clearQueueForDate(args.selectedDate.value);
+    await queueAnalysis(args.selectedDate.value, nextProvider);
+    await runPendingAnalysis();
+    await args.refreshState();
+  }
+
+  function dismissSuggestedModelSwitch() {
+    showModelSwitchPrompt.value = false;
   }
 
   return {
     isAnalyzing,
-    isFallingBackToLite,
+    showModelSwitchPrompt,
+    suggestedModelLabel,
     analyzeIssue,
     flushPendingAnalysis,
     analyzeCurrentDay,
+    acceptSuggestedModelSwitch,
+    dismissSuggestedModelSwitch,
   };
 }

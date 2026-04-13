@@ -106,6 +106,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   <BasePanel id="historyPanel" class="history-panel" :title="t('history')" :helper="t('historyHelper')" collapsible>
     <fieldset class="history-weight-strategy" :aria-label="t('missingWeightStrategy')">
       <legend class="history-weight-strategy__legend">{{ t("missingWeightStrategy") }}</legend>
+      <div class="history-weight-strategy__helper">{{ t("missingWeightStrategyHelper") }}</div>
 
       <label class="history-weight-strategy__option">
         <input
@@ -271,22 +272,24 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("calories") }}</div>
-          <div class="v v--calories" dir="ltr">
-            <HistoryCaloriesCell
-              :value="entry.manualCalories"
-              :fallback-value="resolvedDailyCalories(entry)"
-              :is-saving="Boolean(savingCalories[entry.date])"
-              @save="emit('save-calories', entry.date, $event)"
-            />
-            <small v-if="tdeeReference != null" class="tdee-footnote" dir="ltr">
-              <span class="tdee-divider">/</span>
-              <span class="tdee-value">{{ tdeeReference }}</span>
-            </small>
+          <div class="v v--calories">
+            <div class="calories-card-inline" dir="ltr">
+              <HistoryCaloriesCell
+                :value="entry.manualCalories"
+                :fallback-value="resolvedDailyCalories(entry)"
+                :is-saving="Boolean(savingCalories[entry.date])"
+                @save="emit('save-calories', entry.date, $event)"
+              />
+              <small v-if="tdeeReference != null" class="tdee-footnote">
+                <span class="tdee-divider">/</span>
+                <span class="tdee-value">{{ tdeeReference }}</span>
+              </small>
+            </div>
           </div>
         </div>
         <div class="history-card__row">
           <div class="k">{{ t("caloriesRemainingToTarget") }}</div>
-          <div class="v numeric-pair">{{ caloriesRemainingToTarget(entry) }}</div>
+          <div class="v numeric-pair"><span dir="ltr">{{ caloriesRemainingToTarget(entry) }}</span></div>
         </div>
 	        <div class="history-card__row">
 	          <div class="k">{{ t("deficitSurplus") }}</div>
@@ -337,6 +340,13 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   background: var(--panel);
   color: var(--text-muted);
   font-weight: 700;
+}
+
+.history-weight-strategy__helper {
+  flex: 1 1 100%;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.3;
 }
 
 .history-weight-strategy__option {
@@ -475,8 +485,9 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
     text-align: end;
   }
 
-  .v.numeric-pair {
-    text-align: start;
+  .history-cards .numeric-pair {
+    direction: inherit;
+    text-align: end;
   }
 
   .v--calories {
@@ -485,6 +496,15 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
     justify-content: flex-end;
     gap: 4px;
     flex-wrap: nowrap;
+    unicode-bidi: isolate;
+  }
+
+  .calories-card-inline {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
     unicode-bidi: isolate;
   }
 

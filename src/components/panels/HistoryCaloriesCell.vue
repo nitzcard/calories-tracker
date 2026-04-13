@@ -46,6 +46,7 @@ function emitSave() {
     <input
       type="number"
       inputmode="decimal"
+      dir="ltr"
       :value="draft"
       :placeholder="placeholder"
       @input="draft = ($event.target as HTMLInputElement).value"

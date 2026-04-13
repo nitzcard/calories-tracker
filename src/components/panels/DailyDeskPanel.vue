@@ -4,6 +4,7 @@ import BasePanel from "../base/BasePanel.vue";
 import FoodRulesPanel from "./FoodRulesPanel.vue";
 import TodayLogPanel from "./TodayLogPanel.vue";
 import type { AppLocale } from "../../types";
+import type { AiProviderOption } from "../../types";
 
 defineProps<{
   locale: AppLocale;
@@ -11,10 +12,14 @@ defineProps<{
   currentWeight: string;
   foodLog: string;
   isAnalyzing: boolean;
-  isFallingBackToLite?: boolean;
+  showModelSwitchPrompt?: boolean;
+  suggestedModelLabel?: string | null;
   hasResults: boolean;
   isProfileReady: boolean;
   provider: string;
+  providerOptions: AiProviderOption[];
+  isSavingProvider: boolean;
+  canSelectProvider: boolean;
   analyzeIssue: string;
   analysisError?: string | null;
   isSavingWeight: boolean;
@@ -30,6 +35,9 @@ const emit = defineEmits<{
   "save-weight": [];
   "save-draft": [];
   analyze: [];
+  "provider-change": [provider: string];
+  "accept-model-switch": [];
+  "dismiss-model-switch": [];
   "save-instructions": [value: string];
 }>();
 
@@ -48,10 +56,14 @@ const { t } = useI18n();
           :current-weight="currentWeight"
           :food-log="foodLog"
           :is-analyzing="isAnalyzing"
-          :is-falling-back-to-lite="isFallingBackToLite"
+          :show-model-switch-prompt="showModelSwitchPrompt"
+          :suggested-model-label="suggestedModelLabel"
           :has-results="hasResults"
           :is-profile-ready="isProfileReady"
           :provider="provider"
+          :provider-options="providerOptions"
+          :is-saving-provider="isSavingProvider"
+          :can-select-provider="canSelectProvider"
           :analyze-issue="analyzeIssue"
           :analysis-error="analysisError"
           :is-saving-weight="isSavingWeight"
@@ -61,7 +73,10 @@ const { t } = useI18n();
           @update:food-log="emit('update:foodLog', $event)"
           @save-weight="emit('save-weight')"
           @save-draft="emit('save-draft')"
+          @provider-change="emit('provider-change', $event)"
           @analyze="emit('analyze')"
+          @accept-model-switch="emit('accept-model-switch')"
+          @dismiss-model-switch="emit('dismiss-model-switch')"
         />
       </div>
       <div class="subpanel">

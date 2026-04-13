@@ -27,8 +27,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     cloudSyncHelper:
       "Two-way cloud sync with username + password login in this browser. Data is merged on both sides based on last-updated time per day.",
     cloudMode: "Mode",
-    cloudModeOffline: "Offline only",
-    cloudModeCloud: "Cloud",
+    cloudModeHelper:
+      "🏠 Local only keeps data on this device. ☁️ Synced saves online and keeps devices in sync.",
+    cloudModeOffline: "🏠 Only offline",
+    cloudModeCloud: "☁️ Synced - saved online",
     cloudUsername: "Username",
     cloudSyncNow: "Sync now",
     cloudLogin: "Login",
@@ -110,15 +112,25 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     jumpToResults: "Jump to results",
     analysisInProgressTitle: "Analysis in progress",
     analysisFallbackTitle: "Retrying with a lighter model",
+    analysisFallbackWithModelTitle: "Retrying with {model}",
+    analysisSwitchSuggestionTitle: "Still working",
+    analysisSwitchSuggestionHelper:
+      "This is taking longer than usual. Switch to {model} to try a faster run.",
+    analysisSwitchSuggestionAccept: "Switch to {model}",
+    analysisSwitchSuggestionDismiss: "Keep waiting",
+    analysisSwitchSuggestionToast: "Suggestion: switch to {model}",
     analyzeHelper:
       "Draft text saves automatically. Use the button only when you want a fresh analysis.",
     analyzeSlowNotice:
       "Your food log is being processed now. This usually takes about 10-30 seconds.",
     analyzeFallbackToLite:
       "This is taking a bit longer than usual, so the app is retrying automatically with a lighter model.",
+    analysisFallbackWithModelHelper:
+      "This is taking longer than usual, so the app is retrying automatically with {model}.",
     resultsUpdated: "Results updated.",
     resultsUpdatedForDate: "Analysis updated for this date.",
     resultsQueued: "Saved locally. Analysis will run automatically when the app can reach AI.",
+    instructionSavedNeedsReanalysis: "Saved for future. Re-analyze to apply to this day.",
     missingGeminiKeyNotice:
       "Gemini key is not loaded in the running app. Restart `npm run dev` after editing `.env`.",
     missingProviderKeyNotice:
@@ -208,8 +220,14 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     protein: "Protein",
     carbs: "Carbs",
     fat: "Fat",
-    saveFix: "Save fix as instruction",
+    saveFix: "Save for future",
     saveFixAndReanalyze: "Fix + re-run",
+    applyFixTodayOnly: "Apply (today only)",
+    saveFixShort: "Save",
+    applyFixTodayOnlyShort: "Apply",
+    saveFixTable: "Save for future",
+    applyFixTodayOnlyTable: "Apply today",
+    kcalPer100gHeader: "kcal/100g",
     estimatedValue: "Estimated",
     kcalPer100g: "kcal/100g",
     unitKcal: "kcal",
@@ -221,7 +239,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     unitMcg: "mcg",
     usuallyDerived: "auto",
     correctionHelper:
-      "Edit grams or calories for a parsed food, then save the correction into food instructions.",
+      "Apply updates this day locally. Save for future updates food instructions only and marks this result for re-analysis.",
     unmatchedItems: "Unmatched items",
     tdeeSummary: "TDEE summary",
     tdeeHelper:
@@ -340,6 +358,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     goalModeLeanMass: "Lean bulk",
     goalModeMaingain: "Maintenance",
     missingWeightStrategy: "Missing weight strategy",
+    missingWeightStrategyHelper:
+      "Used when a specific day has no logged weight. Previous day is simpler; deduced weight interpolates between nearby logged weights when possible.",
     weightStrategyPreviousDay: "Previous day",
     weightStrategyDeducedWeight: "Deduced weight",
     bodyFat: "Body fat %",
@@ -358,7 +378,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     localeAuto: "Auto-detected",
     queueStatus: "AI status",
     aiReady: "AI ready",
-    provider: "AI model",
+    provider: "AI Model for Analyze",
     syncNow: "Analyze saved entries",
     analyzingNow: "Analyzing...",
     nutritionLoadingHelper:
@@ -366,9 +386,9 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     needsManualReview: "Needs manual review",
     aiNotes: "Assumptions and warnings",
     aiError: "AI analysis failed",
-    staleNutritionTitle: "Saved text changed since the last analysis",
+    staleNutritionTitle: "Current result needs refresh",
     staleNutritionHelper:
-      "The nutrition result is no longer current. Save only keeps your food text locally. Run analysis again when you want fresh nutrition totals.",
+      "Food text or saved instructions changed after this result was made. Run analysis again when you want AI to rebuild this day.",
     autoSaved: "Changes save automatically when you leave the field.",
     completeProfileFirst: "Complete the required profile fields above before running analysis.",
     activityPlaceholder:
@@ -406,8 +426,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     cloudSyncHelper:
       "סנכרון ענן דו-כיווני עם התחברות של שם משתמש + סיסמה בתוך הדפדפן. הנתונים מתמזגים לפי זמן עדכון לכל יום.",
     cloudMode: "מצב",
-    cloudModeOffline: "אופליין בלבד",
-    cloudModeCloud: "ענן",
+    cloudModeHelper:
+      "🏠 מקומי בלבד שומר רק במכשיר הזה. ☁️ מסונכרן שומר אונליין ומסנכרן בין מכשירים.",
+    cloudModeOffline: "🏠 מקומי בלבד",
+    cloudModeCloud: "☁️ מסונכרן - נשמר אונליין",
     cloudUsername: "שם משתמש",
     cloudSyncNow: "סנכרן עכשיו",
     cloudLogin: "התחבר",
@@ -487,14 +509,24 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     jumpToResults: "קפוץ לתוצאות",
     analysisInProgressTitle: "הניתוח בתהליך",
     analysisFallbackTitle: "מנסה שוב עם מודל קל יותר",
+    analysisFallbackWithModelTitle: "מנסה שוב עם {model}",
+    analysisSwitchSuggestionTitle: "עדיין עובד",
+    analysisSwitchSuggestionHelper:
+      "זה לוקח יותר זמן מהרגיל. אפשר לעבור ל-{model} כדי לנסות ניתוח מהיר יותר.",
+    analysisSwitchSuggestionAccept: "לעבור ל-{model}",
+    analysisSwitchSuggestionDismiss: "להמשיך לחכות",
+    analysisSwitchSuggestionToast: "הצעה: לעבור ל-{model}",
     analyzeHelper: "טיוטת הטקסט נשמרת אוטומטית. השתמש בכפתור רק כשרוצים ניתוח חדש.",
     analyzeSlowNotice:
       "יומן האוכל שלך נמצא עכשיו בעיבוד. בדרך כלל זה לוקח בערך 10-30 שניות.",
     analyzeFallbackToLite:
       "זה לוקח קצת יותר זמן מהרגיל, ולכן האפליקציה מנסה שוב אוטומטית עם מודל קל יותר.",
+    analysisFallbackWithModelHelper:
+      "זה לוקח יותר זמן מהרגיל, ולכן האפליקציה מנסה שוב אוטומטית עם {model}.",
     resultsUpdated: "התוצאות עודכנו.",
     resultsUpdatedForDate: "הניתוח עודכן עבור התאריך הזה.",
     resultsQueued: "נשמר מקומית. הניתוח ירוץ אוטומטית כשהאפליקציה תוכל להגיע ל-AI.",
+    instructionSavedNeedsReanalysis: "נשמר להבא. כדי להחיל על היום הזה, מריצים ניתוח מחדש.",
     missingGeminiKeyNotice:
       "מפתח Gemini לא נטען באפליקציה שרצה כרגע. צריך להפעיל מחדש את `npm run dev` אחרי עדכון `.env`.",
     missingProviderKeyNotice:
@@ -584,8 +616,14 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     protein: "חלבון",
     carbs: "פחמימות",
     fat: "שומן",
-    saveFix: "שמור תיקון כהנחיה",
+    saveFix: "שמור להבא",
     saveFixAndReanalyze: "תקן + נתח",
+    applyFixTodayOnly: "החל (רק היום)",
+    saveFixShort: "שמור",
+    applyFixTodayOnlyShort: "החל",
+    saveFixTable: "שמור להבא",
+    applyFixTodayOnlyTable: "החל היום",
+    kcalPer100gHeader: "kcal/100g",
     estimatedValue: "מוערך",
     kcalPer100g: "קלוריות ל-100 גרם",
     unitKcal: "קלוריות",
@@ -597,7 +635,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     unitMcg: "מק\"ג",
     usuallyDerived: "אוטו",
     correctionHelper:
-      "אפשר לערוך גרמים או קלוריות לכל מזון שפוענח, ואז לשמור את התיקון בתוך הוראות המזון.",
+      "החל מחשב מחדש מקומית ליום הזה. שמירה להבא מעדכנת רק את הוראות המזון ומסמנת שכדאי להריץ ניתוח מחדש.",
     unmatchedItems: "פריטים שלא הותאמו",
     tdeeSummary: "סיכום TDEE",
     tdeeHelper: "TDEE נצפה מחושב לפי צריכה ומגמת משקל. ממוצע נוסחאות הוא נקודת ייחוס נפרדת.",
@@ -709,6 +747,8 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     goalModeLeanMass: "מסה קלה",
     goalModeMaingain: "תחזוקה",
     missingWeightStrategy: "אסטרטגיית משקל חסר",
+    missingWeightStrategyHelper:
+      "משמש כשאין משקל רשום ליום מסוים. יום קודם פשוט יותר; משקל מוסק מנסה לאמוד לפי משקלים סמוכים (כולל אינטרפולציה כשאפשר).",
     weightStrategyPreviousDay: "יום קודם",
     weightStrategyDeducedWeight: "משקל מוסק",
     targetCaloriesLine: "יעד קלורי",
@@ -729,7 +769,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     localeAuto: "זוהה אוטומטית",
     queueStatus: "סטטוס AI",
     aiReady: "AI מוכן",
-    provider: "מודל AI",
+    provider: "מודל AI לניתוח",
     syncNow: "נתח רשומות שמורות",
     analyzingNow: "מנתח...",
     nutritionLoadingHelper:
@@ -737,9 +777,9 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     needsManualReview: "דורש בדיקה ידנית",
     aiNotes: "הנחות ואזהרות",
     aiError: "ניתוח AI נכשל",
-    staleNutritionTitle: "הטקסט השמור השתנה מאז הניתוח האחרון",
+    staleNutritionTitle: "התוצאה הנוכחית צריכה רענון",
     staleNutritionHelper:
-      "התוצאה התזונתית כבר לא עדכנית. שמירה בלבד שומרת את טקסט האוכל מקומית. אפשר להריץ ניתוח שוב כשרוצים תוצאה מעודכנת.",
+      "טקסט האוכל או הוראות המזון השתנו אחרי שהתוצאה הזו נוצרה. כשצריך תוצאה מעודכנת ליום הזה, מריצים ניתוח מחדש.",
     autoSaved: "השינויים נשמרים אוטומטית כשעוזבים את השדה.",
     completeProfileFirst: "צריך להשלים למעלה את שדות הפרופיל הנדרשים לפני שמריצים ניתוח.",
     activityPlaceholder:

@@ -32,6 +32,13 @@ const { t } = useI18n();
 const isOnline = ref(typeof navigator === "undefined" ? true : navigator.onLine);
 const draftUsername = ref(props.cloudUsername);
 const draftPassword = ref("");
+const cloudModeSelectWidth = computed(() => {
+  const offlineLabel = t("cloudModeOffline");
+  const cloudLabel = t("cloudModeCloud");
+  const longest = Math.max(offlineLabel.trim().length, cloudLabel.trim().length);
+  const widthCh = Math.min(70, Math.max(36, longest + 10));
+  return `${widthCh}ch`;
+});
 let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let latestProfileToSave: Profile | null = null;
 const PROFILE_SAVE_DEBOUNCE_MS = 2000;
@@ -157,7 +164,12 @@ function onSubmit() {
 <template>
   <BasePanel :title="t('cloudSyncTitle')" :helper="t('cloudSyncHelper')">
     <div class="cloud-controls">
-      <FormField :label="t('cloudMode')">
+      <FormField
+        class="cloud-mode-field"
+        :label="t('cloudMode')"
+        :helper="t('cloudModeHelper')"
+        :style="{ '--cloud-mode-select-width': cloudModeSelectWidth }"
+      >
         <select
           :value="cloudMode"
           @change="emit('update:cloudMode', ($event.target as HTMLSelectElement).value as 'offline' | 'cloud')"
@@ -271,6 +283,11 @@ function onSubmit() {
   display: grid;
   gap: 8px;
   margin-block-start: 10px;
+}
+
+.cloud-mode-field {
+  inline-size: min(100%, var(--cloud-mode-select-width, 30rem));
+  max-inline-size: 100%;
 }
 
 .cloud-actions {

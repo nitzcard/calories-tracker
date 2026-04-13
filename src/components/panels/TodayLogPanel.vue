@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { AppLocale } from "../../types";
+import type { AiProviderOption, AppLocale } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -12,10 +12,14 @@ const props = defineProps<{
   currentWeight: string;
   foodLog: string;
   isAnalyzing: boolean;
-  isFallingBackToLite?: boolean;
+  showModelSwitchPrompt?: boolean;
+  suggestedModelLabel?: string | null;
   hasResults: boolean;
   isProfileReady: boolean;
   provider: string;
+  providerOptions: AiProviderOption[];
+  isSavingProvider: boolean;
+  canSelectProvider: boolean;
   analyzeIssue: string;
   analysisError?: string | null;
   isSavingWeight: boolean;
@@ -32,6 +36,9 @@ const emit = defineEmits<{
   "save-weight": [];
   "save-draft": [];
   analyze: [];
+  "provider-change": [provider: string];
+  "accept-model-switch": [];
+  "dismiss-model-switch": [];
 }>();
 
 const issueText = computed(() => {
@@ -65,10 +72,21 @@ function missingKeyText(provider: string) {
   return t("missingGeminiKeyNotice");
 }
 
-// Show the calming notice immediately when analysis starts.
-// A separate "falling back" notice appears when the 30s timeout is hit.
-const showAnalyzingNotice = computed(() => props.isAnalyzing && !props.isFallingBackToLite);
-const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBackToLite);
+const activeProvider = computed(() =>
+  props.providerOptions.find((option) => option.id === props.provider),
+);
+
+const providerSelectWidth = computed(() => {
+  const longest = Math.max(
+    0,
+    ...props.providerOptions.map((option) => (option.label ?? "").trim().length),
+  );
+  // `ch` sizing: keep within reasonable bounds, add padding for caret/spacing.
+  const widthCh = Math.min(72, Math.max(40, longest + 12));
+  return `${widthCh}ch`;
+});
+
+const showAnalyzingNotice = computed(() => props.isAnalyzing);
 </script>
 
 <template>
@@ -126,6 +144,25 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
       </FormField>
 
       <div class="actions">
+        <FormField
+          class="provider-field"
+          :label="t('provider')"
+          :helper="canSelectProvider ? activeProvider?.helper : t('providerNeedsKey')"
+          :style="{ '--provider-select-width': providerSelectWidth }"
+        >
+          <FieldControl as="select" :is-saving="isSavingProvider">
+            <select
+              :value="provider"
+              :disabled="!canSelectProvider"
+              @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="option in providerOptions" :key="option.id" :value="option.id">
+                {{ option.label }}
+              </option>
+            </select>
+          </FieldControl>
+        </FormField>
+
         <p class="helper-text">{{ t("analyzeHelper") }}</p>
         <div class="form-row">
           <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
@@ -149,11 +186,18 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
             <p>{{ t("analyzeSlowNotice") }}</p>
           </div>
         </div>
-        <div v-if="showFallbackNotice" class="analysis-notice analysis-notice--fallback" role="status" aria-live="polite">
-          <span class="analysis-notice__spinner" aria-hidden="true"></span>
-          <div class="analysis-notice__copy">
-            <strong>{{ t("analysisFallbackTitle") }}</strong>
-            <p>{{ t("analyzeFallbackToLite") }}</p>
+        <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="analysis-suggestion" role="status" aria-live="polite">
+          <div class="analysis-suggestion__copy">
+            <strong>{{ t("analysisSwitchSuggestionTitle") }}</strong>
+            <p>{{ t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel }) }}</p>
+          </div>
+          <div class="analysis-suggestion__actions">
+            <button class="secondary-action" type="button" @click="emit('accept-model-switch')">
+              {{ t("analysisSwitchSuggestionAccept", { model: suggestedModelLabel }) }}
+            </button>
+            <button class="secondary-action secondary-action--subtle" type="button" @click="emit('dismiss-model-switch')">
+              {{ t("analysisSwitchSuggestionDismiss") }}
+            </button>
           </div>
         </div>
       </div>
@@ -208,6 +252,25 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
     </FormField>
 
     <div class="actions">
+      <FormField
+        class="provider-field"
+        :label="t('provider')"
+        :helper="canSelectProvider ? activeProvider?.helper : t('providerNeedsKey')"
+        :style="{ '--provider-select-width': providerSelectWidth }"
+      >
+        <FieldControl as="select" :is-saving="isSavingProvider">
+          <select
+            :value="provider"
+            :disabled="!canSelectProvider"
+            @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
+          >
+            <option v-for="option in providerOptions" :key="option.id" :value="option.id">
+              {{ option.label }}
+            </option>
+          </select>
+        </FieldControl>
+      </FormField>
+
       <p class="helper-text">{{ t("analyzeHelper") }}</p>
       <div class="form-row">
         <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
@@ -234,11 +297,18 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
           <p>{{ t("analyzeSlowNotice") }}</p>
         </div>
       </div>
-      <div v-if="showFallbackNotice" class="analysis-notice analysis-notice--fallback" role="status" aria-live="polite">
-        <span class="analysis-notice__spinner" aria-hidden="true"></span>
-        <div class="analysis-notice__copy">
-          <strong>{{ t("analysisFallbackTitle") }}</strong>
-          <p>{{ t("analyzeFallbackToLite") }}</p>
+      <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="analysis-suggestion" role="status" aria-live="polite">
+        <div class="analysis-suggestion__copy">
+          <strong>{{ t("analysisSwitchSuggestionTitle") }}</strong>
+          <p>{{ t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel }) }}</p>
+        </div>
+        <div class="analysis-suggestion__actions">
+          <button class="secondary-action" type="button" @click="emit('accept-model-switch')">
+            {{ t("analysisSwitchSuggestionAccept", { model: suggestedModelLabel }) }}
+          </button>
+          <button class="secondary-action secondary-action--subtle" type="button" @click="emit('dismiss-model-switch')">
+            {{ t("analysisSwitchSuggestionDismiss") }}
+          </button>
         </div>
       </div>
     </div>
@@ -283,6 +353,12 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
   display: grid;
   gap: var(--group-gap);
 }
+
+.provider-field {
+  inline-size: min(100%, var(--provider-select-width, 28rem));
+  max-inline-size: 100%;
+}
+
 .unit-field {
   display: inline-flex;
   gap: var(--field-gap);
@@ -402,6 +478,38 @@ const showFallbackNotice = computed(() => props.isAnalyzing && props.isFallingBa
       color-mix(in srgb, var(--surface-1) 86%, var(--accent) 14%) 0%,
       color-mix(in srgb, var(--surface-2) 92%, var(--accent) 8%) 100%
     );
+}
+
+.analysis-suggestion {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  box-shadow: var(--bevel-sunken);
+}
+
+.analysis-suggestion__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.analysis-suggestion__copy p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.analysis-suggestion__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.analysis-suggestion__actions .secondary-action--subtle {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 .analysis-notice__spinner {

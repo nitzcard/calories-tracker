@@ -36,8 +36,6 @@ import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
 import { applyTheme, detectThemeMode } from "../theme";
 import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation, ThemeMode } from "../types";
-import { createUserBlob, fetchUserBlob, upsertUserBlob } from "../cloud/user-blob";
-import { isSupabaseConfigured } from "../cloud/supabase";
 import {
   decryptJsonWithPassphrase,
   encryptJsonWithPassphrase,
@@ -85,10 +83,26 @@ export function useDashboard() {
   const cloudLastSyncedAt = ref("");
   const cloudError = ref("");
   const isCalculatingCustomTdee = ref(false);
-  const supabaseConfigured = computed(() => isSupabaseConfigured());
+  // Avoid pulling Supabase SDK into initial bundle; cloud module loads lazily on demand.
+  const supabaseConfigured = computed(() =>
+    Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
+  );
   const cloudIsSyncing = ref(false);
   let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
   let cloudPushPending = false;
+
+  let cachedCloudBlobModule:
+    | Promise<{
+        createUserBlob: (username: string, raw: unknown) => Promise<any>;
+        fetchUserBlob: (username: string) => Promise<any>;
+        upsertUserBlob: (username: string, raw: unknown) => Promise<any>;
+      }>
+    | null = null;
+
+  function getCloudBlobModule() {
+    cachedCloudBlobModule ??= import("../cloud/user-blob");
+    return cachedCloudBlobModule;
+  }
 
   function normalizeUsername(value: string) {
     return value.trim().toLowerCase();
@@ -321,8 +335,17 @@ export function useDashboard() {
   }
   const weightPoints = computed(() =>
     displayEntries.value
-      .filter((entry) => entry.weight !== null)
-      .map((entry) => ({ x: chartDayTimestamp(entry.date), y: entry.weight })),
+      .map((entry) => {
+        const effective =
+          entry.weight ??
+          deducedWeightFromEntries(
+            displayEntries.value,
+            entry.date,
+            profile.value?.weightMissingStrategy ?? "previousDay",
+          );
+        return { x: chartDayTimestamp(entry.date), y: effective };
+      })
+      .filter((point) => point.y !== null && point.y !== undefined),
   );
   const caloriePoints = computed(() =>
     displayEntries.value
@@ -581,10 +604,7 @@ export function useDashboard() {
   const corrections = useFoodCorrectionState({
     profile,
     currentEntry,
-    provider,
-    selectedDate,
     refreshState,
-    flushPendingAnalysis: analysis.flushPendingAnalysis,
     setNotice: (value) => {
       notice.value = value;
     },
@@ -761,6 +781,7 @@ export function useDashboard() {
       return;
     }
 
+    const { fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
     const remote = await fetchUserBlob(username);
     if (!remote.ok || !remote.data?.raw) {
       return;
@@ -824,6 +845,7 @@ export function useDashboard() {
     cloudStatus.value = "idle";
     cloudError.value = "";
     try {
+      const { createUserBlob, fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
       // Ensure the current UI draft is persisted before snapshotting local state for the merge.
       if (isCurrentFoodLogDirty.value) {
         await saveFoodDraft();
@@ -962,6 +984,7 @@ export function useDashboard() {
     }
 
     try {
+      const { fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
       cloudPushPending = false;
       const normalized = normalizeUsername(cloudUsername.value);
       const secret = getCloudSecret(normalized);
@@ -1227,7 +1250,8 @@ export function useDashboard() {
     providerOptions,
     aiKeys,
     isAnalyzing: analysis.isAnalyzing,
-    isFallingBackToLite: analysis.isFallingBackToLite,
+    showModelSwitchPrompt: analysis.showModelSwitchPrompt,
+    suggestedModelLabel: analysis.suggestedModelLabel,
     isAutoSaving: autoSave.isAutoSaving,
     isSavingWeight: autoSave.isSavingWeight,
     isSavingFoodLog: autoSave.isSavingFoodLog,
@@ -1274,19 +1298,31 @@ export function useDashboard() {
     saveHistoryWeight,
     calculateCustomTdeeWithGemini,
     analyzeCurrentDay,
+    acceptSuggestedModelSwitch: analysis.acceptSuggestedModelSwitch,
+    dismissSuggestedModelSwitch: analysis.dismissSuggestedModelSwitch,
     saveProfileDraft,
     saveActivityPrompt,
     saveTdeeEquation,
     saveFoodInstructions,
     saveAiKey,
-    saveFoodCorrection: async (
+    saveFoodCorrectionInstruction: async (
       foodId: string,
       foodName: string,
       grams: number | null,
       calories: number | null,
       caloriesPer100g: number | null,
     ) => {
-      await corrections.saveFoodCorrection(foodId, foodName, grams, calories, caloriesPer100g);
+      await corrections.saveFoodCorrectionInstruction(foodId, foodName, grams, calories, caloriesPer100g);
+      scheduleCloudPush("nutrition.correction");
+    },
+    applyFoodCorrectionToCurrentEntry: async (
+      foodId: string,
+      foodName: string,
+      grams: number | null,
+      calories: number | null,
+      caloriesPer100g: number | null,
+    ) => {
+      await corrections.applyFoodCorrectionToCurrentEntry(foodId, foodName, grams, calories, caloriesPer100g);
       scheduleCloudPush("nutrition.correction");
     },
     exportData: dataTransfer.exportData,

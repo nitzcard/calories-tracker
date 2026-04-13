@@ -22,6 +22,13 @@ const emit = defineEmits<{
     calories: number | null,
     caloriesPer100g: number | null,
   ];
+  "apply-correction": [
+    foodId: string,
+    foodName: string,
+    grams: number | null,
+    calories: number | null,
+    caloriesPer100g: number | null,
+  ];
 }>();
 
 const editableMeals = ref<MealBreakdownItem[]>([]);
@@ -100,6 +107,17 @@ function updateFood(
 function emitSaveCorrection(food: FoodBreakdownItem) {
   emit(
     "save-correction",
+    food.id,
+    food.name,
+    food.grams ?? null,
+    food.calories ?? null,
+    food.caloriesPer100g ?? null,
+  );
+}
+
+function emitApplyCorrection(food: FoodBreakdownItem) {
+  emit(
+    "apply-correction",
     food.id,
     food.name,
     food.grams ?? null,
@@ -745,7 +763,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <th>{{ t("amount") }}</th>
                   <th>{{ t("grams") }}</th>
                   <th>{{ t("calories") }}</th>
-                  <th>{{ t("kcalPer100g") }}</th>
+                  <th dir="ltr">{{ t("kcalPer100gHeader") }}</th>
                   <th><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</th>
                   <th><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</th>
                   <th><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</th>
@@ -805,9 +823,22 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <td>{{ food.fat ?? "-" }}</td>
                   <td>{{ food.fiber ?? "-" }}</td>
                   <td class="action-cell">
-                    <button class="secondary-action" @click="emitSaveCorrection(food)">
-                      {{ t("saveFixAndReanalyze") }}
-                    </button>
+                    <div class="action-buttons action-buttons--table">
+                      <button
+                        class="secondary-action secondary-action--subtle"
+                        :title="t('applyFixTodayOnly')"
+                        @click="emitApplyCorrection(food)"
+                      >
+                        {{ t("applyFixTodayOnlyTable") }}
+                      </button>
+                      <button
+                        class="secondary-action"
+                        :title="t('saveFix')"
+                        @click="emitSaveCorrection(food)"
+                      >
+                        {{ t("saveFixTable") }}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -894,9 +925,14 @@ const proteinPerLeanBodyWeight = computed(() => {
                 </div>
 
                 <div class="food-card__actions">
-                  <button class="secondary-action" @click="emitSaveCorrection(food)">
-                    {{ t("saveFixAndReanalyze") }}
-                  </button>
+                  <div class="action-buttons action-buttons--cards">
+                    <button class="secondary-action secondary-action--subtle" @click="emitApplyCorrection(food)">
+                      {{ t("applyFixTodayOnly") }}
+                    </button>
+                    <button class="secondary-action" @click="emitSaveCorrection(food)">
+                      {{ t("saveFix") }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1307,6 +1343,8 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .meal-table {
   min-inline-size: 920px;
+  inline-size: 100%;
+  table-layout: fixed;
 }
 
 .meal-cards {
@@ -1314,7 +1352,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .meal-table th {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  font-size: 0.9rem;
+  vertical-align: bottom;
 }
 
 .meal-table td {
@@ -1360,14 +1402,44 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .action-cell {
-  inline-size: 1%;
-  white-space: nowrap;
+  inline-size: 7.25rem;
+  min-inline-size: 7.25rem;
+  white-space: normal;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.action-buttons--table {
+  grid-template-columns: 1fr;
+}
+
+.action-buttons .secondary-action {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .action-cell .secondary-action {
   background: #87613a;
   color: #fff8ef;
   border-color: #53371a;
+}
+
+.action-cell .secondary-action--subtle,
+.food-card__actions .secondary-action--subtle {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+@media (max-width: 420px) {
+  .action-buttons--cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 960px) {
@@ -1471,7 +1543,6 @@ const proteinPerLeanBodyWeight = computed(() => {
   }
 
   .food-card__actions {
-    display: flex;
     justify-content: flex-end;
   }
 
