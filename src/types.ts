@@ -258,8 +258,12 @@ export interface NutritionInsights {
   macros: MacroInsightStat[];
   averageProteinPerKg7d: number | null;
   averageProteinPerKg30d: number | null;
+  weightAvgChangeKgPerDay7d: number | null;
+  weightAvgChangeKgPerDay30d: number | null;
   averageCaloriesVsTdee7d: number | null;
   calorieConsistency7d: number | null;
+  averageMealCalories7d: number | null;
+  averageMealCalories30d: number | null;
   topFoods30d: TopFoodInsightItem[];
 }
 

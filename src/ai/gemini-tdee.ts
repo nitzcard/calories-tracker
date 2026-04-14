@@ -219,6 +219,11 @@ async function fetchWithRetry(url: string, init: RequestInit) {
 
 async function readGeminiErrorMessage(response: Response) {
   try {
+    if (response.status === 503 || response.status === 429) {
+      const reason = response.status === 503 ? "under high demand" : "rate limited";
+      return `Gemini is ${reason} (${response.status}).`;
+    }
+
     const text = await response.text();
     if (!text) return null;
 

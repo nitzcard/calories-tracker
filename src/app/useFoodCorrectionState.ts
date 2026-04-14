@@ -9,10 +9,27 @@ export function useFoodCorrectionState(args: {
   refreshState: () => Promise<void>;
   setNotice: (value: string) => void;
 }) {
+  function formatCaloriesPer100(value: number) {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+  }
+
   function buildInstructionLine(foodName: string, caloriesPer100g: number) {
+    const calories = formatCaloriesPer100(caloriesPer100g);
     return args.profile.value?.locale === "he"
-      ? `${foodName}: השתמש ${caloriesPer100g} קלוריות ל-100 גרם`
-      : `${foodName}: use ${caloriesPer100g} kcal per 100g`;
+      ? `${foodName}: ${calories} קלוריות ל-100גרם`
+      : `${foodName}: ${calories} calories for 100gr`;
+  }
+
+  function foodInstructionKey(line: string) {
+    return line.split(":")[0]?.trim().toLowerCase() ?? "";
+  }
+
+  function mergeAutomaticInstructions(currentInstructions: string, line: string) {
+    const normalized = currentInstructions.replace(/\r\n/g, "\n").trimEnd();
+    const lines = normalized ? normalized.split("\n") : [];
+    const filtered = lines.filter((item) => item.trim() && foodInstructionKey(item) !== foodInstructionKey(line));
+    return [...filtered, line].join("\n");
   }
 
   async function saveFoodCorrectionInstruction(
@@ -22,35 +39,71 @@ export function useFoodCorrectionState(args: {
     calories: number | null,
     caloriesPer100g: number | null,
   ) {
+    await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, true);
+  }
+
+  async function saveFoodCorrectionInstructionOnly(
+    foodId: string,
+    foodName: string,
+    grams: number | null,
+    calories: number | null,
+    caloriesPer100g: number | null,
+  ) {
+    await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, false);
+  }
+
+  async function saveFoodCorrectionInstructionInternal(
+    foodId: string,
+    foodName: string,
+    grams: number | null,
+    calories: number | null,
+    caloriesPer100g: number | null,
+    markStale: boolean,
+  ) {
     if (!args.profile.value || !args.currentEntry.value?.nutritionSnapshot) return;
 
     const snapshot = args.currentEntry.value.nutritionSnapshot;
     const previousFood = snapshot.foods.find((food) => food.id === foodId);
     const resolved = resolveFoodCorrection(previousFood, grams, calories, caloriesPer100g);
-    if (!resolved) {
+
+    // Allow saving instructions even if we can't fully resolve grams+calories.
+    // We only need a per-gram kcal ratio, which can be derived from per-100g or from an existing snapshot.
+    const ratioFromPer100 =
+      caloriesPer100g != null && Number.isFinite(caloriesPer100g) ? caloriesPer100g / 100 : null;
+    const ratioFromPrevPer100 =
+      previousFood?.caloriesPer100g != null && Number.isFinite(previousFood.caloriesPer100g)
+        ? previousFood.caloriesPer100g / 100
+        : null;
+    const ratioFromInputs =
+      grams != null && calories != null && grams > 0 && Number.isFinite(grams) && Number.isFinite(calories)
+        ? calories / grams
+        : null;
+    const ratioFromPrev =
+      previousFood?.grams && previousFood?.calories ? previousFood.calories / previousFood.grams : null;
+    const ratioFromResolved =
+      resolved?.grams && resolved.calories ? resolved.calories / resolved.grams : null;
+
+    const caloriesPerGram =
+      ratioFromPer100 ?? ratioFromInputs ?? ratioFromResolved ?? ratioFromPrevPer100 ?? ratioFromPrev;
+    if (caloriesPerGram == null || !Number.isFinite(caloriesPerGram) || caloriesPerGram <= 0) {
       return;
     }
 
-    const per100g = Math.round((resolved.calories / resolved.grams) * 100);
-    const line = buildInstructionLine(foodName, per100g);
-    const currentLines = args.profile.value.foodInstructions
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const filtered = currentLines.filter(
-      (item) => item.split(":")[0]?.trim().toLowerCase() !== foodName.toLowerCase(),
-    );
-    const nextInstructions = [...filtered, line].join("\n");
+    const line = buildInstructionLine(foodName, caloriesPerGram * 100);
+    const nextInstructions = mergeAutomaticInstructions(args.profile.value.foodInstructions, line);
     args.profile.value = { ...args.profile.value, foodInstructions: nextInstructions };
     await saveProfile(args.profile.value);
 
-    await saveEntry({
-      ...args.currentEntry.value,
-      analysisStale: true,
-    });
+    args.setNotice(markStale ? "instruction-pending" : "instruction-saved");
+
+    if (markStale) {
+      await saveEntry({
+        ...args.currentEntry.value,
+        analysisStale: true,
+      });
+    }
 
     await args.refreshState();
-    args.setNotice("instruction-pending");
   }
 
   function scaleMacro(value: number | null | undefined, ratio: number) {
@@ -180,6 +233,7 @@ export function useFoodCorrectionState(args: {
 
   return {
     saveFoodCorrectionInstruction,
+    saveFoodCorrectionInstructionOnly,
     applyFoodCorrectionToCurrentEntry,
   };
 }

@@ -22,6 +22,8 @@ const props = defineProps<{
   canSelectProvider: boolean;
   analyzeIssue: string;
   analysisError?: string | null;
+  analysisRetryModelLabel?: string | null;
+  analysisRetryModelId?: string | null;
   isSavingWeight: boolean;
   isSavingFoodLog: boolean;
   embedded?: boolean;
@@ -39,6 +41,7 @@ const emit = defineEmits<{
   "provider-change": [provider: string];
   "accept-model-switch": [];
   "dismiss-model-switch": [];
+  "retry-analysis-with-model": [provider: string];
 }>();
 
 const issueText = computed(() => {
@@ -75,6 +78,9 @@ const providerSelectWidth = computed(() => {
 const showAnalyzingNotice = computed(() => props.isAnalyzing);
 const showModelSwitchAction = computed(
   () => Boolean(props.showModelSwitchPrompt && props.suggestedModelLabel),
+);
+const showAnalysisRetryAction = computed(
+  () => Boolean(props.analysisError && props.analysisRetryModelLabel && props.analysisRetryModelId),
 );
 const analysisNoticeText = computed(() =>
   showModelSwitchAction.value
@@ -174,6 +180,20 @@ const analysisNoticeText = computed(() =>
         <p v-if="analyzeIssue" class="analyze-issue">
           {{ issueText }}
         </p>
+        <div v-else-if="analysisError" class="analyze-error" dir="ltr">
+          <p>{{ analysisError }}</p>
+          <p v-if="showAnalysisRetryAction" class="analyze-error__retry">
+            <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
+            <button
+              class="inline-action-link"
+              type="button"
+              @click="emit('retry-analysis-with-model', analysisRetryModelId ?? '')"
+            >
+              {{ analysisRetryModelLabel }}
+            </button>
+            <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+          </p>
+        </div>
         <div v-if="showAnalyzingNotice" class="analysis-notice" role="status" aria-live="polite">
           <span class="analysis-notice__spinner" aria-hidden="true"></span>
           <div class="analysis-notice__copy">
@@ -181,16 +201,13 @@ const analysisNoticeText = computed(() =>
             <p>{{ analysisNoticeText }}</p>
           </div>
           <div v-if="showModelSwitchAction" class="analysis-notice__actions">
-            <button class="secondary-action" type="button" @click="emit('accept-model-switch')">
-              {{ t("analysisSwitchSuggestionUseModel") }}
-            </button>
-            <button
-              class="secondary-action secondary-action--subtle"
-              type="button"
-              @click="emit('dismiss-model-switch')"
-            >
-              {{ t("analysisSwitchSuggestionDismiss") }}
-            </button>
+            <span class="analysis-notice__switch">
+              {{ t("analysisRetrySuggestionPrefix") }}
+              <button class="inline-action-link" type="button" @click="emit('accept-model-switch')">
+                {{ suggestedModelLabel }}
+              </button>
+              <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -278,9 +295,20 @@ const analysisNoticeText = computed(() =>
           {{ t("jumpToResults") }}
         </a>
       </div>
-      <p v-if="analysisError" class="analyze-error" dir="ltr">
-        {{ analysisError }}
-      </p>
+      <div v-if="analysisError" class="analyze-error" dir="ltr">
+        <p>{{ analysisError }}</p>
+        <p v-if="showAnalysisRetryAction" class="analyze-error__retry">
+          <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
+          <button
+            class="inline-action-link"
+            type="button"
+            @click="emit('retry-analysis-with-model', analysisRetryModelId ?? '')"
+          >
+            {{ analysisRetryModelLabel }}
+          </button>
+          <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+        </p>
+      </div>
       <p v-else-if="analyzeIssue" class="analyze-issue">
         {{ issueText }}
       </p>
@@ -291,16 +319,13 @@ const analysisNoticeText = computed(() =>
           <p>{{ analysisNoticeText }}</p>
         </div>
         <div v-if="showModelSwitchAction" class="analysis-notice__actions">
-          <button class="secondary-action" type="button" @click="emit('accept-model-switch')">
-            {{ t("analysisSwitchSuggestionUseModel") }}
-          </button>
-          <button
-            class="secondary-action secondary-action--subtle"
-            type="button"
-            @click="emit('dismiss-model-switch')"
-          >
-            {{ t("analysisSwitchSuggestionDismiss") }}
-          </button>
+          <span class="analysis-notice__switch">
+            {{ t("analysisRetrySuggestionPrefix") }}
+            <button class="inline-action-link" type="button" @click="emit('accept-model-switch')">
+              {{ suggestedModelLabel }}
+            </button>
+            <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+          </span>
         </div>
       </div>
     </div>
@@ -441,6 +466,26 @@ const analysisNoticeText = computed(() =>
   border: 1px solid #4e221d;
   box-shadow: var(--bevel-raised);
   white-space: pre-wrap;
+}
+
+.analyze-error__retry {
+  margin: 0.35rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.inline-action-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+  cursor: pointer;
 }
 
 .analysis-notice {

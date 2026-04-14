@@ -22,6 +22,8 @@ defineProps<{
   canSelectProvider: boolean;
   analyzeIssue: string;
   analysisError?: string | null;
+  analysisRetryModelLabel?: string | null;
+  analysisRetryModelId?: string | null;
   isSavingWeight: boolean;
   isSavingFoodLog: boolean;
   foodInstructions: string;
@@ -38,6 +40,7 @@ const emit = defineEmits<{
   "provider-change": [provider: string];
   "accept-model-switch": [];
   "dismiss-model-switch": [];
+  "retry-analysis-with-model": [provider: string];
   "save-instructions": [value: string];
 }>();
 
@@ -66,6 +69,8 @@ const { t } = useI18n();
           :can-select-provider="canSelectProvider"
           :analyze-issue="analyzeIssue"
           :analysis-error="analysisError"
+          :analysis-retry-model-label="analysisRetryModelLabel"
+          :analysis-retry-model-id="analysisRetryModelId"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
           @update:selected-date="emit('update:selectedDate', $event)"
@@ -77,6 +82,7 @@ const { t } = useI18n();
           @analyze="emit('analyze')"
           @accept-model-switch="emit('accept-model-switch')"
           @dismiss-model-switch="emit('dismiss-model-switch')"
+          @retry-analysis-with-model="emit('retry-analysis-with-model', $event)"
         />
       </div>
       <div class="subpanel">

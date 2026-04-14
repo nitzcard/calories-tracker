@@ -61,6 +61,8 @@ export function buildNutritionInsights(
   const anchorTime = Date.parse(anchorDate);
   const analyzed7d = analyzedEntriesWithinWindow(entries, anchorTime, WINDOWS.short);
   const analyzed30d = analyzedEntriesWithinWindow(entries, anchorTime, WINDOWS.long);
+  const weight7d = entriesWithinWindow(entries, anchorTime, WINDOWS.short);
+  const weight30d = entriesWithinWindow(entries, anchorTime, WINDOWS.long);
   const micronutrients = buildMicronutrientInsightsFromWindows(analyzed7d, analyzed30d, profile, anchorDate);
   const macros = buildMacroStats(analyzed7d, analyzed30d);
   const averageProteinPerKg7d = buildProteinPerKg(analyzed7d);
@@ -71,10 +73,72 @@ export function buildNutritionInsights(
     macros,
     averageProteinPerKg7d,
     averageProteinPerKg30d,
+    weightAvgChangeKgPerDay7d: slopeKgPerDay(weight7d),
+    weightAvgChangeKgPerDay30d: slopeKgPerDay(weight30d),
     averageCaloriesVsTdee7d: tdeeReference ? caloriesVsTdee(analyzed7d, tdeeReference) : null,
     calorieConsistency7d: calorieConsistency(analyzed7d),
+    averageMealCalories7d: averageMealCalories(analyzed7d),
+    averageMealCalories30d: averageMealCalories(analyzed30d),
     topFoods30d: buildTopFoods(analyzed30d, locale),
   };
+}
+
+function entriesWithinWindow(entries: DailyEntry[], anchorTime: number, days: number) {
+  const start = anchorTime - (days - 1) * DAY_MS;
+  return entries.filter((entry) => {
+    const entryTime = Date.parse(entry.date);
+    return entryTime >= start && entryTime <= anchorTime;
+  });
+}
+
+function slopeKgPerDay(entries: DailyEntry[]) {
+  const points = entries
+    .map((entry) => ({ time: Date.parse(entry.date), weight: entry.weight ?? null }))
+    .filter(
+      (point): point is { time: number; weight: number } =>
+        typeof point.weight === "number" && Number.isFinite(point.weight),
+    )
+    .sort((left, right) => left.time - right.time);
+
+  if (points.length < 2) {
+    return null;
+  }
+
+  const origin = points[0].time;
+  const xs = points.map((point) => (point.time - origin) / DAY_MS);
+  const ys = points.map((point) => point.weight);
+  const meanX = xs.reduce((sum, value) => sum + value, 0) / xs.length;
+  const meanY = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+  const numerator = xs.reduce((sum, value, index) => sum + (value - meanX) * (ys[index] - meanY), 0);
+  const denominator = xs.reduce((sum, value) => sum + (value - meanX) ** 2, 0);
+
+  if (denominator === 0) {
+    return null;
+  }
+
+  return Math.round((numerator / denominator) * 1000) / 1000;
+}
+
+function averageMealCalories(entries: DailyEntry[]) {
+  let totalCalories = 0;
+  let mealCount = 0;
+
+  for (const entry of entries) {
+    for (const meal of entry.nutritionSnapshot?.meals ?? []) {
+      const calories = meal.totals?.calories;
+      if (typeof calories !== "number" || !Number.isFinite(calories) || calories <= 0) {
+        continue;
+      }
+      totalCalories += calories;
+      mealCount += 1;
+    }
+  }
+
+  if (mealCount === 0) {
+    return null;
+  }
+
+  return Math.round(totalCalories / mealCount);
 }
 
 function buildMicronutrientInsightsFromWindows(

@@ -520,6 +520,11 @@ small,
   box-shadow: var(--bevel-raised);
 }
 
+/* Isolate numeric metrics for proper RTL/LTR handling */
+.signed-metric {
+  display: inline-block;
+}
+
 .readonly-metric {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;

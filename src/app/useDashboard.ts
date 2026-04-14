@@ -248,10 +248,7 @@ export function useDashboard() {
       entry.date === selectedDate.value && isCurrentFoodLogDirty.value
         ? {
             ...entry,
-            nutritionSnapshot: null,
             analysisStale: true,
-            aiStatus: "idle" as const,
-            aiError: null,
           }
         : entry,
     ),
@@ -383,8 +380,12 @@ export function useDashboard() {
           macros: [],
           averageProteinPerKg7d: null,
           averageProteinPerKg30d: null,
+          weightAvgChangeKgPerDay7d: null,
+          weightAvgChangeKgPerDay30d: null,
           averageCaloriesVsTdee7d: null,
           calorieConsistency7d: null,
+          averageMealCalories7d: null,
+          averageMealCalories30d: null,
           topFoods30d: [],
         },
   );
@@ -1202,7 +1203,6 @@ export function useDashboard() {
     }
 
     await maybeInitCloudSync();
-    void analysis.flushPendingAnalysis(false);
   });
 
   function suggestLatestStableFlash(options: AiProviderOption[]) {
@@ -1313,6 +1313,22 @@ export function useDashboard() {
       caloriesPer100g: number | null,
     ) => {
       await corrections.saveFoodCorrectionInstruction(foodId, foodName, grams, calories, caloriesPer100g);
+      scheduleCloudPush("nutrition.correction");
+    },
+    saveFoodCorrectionInstructionOnly: async (
+      foodId: string,
+      foodName: string,
+      grams: number | null,
+      calories: number | null,
+      caloriesPer100g: number | null,
+    ) => {
+      await corrections.saveFoodCorrectionInstructionOnly(
+        foodId,
+        foodName,
+        grams,
+        calories,
+        caloriesPer100g,
+      );
       scheduleCloudPush("nutrition.correction");
     },
     applyFoodCorrectionToCurrentEntry: async (

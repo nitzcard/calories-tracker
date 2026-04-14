@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
-import type { AppLocale, InsightStatus, NutritionInsights } from "../../types";
+import type { AppLocale, NutritionInsights } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -12,6 +12,13 @@ const props = defineProps<{
 const { t } = useI18n();
 
 const showEmptyState = computed(() => props.insights.micronutrients.analyzedDays30d === 0);
+const weightUnitPerDay = computed(() =>
+  props.locale === "he" ? `${t("unitG")}/יום` : `${t("unitG")}/day`,
+);
+
+function convertKgToGrams(valueKg: number | null): number | null {
+  return valueKg === null ? null : valueKg * 1000;
+}
 
 function nutrientLabel(
   nutrientKey: NutritionInsights["micronutrients"]["items"][number]["nutrientKey"],
@@ -68,17 +75,6 @@ function macroLabel(key: NutritionInsights["macros"][number]["key"]) {
   return labels[key];
 }
 
-function statusLabel(status: InsightStatus) {
-  const labels: Record<InsightStatus, string> = {
-    likely_low: t("insightStatusLikelyLow"),
-    borderline: t("insightStatusBorderline"),
-    covered: t("insightStatusCovered"),
-    insufficient_data: t("insightStatusInsufficient"),
-  };
-
-  return labels[status];
-}
-
 function unitLabel(unit: "kcal" | "g" | "mg" | "mcg") {
   const labels = {
     kcal: t("unitKcal"),
@@ -91,14 +87,19 @@ function unitLabel(unit: "kcal" | "g" | "mg" | "mcg") {
 }
 
 function formatNumber(value: number | null, unit: string) {
-  return value === null ? "-" : `${value} ${unit}`;
+  if (value === null) return "-";
+  // Wrap number in LTR embedding to keep it intact in RTL
+  return `\u202A${value}\u202C ${unit}`;
 }
 
 function formatSigned(value: number | null, unit: string) {
   if (value === null) return "-";
   const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value} ${unit}`;
+  const rounded = Math.round(value * 100) / 100; // 2 decimal places
+  // Wrap sign+number in LTR embedding to keep minus/plus with number in RTL
+  return `\u202A${prefix}${rounded}\u202C ${unit}`;
 }
+
 </script>
 
 <template>
@@ -119,20 +120,12 @@ function formatSigned(value: number | null, unit: string) {
         <span>{{ insights.micronutrients.analyzedDays30d }}</span>
       </div>
       <div class="compact-stat">
-        <strong>{{ t("insightsLikelyLow7d") }}</strong>
-        <span>{{ insights.micronutrients.likelyLowCount7d }}</span>
-      </div>
-      <div class="compact-stat">
-        <strong>{{ t("insightsLikelyLow30d") }}</strong>
-        <span>{{ insights.micronutrients.likelyLowCount30d }}</span>
-      </div>
-      <div class="compact-stat">
         <strong>{{ t("macroProteinPerKg7d") }}</strong>
-        <span>{{ formatNumber(insights.averageProteinPerKg7d, t("unitProteinPerKg")) }}</span>
+        <span class="signed-metric">{{ formatNumber(insights.averageProteinPerKg7d, t("unitProteinPerKg")) }}</span>
       </div>
       <div class="compact-stat">
         <strong>{{ t("macroCaloriesVsTdee7d") }}</strong>
-        <span>{{ formatSigned(insights.averageCaloriesVsTdee7d, t("unitKcal")) }}</span>
+        <span class="signed-metric">{{ formatSigned(insights.averageCaloriesVsTdee7d, t("unitKcal")) }}</span>
       </div>
     </div>
 
@@ -157,22 +150,27 @@ function formatSigned(value: number | null, unit: string) {
             <tbody>
               <tr v-for="item in insights.macros" :key="item.key">
                 <td>{{ macroLabel(item.key) }}</td>
-                <td>{{ formatNumber(item.average7d, unitLabel(item.unit)) }}</td>
-                <td>{{ formatNumber(item.average30d, unitLabel(item.unit)) }}</td>
+                <td><span class="signed-metric">{{ formatNumber(item.average7d, unitLabel(item.unit)) }}</span></td>
+                <td><span class="signed-metric">{{ formatNumber(item.average30d, unitLabel(item.unit)) }}</span></td>
               </tr>
               <tr>
                 <td>{{ t("macroProteinPerKg") }}</td>
-                <td>{{ formatNumber(insights.averageProteinPerKg7d, t("unitProteinPerKg")) }}</td>
-                <td>{{ formatNumber(insights.averageProteinPerKg30d, t("unitProteinPerKg")) }}</td>
+                <td><span class="signed-metric">{{ formatNumber(insights.averageProteinPerKg7d, t("unitProteinPerKg")) }}</span></td>
+                <td><span class="signed-metric">{{ formatNumber(insights.averageProteinPerKg30d, t("unitProteinPerKg")) }}</span></td>
+              </tr>
+              <tr>
+                <td>{{ t("averageWeightChangePerDay") }}</td>
+                <td><span class="signed-metric">{{ formatSigned(convertKgToGrams(insights.weightAvgChangeKgPerDay7d), weightUnitPerDay) }}</span></td>
+                <td><span class="signed-metric">{{ formatSigned(convertKgToGrams(insights.weightAvgChangeKgPerDay30d), weightUnitPerDay) }}</span></td>
               </tr>
               <tr>
                 <td>{{ t("macroCaloriesVsTdee") }}</td>
-                <td>{{ formatSigned(insights.averageCaloriesVsTdee7d, t("unitKcal")) }}</td>
+                <td><span class="signed-metric">{{ formatSigned(insights.averageCaloriesVsTdee7d, t("unitKcal")) }}</span></td>
                 <td>-</td>
               </tr>
               <tr>
                 <td>{{ t("macroCalorieConsistency") }}</td>
-                <td>{{ formatNumber(insights.calorieConsistency7d, t("unitKcal")) }}</td>
+                <td><span class="signed-metric">{{ formatNumber(insights.calorieConsistency7d, t("unitKcal")) }}</span></td>
                 <td>-</td>
               </tr>
             </tbody>
@@ -187,11 +185,8 @@ function formatSigned(value: number | null, unit: string) {
             <thead>
               <tr>
                 <th>{{ t("insightsNutrient") }}</th>
-                <th>{{ t("insightsTarget") }}</th>
                 <th>{{ t("insights7dAvg") }}</th>
-                <th>{{ t("insights7dStatus") }}</th>
                 <th>{{ t("insights30dAvg") }}</th>
-                <th>{{ t("insights30dStatus") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -206,19 +201,8 @@ function formatSigned(value: number | null, unit: string) {
                   >{{ nutrientLabel(item.nutrientKey) }}</a>
                   <small class="nutrient-why">{{ nutrientWhy(item.nutrientKey) }}</small>
                 </td>
-                <td>{{ formatNumber(item.target, unitLabel(item.unit)) }}</td>
-                <td>{{ formatNumber(item.average7d, unitLabel(item.unit)) }}</td>
-                <td>
-                  <span class="status-box" :data-status="item.status7d">
-                    {{ statusLabel(item.status7d) }}
-                  </span>
-                </td>
-                <td>{{ formatNumber(item.average30d, unitLabel(item.unit)) }}</td>
-                <td>
-                  <span class="status-box" :data-status="item.status30d">
-                    {{ statusLabel(item.status30d) }}
-                  </span>
-                </td>
+                <td><span class="signed-metric">{{ formatNumber(item.average7d, unitLabel(item.unit)) }}</span></td>
+                <td><span class="signed-metric">{{ formatNumber(item.average30d, unitLabel(item.unit)) }}</span></td>
               </tr>
             </tbody>
           </table>

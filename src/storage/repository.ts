@@ -171,8 +171,8 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
           ? null
           : entry.manualCalories,
     customTdee: input.customTdee === undefined ? entry.customTdee : input.customTdee,
-    analysisStale: foodLogChanged ? false : entry.analysisStale ?? false,
-    nutritionSnapshot: foodLogChanged ? null : entry.nutritionSnapshot,
+    analysisStale: foodLogChanged ? true : entry.analysisStale ?? false,
+    nutritionSnapshot: foodLogChanged ? entry.nutritionSnapshot : entry.nutritionSnapshot,
     aiStatus: foodLogChanged ? "idle" : entry.aiStatus,
     aiError: foodLogChanged ? null : entry.aiError,
     updatedAt: now,

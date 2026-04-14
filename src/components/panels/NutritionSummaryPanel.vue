@@ -12,6 +12,8 @@ const props = defineProps<{
   statusText: string;
   isStale?: boolean;
   correctionToken?: number;
+  analysisRetryModelLabel?: string | null;
+  analysisRetryModelId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -29,6 +31,14 @@ const emit = defineEmits<{
     calories: number | null,
     caloriesPer100g: number | null,
   ];
+  "save-correction-only": [
+    foodId: string,
+    foodName: string,
+    grams: number | null,
+    calories: number | null,
+    caloriesPer100g: number | null,
+  ];
+  "retry-analysis-with-model": [provider: string];
 }>();
 
 const editableMeals = ref<MealBreakdownItem[]>([]);
@@ -36,6 +46,7 @@ const showCorrectionCue = ref(false);
 const showNewResultsCue = ref(false);
 let correctionCueTimeout: ReturnType<typeof setTimeout> | null = null;
 let newResultsCueTimeout: ReturnType<typeof setTimeout> | null = null;
+
 const { t } = useI18n();
 const visibleUnmatchedItems = computed(() =>
   (props.entry?.nutritionSnapshot?.unmatchedItems ?? []).filter(
@@ -124,6 +135,35 @@ function emitApplyCorrection(food: FoodBreakdownItem) {
     food.calories ?? null,
     food.caloriesPer100g ?? null,
   );
+}
+
+function closeRowActionMenu(food: FoodBreakdownItem) {
+  const popover = document.getElementById(`action-menu-${food.id}`) as HTMLElement | null;
+  if (popover) {
+    popover.hidePopover();
+  }
+}
+
+function emitApplyCorrectionFromMenu(food: FoodBreakdownItem) {
+  emitApplyCorrection(food);
+  closeRowActionMenu(food);
+}
+
+function emitSaveCorrectionFromMenu(food: FoodBreakdownItem) {
+  emitSaveCorrection(food);
+  closeRowActionMenu(food);
+}
+
+function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
+  emit(
+    "save-correction-only",
+    food.id,
+    food.name,
+    food.grams ?? null,
+    food.calories ?? null,
+    food.caloriesPer100g ?? null,
+  );
+  closeRowActionMenu(food);
 }
 
 function displayMealLabel(mealKey: MealBreakdownItem["mealKey"], fallback: string) {
@@ -757,18 +797,50 @@ const proteinPerLeanBodyWeight = computed(() => {
 
           <div class="meal-table-wrap">
             <table class="meal-table">
+              <colgroup>
+                <col class="meal-col-food" />
+                <col class="meal-col-amount" />
+                <col class="meal-col-grams" />
+                <col class="meal-col-calories" />
+                <col class="meal-col-per100" />
+                <col class="meal-col-protein" />
+                <col class="meal-col-carbs" />
+                <col class="meal-col-fat" />
+                <col class="meal-col-fiber" />
+                <col class="meal-col-actions" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>{{ t("foodBreakdown") }}</th>
                   <th>{{ t("amount") }}</th>
                   <th>{{ t("grams") }}</th>
                   <th>{{ t("calories") }}</th>
-                  <th dir="ltr">{{ t("kcalPer100gHeader") }}</th>
-                  <th><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</th>
-                  <th><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</th>
-                  <th><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</th>
-                  <th><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</th>
-                  <th></th>
+                  <th>{{ t("kcalPer100gHeader") }}</th>
+                  <th>
+                    <span class="macro-heading">
+                      <span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>
+                      <span class="macro-heading-text">{{ t("protein") }}</span>
+                    </span>
+                  </th>
+                  <th>
+                    <span class="macro-heading">
+                      <span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>
+                      <span class="macro-heading-text">{{ t("carbs") }}</span>
+                    </span>
+                  </th>
+                  <th>
+                    <span class="macro-heading">
+                      <span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>
+                      <span class="macro-heading-text">{{ t("fat") }}</span>
+                    </span>
+                  </th>
+                  <th>
+                    <span class="macro-heading">
+                      <span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>
+                      <span class="macro-heading-text">{{ t("fiber") }}</span>
+                    </span>
+                  </th>
+                  <th>{{ t("foodActions") }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -823,18 +895,42 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <td>{{ food.fat ?? "-" }}</td>
                   <td>{{ food.fiber ?? "-" }}</td>
                   <td class="action-cell">
-                    <div class="action-buttons action-buttons--table">
+                    <button
+                      :id="`action-toggle-${food.id}`"
+                      class="row-action-menu__toggle"
+                      type="button"
+                      :popovertarget="`action-menu-${food.id}`"
+                      :aria-label="t('foodActions')"
+                    >
+                      ⋯
+                    </button>
+                    <div
+                      :id="`action-menu-${food.id}`"
+                      class="row-action-menu__panel"
+                      popover
+                      :anchor="`action-toggle-${food.id}`"
+                    >
                       <button
-                        class="secondary-action secondary-action--subtle"
-                        :title="t('applyFixTodayOnly')"
-                        @click="emitApplyCorrection(food)"
+                        class="row-action-menu__link"
+                        type="button"
+                        data-variant="primary"
+                        @click="emitApplyCorrectionFromMenu(food)"
                       >
                         {{ t("applyFixTodayOnlyTable") }}
                       </button>
                       <button
-                        class="secondary-action"
-                        :title="t('saveFix')"
-                        @click="emitSaveCorrection(food)"
+                        class="row-action-menu__link"
+                        type="button"
+                        data-variant="secondary"
+                        @click="emitSaveCorrectionOnlyFromMenu(food)"
+                      >
+                        {{ t("saveFixOnlyTable") }}
+                      </button>
+                      <button
+                        class="row-action-menu__link"
+                        type="button"
+                        data-variant="tertiary"
+                        @click="emitSaveCorrectionFromMenu(food)"
                       >
                         {{ t("saveFixTable") }}
                       </button>
@@ -907,29 +1003,66 @@ const proteinPerLeanBodyWeight = computed(() => {
                   </label>
 
                   <div class="kv">
-                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</div>
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>
+                        <span class="macro-heading-text">{{ t("protein") }}</span>
+                      </span>
+                    </div>
                     <div class="v">{{ food.protein ?? "-" }}</div>
                   </div>
                   <div class="kv">
-                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</div>
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>
+                        <span class="macro-heading-text">{{ t("carbs") }}</span>
+                      </span>
+                    </div>
                     <div class="v">{{ food.carbs ?? "-" }}</div>
                   </div>
                   <div class="kv">
-                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</div>
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>
+                        <span class="macro-heading-text">{{ t("fat") }}</span>
+                      </span>
+                    </div>
                     <div class="v">{{ food.fat ?? "-" }}</div>
                   </div>
                   <div class="kv">
-                    <div class="k"><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</div>
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>
+                        <span class="macro-heading-text">{{ t("fiber") }}</span>
+                      </span>
+                    </div>
                     <div class="v">{{ food.fiber ?? "-" }}</div>
                   </div>
                 </div>
 
                 <div class="food-card__actions">
-                  <div class="action-buttons action-buttons--cards">
-                    <button class="secondary-action secondary-action--subtle" @click="emitApplyCorrection(food)">
+                  <div class="card-action-links">
+                    <button class="card-action-link" type="button" data-variant="primary" @click="emitApplyCorrection(food)">
                       {{ t("applyFixTodayOnly") }}
                     </button>
-                    <button class="secondary-action" @click="emitSaveCorrection(food)">
+                    <button
+                      class="card-action-link"
+                      type="button"
+                      data-variant="secondary"
+                      @click="
+                        emit(
+                          'save-correction-only',
+                          food.id,
+                          food.name,
+                          food.grams ?? null,
+                          food.calories ?? null,
+                          food.caloriesPer100g ?? null,
+                        )
+                      "
+                    >
+                      {{ t("saveFixOnly") }}
+                    </button>
+                    <button class="card-action-link" type="button" data-variant="tertiary" @click="emitSaveCorrection(food)">
                       {{ t("saveFix") }}
                     </button>
                   </div>
@@ -947,13 +1080,35 @@ const proteinPerLeanBodyWeight = computed(() => {
               {{ macroEmoji("fiber") }} {{ t("fiber") }} {{ meal.totals.fiber ?? "-" }}
             </span>
           </div>
+
         </div>
+
+      </div>
+      <div v-if="dailyTotals" class="day-total-line">
+        <span class="meal-total">
+          {{ t("dayTotal") }}: <strong>{{ dailyTotals.calories ?? "-" }}</strong> {{ t("unitKcal") }} /
+          {{ macroEmoji("protein") }} {{ t("protein") }} {{ dailyTotals.protein ?? "-" }} /
+          {{ macroEmoji("carbs") }} {{ t("carbs") }} {{ dailyTotals.carbs ?? "-" }} /
+          {{ macroEmoji("fat") }} {{ t("fat") }} {{ dailyTotals.fat ?? "-" }} /
+          {{ macroEmoji("fiber") }} {{ t("fiber") }} {{ dailyTotals.fiber ?? "-" }}
+        </span>
       </div>
     </template>
 
     <div v-else-if="entry?.aiError" class="error-box error-box--center">
       <strong>{{ t("aiError") }}</strong>
       <p dir="ltr">{{ entry.aiError }}</p>
+      <p v-if="analysisRetryModelLabel && analysisRetryModelId" class="error-box__retry" dir="ltr">
+        <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
+        <button
+          class="inline-action-link"
+          type="button"
+          @click="emit('retry-analysis-with-model', analysisRetryModelId)"
+        >
+          {{ analysisRetryModelLabel }}
+        </button>
+        <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+      </p>
     </div>
 
     <p v-else>{{ t("noNutritionYet") }}</p>
@@ -963,6 +1118,26 @@ const proteinPerLeanBodyWeight = computed(() => {
 <style scoped>
 .summary-panel {
   align-self: start;
+}
+
+.error-box__retry {
+  margin: 0.35rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.inline-action-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+  cursor: pointer;
 }
 
 .results-flash :deep(.panel__body) {
@@ -1079,9 +1254,21 @@ const proteinPerLeanBodyWeight = computed(() => {
   --macro-accent: #58b97f;
 }
 
+.macro-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
 .macro-heading-mark {
-  display: inline-block;
-  margin-inline-end: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.macro-heading-text {
+  line-height: 1.1;
 }
 
 .compact-stat--protein strong,
@@ -1336,6 +1523,28 @@ const proteinPerLeanBodyWeight = computed(() => {
   text-align: start;
 }
 
+.day-total-line {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-block: 0.875rem;
+  padding-inline: 0.5rem;
+  border-block-start: 1px solid var(--meal-border, var(--border));
+  text-align: center;
+}
+
+.day-total-line .meal-total {
+  display: inline-flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.meal-block--day-total {
+  --meal-accent: #6b6b6b;
+}
+
 .meal-table-wrap {
   overflow-x: auto;
   padding-block-end: 2px;
@@ -1345,6 +1554,34 @@ const proteinPerLeanBodyWeight = computed(() => {
   min-inline-size: 920px;
   inline-size: 100%;
   table-layout: fixed;
+}
+
+.meal-col-food {
+  width: 24%;
+}
+
+.meal-col-amount {
+  width: 12%;
+}
+
+.meal-col-grams,
+.meal-col-calories,
+.meal-col-per100 {
+  width: 9%;
+}
+
+.meal-col-protein,
+.meal-col-fat,
+.meal-col-fiber {
+  width: 6.5%;
+}
+
+.meal-col-carbs {
+  width: 8.5%;
+}
+
+.meal-col-actions {
+  width: 6%;
 }
 
 .meal-cards {
@@ -1402,43 +1639,140 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .action-cell {
-  inline-size: 7.25rem;
-  min-inline-size: 7.25rem;
-  white-space: normal;
-}
-
-.action-buttons {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-  align-items: stretch;
-}
-
-.action-buttons--table {
-  grid-template-columns: 1fr;
-}
-
-.action-buttons .secondary-action {
   inline-size: 100%;
-  min-inline-size: 0;
+  min-inline-size: 4rem;
+  white-space: normal;
+  padding-inline: 0.45rem;
+  vertical-align: middle;
+  text-align: center;
 }
 
-.action-cell .secondary-action {
-  background: #87613a;
-  color: #fff8ef;
-  border-color: #53371a;
+.row-action-menu__toggle {
+  anchor-name: --action-anchor;
+  cursor: pointer;
+  user-select: none;
+  inline-size: 2.35rem;
+  block-size: 2.35rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 1.65rem;
+  line-height: 1;
+  padding: 0;
 }
 
-.action-cell .secondary-action--subtle,
+.row-action-menu__panel {
+  min-inline-size: 11rem;
+  padding: 0.5rem;
+  margin: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
+  position: absolute;
+  inset: unset;
+  position-anchor: --action-anchor;
+  position-area: block-end span-inline-end;
+  margin-block-start: 0.35rem;
+}
+
+.row-action-menu__panel:popover-open {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.row-action-menu__panel::backdrop {
+  background: transparent;
+}
+
+.row-action-menu__link {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.row-action-menu__link:hover,
+.row-action-menu__link:focus-visible {
+  background: color-mix(in srgb, var(--surface-2) 74%, transparent);
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.row-action-menu__link[data-variant="primary"] {
+  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 14%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--meal-accent, var(--accent)) 22%, var(--border));
+  font-weight: 700;
+}
+
+.row-action-menu__link[data-variant="primary"]:hover,
+.row-action-menu__link[data-variant="primary"]:focus-visible {
+  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 18%, var(--surface-2));
+}
+
+.row-action-menu__link[data-variant="tertiary"] {
+  font-weight: 700;
+}
+
 .food-card__actions .secondary-action--subtle {
   background: var(--surface-2);
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
 
+.card-action-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  align-items: baseline;
+}
+
+.card-action-link {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.card-action-link:hover,
+.card-action-link:focus-visible {
+  background: color-mix(in srgb, var(--surface-1) 74%, transparent);
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+}
+
+.card-action-link[data-variant="primary"] {
+  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 18%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--meal-accent, var(--accent)) 26%, var(--border));
+  font-weight: 700;
+}
+
+.card-action-link[data-variant="primary"]:hover,
+.card-action-link[data-variant="primary"]:focus-visible {
+  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 22%, var(--surface-2));
+}
+
+.card-action-link[data-variant="tertiary"] {
+  font-weight: 700;
+}
+
 @media (max-width: 420px) {
-  .action-buttons--cards {
-    grid-template-columns: 1fr;
+  .card-action-links {
+    justify-content: flex-start;
+    gap: 0.6rem;
   }
 }
 
@@ -1483,6 +1817,10 @@ const proteinPerLeanBodyWeight = computed(() => {
 
   .meal-table :is(input[type="number"], input[type="date"], select) {
     inline-size: min(100%, 5.5rem);
+  }
+
+  .action-cell {
+    min-inline-size: 4rem;
   }
 }
 
@@ -1542,6 +1880,10 @@ const proteinPerLeanBodyWeight = computed(() => {
     inline-size: min(100%, 6rem);
   }
 
+  .day-total-line {
+    padding-block: 0.75rem;
+  }
+
   .food-card__actions {
     justify-content: flex-end;
   }
@@ -1554,8 +1896,8 @@ const proteinPerLeanBodyWeight = computed(() => {
     min-inline-size: 100px;
   }
 
-  .action-cell .secondary-action {
-    padding-inline: 0.4rem;
+  .action-cell {
+    min-inline-size: 5rem;
   }
 }
 </style>

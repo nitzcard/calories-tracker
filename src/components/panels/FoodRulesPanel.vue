@@ -49,6 +49,7 @@ function updateDraft(event: Event) {
       >
         <FieldControl as="textarea" :is-saving="isSaving">
           <textarea
+            id="food-rules-textarea"
             class="constant-textarea"
             :value="draftInstructions"
             @input="updateDraft"
@@ -69,6 +70,7 @@ function updateDraft(event: Event) {
     >
       <FieldControl as="textarea" :is-saving="isSaving">
         <textarea
+          id="food-rules-textarea"
           class="constant-textarea"
           :value="draftInstructions"
           @input="updateDraft"
