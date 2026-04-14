@@ -137,10 +137,17 @@ function emitApplyCorrection(food: FoodBreakdownItem) {
   );
 }
 
+function openRowActionMenu(food: FoodBreakdownItem) {
+  const dialog = document.getElementById(`action-menu-${food.id}`) as HTMLDialogElement | null;
+  if (dialog) {
+    dialog.showModal();
+  }
+}
+
 function closeRowActionMenu(food: FoodBreakdownItem) {
-  const popover = document.getElementById(`action-menu-${food.id}`) as HTMLElement | null;
-  if (popover) {
-    popover.hidePopover();
+  const dialog = document.getElementById(`action-menu-${food.id}`) as HTMLDialogElement | null;
+  if (dialog) {
+    dialog.close();
   }
 }
 
@@ -155,6 +162,7 @@ function emitSaveCorrectionFromMenu(food: FoodBreakdownItem) {
 }
 
 function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
+  console.log('Emitting save-correction-only for', food.name);
   emit(
     "save-correction-only",
     food.id,
@@ -897,45 +905,13 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <td>{{ food.fiber ?? "-" }}</td>
                   <td class="action-cell">
                     <button
-                      :id="`action-toggle-${food.id}`"
                       class="row-action-menu__toggle"
                       type="button"
-                      :popovertarget="`action-menu-${food.id}`"
+                      @click="openRowActionMenu(food)"
                       :aria-label="t('foodActions')"
                     >
                       ⋯
                     </button>
-                    <div
-                      :id="`action-menu-${food.id}`"
-                      class="row-action-menu__panel"
-                      popover
-                      :anchor="`action-toggle-${food.id}`"
-                    >
-                      <button
-                        class="row-action-menu__link"
-                        type="button"
-                        data-variant="primary"
-                        @click="emitApplyCorrectionFromMenu(food)"
-                      >
-                        {{ t("applyFixTodayOnlyTable") }}
-                      </button>
-                      <button
-                        class="row-action-menu__link"
-                        type="button"
-                        data-variant="secondary"
-                        @click="emitSaveCorrectionOnlyFromMenu(food)"
-                      >
-                        {{ t("saveFixOnlyTable") }}
-                      </button>
-                      <button
-                        class="row-action-menu__link"
-                        type="button"
-                        data-variant="tertiary"
-                        @click="emitSaveCorrectionFromMenu(food)"
-                      >
-                        {{ t("saveFixTable") }}
-                      </button>
-                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -1043,13 +1019,12 @@ const proteinPerLeanBodyWeight = computed(() => {
 
                 <div class="food-card__actions">
                   <div class="card-action-links">
-                    <button class="card-action-link" type="button" data-variant="primary" @click="emitApplyCorrection(food)">
+                    <button class="card-action-link" type="button" @click="emitApplyCorrection(food)">
                       {{ t("applyFixTodayOnly") }}
                     </button>
                     <button
                       class="card-action-link"
                       type="button"
-                      data-variant="secondary"
                       @click="
                         emit(
                           'save-correction-only',
@@ -1063,7 +1038,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     >
                       {{ t("saveFixOnly") }}
                     </button>
-                    <button class="card-action-link" type="button" data-variant="tertiary" @click="emitSaveCorrection(food)">
+                    <button class="card-action-link" type="button" @click="emitSaveCorrection(food)">
                       {{ t("saveFix") }}
                     </button>
                   </div>
@@ -1094,6 +1069,51 @@ const proteinPerLeanBodyWeight = computed(() => {
           {{ macroEmoji("fiber") }} {{ t("fiber") }} {{ dailyTotals.fiber ?? "-" }}
         </span>
       </div>
+
+      <!-- Action dialogs (outside table for proper rendering) -->
+      <template v-for="meal in editableMeals" :key="`meal-dialogs-${meal.id}`">
+        <dialog
+          v-for="food in meal.foods"
+          :key="`dialog-${food.id}`"
+          :id="`action-menu-${food.id}`"
+          class="row-action-menu__dialog"
+          @click.self="closeRowActionMenu(food)"
+        >
+          <div class="row-action-menu__header">
+            <button
+              class="row-action-menu__close"
+              type="button"
+              @click="closeRowActionMenu(food)"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <div class="row-action-menu__content">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="emitApplyCorrectionFromMenu(food)"
+            >
+              {{ t("applyFixTodayOnlyTable") }}
+            </button>
+            <button
+              class="secondary-action"
+              type="button"
+              @click="emitSaveCorrectionOnlyFromMenu(food)"
+            >
+              {{ t("saveFixOnlyTable") }}
+            </button>
+            <button
+              class="secondary-action"
+              type="button"
+              @click="emitSaveCorrectionFromMenu(food)"
+            >
+              {{ t("saveFixTable") }}
+            </button>
+          </div>
+        </dialog>
+      </template>
     </template>
 
     <div v-else-if="entry?.aiError" class="error-box error-box--center">
@@ -1649,7 +1669,6 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .row-action-menu__toggle {
-  anchor-name: --action-anchor;
   cursor: pointer;
   user-select: none;
   inline-size: 2.35rem;
@@ -1664,64 +1683,61 @@ const proteinPerLeanBodyWeight = computed(() => {
   padding: 0;
 }
 
-.row-action-menu__panel {
-  min-inline-size: 11rem;
-  padding: 0.5rem;
-  margin: 0;
+.row-action-menu__dialog {
+  padding: 0;
+  margin: auto;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 14px;
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
-  position: absolute;
-  inset: unset;
-  position-anchor: --action-anchor;
-  position-area: block-end span-inline-end;
-  margin-block-start: 0.35rem;
+  max-inline-size: min(90vw, 20rem);
+  z-index: 1000;
 }
 
-.row-action-menu__panel:popover-open {
+.row-action-menu__dialog[open] {
+  display: block;
+}
+
+.row-action-menu__dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.row-action-menu__header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.25rem 0.25rem 0;
+}
+
+.row-action-menu__close {
+  inline-size: 2rem;
+  block-size: 2rem;
   display: grid;
-  gap: 0.35rem;
-}
-
-.row-action-menu__panel::backdrop {
-  background: transparent;
-}
-
-.row-action-menu__link {
-  display: grid;
-  gap: 0.1rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  text-decoration: none;
+  place-items: center;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 2rem;
+  line-height: 1;
+  padding: 0;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
 }
 
-.row-action-menu__link:hover,
-.row-action-menu__link:focus-visible {
-  background: color-mix(in srgb, var(--surface-2) 74%, transparent);
-  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+.row-action-menu__close:hover,
+.row-action-menu__close:focus-visible {
+  opacity: 1;
 }
 
-.row-action-menu__link[data-variant="primary"] {
-  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 14%, var(--surface-2));
-  border-color: color-mix(in srgb, var(--meal-accent, var(--accent)) 22%, var(--border));
-  font-weight: 700;
+.row-action-menu__content {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.5rem;
+  min-inline-size: 11rem;
 }
 
-.row-action-menu__link[data-variant="primary"]:hover,
-.row-action-menu__link[data-variant="primary"]:focus-visible {
-  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 18%, var(--surface-2));
-}
-
-.row-action-menu__link[data-variant="tertiary"] {
-  font-weight: 700;
+.row-action-menu__content .secondary-action {
+  inline-size: 100%;
 }
 
 .food-card__actions .secondary-action--subtle {
@@ -1746,28 +1762,13 @@ const proteinPerLeanBodyWeight = computed(() => {
   color: var(--text-primary);
   font: inherit;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .card-action-link:hover,
 .card-action-link:focus-visible {
-  background: color-mix(in srgb, var(--surface-1) 74%, transparent);
-  border-color: color-mix(in srgb, var(--border) 88%, transparent);
-}
-
-.card-action-link[data-variant="primary"] {
-  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 18%, var(--surface-2));
-  border-color: color-mix(in srgb, var(--meal-accent, var(--accent)) 26%, var(--border));
-  font-weight: 700;
-}
-
-.card-action-link[data-variant="primary"]:hover,
-.card-action-link[data-variant="primary"]:focus-visible {
-  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 22%, var(--surface-2));
-}
-
-.card-action-link[data-variant="tertiary"] {
-  font-weight: 700;
+  background: var(--surface-1);
+  border-color: var(--border-strong);
 }
 
 @media (max-width: 420px) {

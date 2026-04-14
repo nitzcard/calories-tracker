@@ -424,6 +424,7 @@ watch(
 watch(
   notice,
   (next, previous) => {
+    console.log('Notice changed:', { next, previous });
     if (!next || next === previous) {
       return;
     }
@@ -451,6 +452,7 @@ watch(
     }
 
     if (next === "instruction-saved") {
+      console.log('Showing instruction-saved toast');
       showTransientToast("local", `💾 ${t("instructionSavedOnly")}`, {
         duration: 5000,
         action: {

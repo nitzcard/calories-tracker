@@ -17,8 +17,8 @@ export function useFoodCorrectionState(args: {
   function buildInstructionLine(foodName: string, caloriesPer100g: number) {
     const calories = formatCaloriesPer100(caloriesPer100g);
     return args.profile.value?.locale === "he"
-      ? `${foodName}: ${calories} קלוריות ל-100גרם`
-      : `${foodName}: ${calories} calories for 100gr`;
+      ? `${foodName}: ${calories} קלוריות ל-100 גרם`
+      : `${foodName}: ${calories} calories for 100 gr`;
   }
 
   function foodInstructionKey(line: string) {
@@ -94,7 +94,9 @@ export function useFoodCorrectionState(args: {
     args.profile.value = { ...args.profile.value, foodInstructions: nextInstructions };
     await saveProfile(args.profile.value);
 
-    args.setNotice(markStale ? "instruction-pending" : "instruction-saved");
+    const noticeValue = markStale ? "instruction-pending" : "instruction-saved";
+    console.log('Setting notice to:', noticeValue);
+    args.setNotice(noticeValue);
 
     if (markStale) {
       await saveEntry({
