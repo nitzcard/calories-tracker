@@ -643,7 +643,7 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
         </div>
         <div class="compact-stat compact-stat--protein">
-          <strong><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>{{ t("protein") }}</strong>
+          <strong><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span> {{ t("protein") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.protein ?? "-" }}</span>
           <small v-if="macroPercent('protein') !== null" class="stat-meta">
             {{ macroPercent("protein") }}% {{ t("macroShareOfCalories") }}
@@ -681,7 +681,7 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
         </div>
         <div class="compact-stat compact-stat--carbs">
-          <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>{{ t("carbs") }}</strong>
+          <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span> {{ t("carbs") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.carbs ?? "-" }}</span>
           <small v-if="macroPercent('carbs') !== null" class="stat-meta">
             {{ macroPercent("carbs") }}% {{ t("macroShareOfCalories") }}
@@ -713,7 +713,7 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
         </div>
         <div class="compact-stat compact-stat--fat">
-          <strong><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>{{ t("fat") }}</strong>
+          <strong><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span> {{ t("fat") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.fat ?? "-" }}</span>
           <small v-if="macroPercent('fat') !== null" class="stat-meta">
             {{ macroPercent("fat") }}% {{ t("macroShareOfCalories") }}
@@ -745,8 +745,9 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
         </div>
         <div class="compact-stat compact-stat--fiber">
-          <strong><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>{{ t("fiber") }}</strong>
+          <strong><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span> {{ t("fiber") }}</strong>
           <span>{{ entry.nutritionSnapshot.dailyTotals.fiber ?? "-" }}</span>
+          <small class="stat-meta" style="visibility: hidden;">-</small>
           <div v-if="fiberGauge" class="macro-gauge" :data-state="fiberGauge.state">
             <div class="macro-bar" aria-hidden="true">
               <div
@@ -819,25 +820,25 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <th>
                     <span class="macro-heading">
                       <span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>
-                      <span class="macro-heading-text">{{ t("protein") }}</span>
+                      <span class="macro-heading-text"> {{ t("protein") }}</span>
                     </span>
                   </th>
                   <th>
                     <span class="macro-heading">
                       <span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>
-                      <span class="macro-heading-text">{{ t("carbs") }}</span>
+                      <span class="macro-heading-text"> {{ t("carbs") }}</span>
                     </span>
                   </th>
                   <th>
                     <span class="macro-heading">
                       <span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>
-                      <span class="macro-heading-text">{{ t("fat") }}</span>
+                      <span class="macro-heading-text"> {{ t("fat") }}</span>
                     </span>
                   </th>
                   <th>
                     <span class="macro-heading">
                       <span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>
-                      <span class="macro-heading-text">{{ t("fiber") }}</span>
+                      <span class="macro-heading-text"> {{ t("fiber") }}</span>
                     </span>
                   </th>
                   <th>{{ t("foodActions") }}</th>
