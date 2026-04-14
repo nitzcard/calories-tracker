@@ -1,4 +1,4 @@
-import { readApiKeyForProvider } from "./credentials";
+import { readGeminiApiKey } from "./credentials";
 import type { Profile, TdeeSnapshot } from "../types";
 
 const GEMINI_TDEE_SCHEMA = {
@@ -40,8 +40,7 @@ export async function estimateTdeeWithGemini(input: {
   assumptions: string[];
   recommendedCaloriesKcal: number | null;
 }> {
-  const apiKey =
-    readApiKeyForProvider(input.providerId) || import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = readGeminiApiKey();
   if (!apiKey) {
     throw new Error("Missing Gemini API key.");
   }

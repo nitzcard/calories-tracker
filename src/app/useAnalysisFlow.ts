@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from "vue";
-import { providerHasKey } from "../ai/registry";
+import { FALLBACK_GEMINI_MODEL, formatGeminiModelLabel } from "../ai/gemini-config";
+import { hasGeminiApiKey } from "../ai/registry";
 import { clearQueueForDate, queueAnalysis, runPendingAnalysis } from "../ai/service";
 import { getPendingQueue } from "../storage/repository";
 import { buildAnalyzeIssue } from "./dashboard-helpers";
@@ -16,32 +17,12 @@ type AnalyzeGate =
 const SUGGEST_SWITCH_AFTER_MS = 30_000;
 
 function friendlyModelLabel(providerId: string) {
-  if (!providerId.startsWith("gemini-")) return providerId;
-  const normalized = providerId.replace(/^gemini-/, "");
-  const parts = normalized.split("-");
-  const version = parts.shift();
-  const rest = parts.join("-");
-  const suffix = rest
-    .split("-")
-    .map((p) => (p.length ? p[0].toUpperCase() + p.slice(1) : p))
-    .join(" ");
-  return `Gemini ${version} ${suffix}`.trim();
+  return formatGeminiModelLabel(providerId);
 }
 
 function suggestedProviderFor(primaryProvider: string): string | null {
-  // Main desired flow: flash latest -> lite latest.
-  if (primaryProvider === "gemini-2.5-flash-latest") {
-    return "gemini-2.5-flash-lite-latest";
-  }
-
-  // Generic Gemini: if on flash (non-lite), suggest lite-latest; if already lite, suggest flash.
-  if (primaryProvider.startsWith("gemini-")) {
-    if (primaryProvider.includes("lite")) {
-      return "gemini-2.5-flash";
-    }
-    if (primaryProvider.includes("flash")) {
-      return "gemini-2.5-flash-lite-latest";
-    }
+  if (primaryProvider.includes("lite")) {
+    return FALLBACK_GEMINI_MODEL;
   }
 
   return null;
@@ -54,6 +35,7 @@ export function useAnalysisFlow(args: {
   selectedDate: Ref<string>;
   refreshState: () => Promise<void>;
   saveFoodDraft: () => Promise<void>;
+  saveProvider: (provider: string) => Promise<void>;
 }) {
   const isAnalyzing = ref(false);
   const suggestedProviderId = ref<string | null>(null);
@@ -66,7 +48,7 @@ export function useAnalysisFlow(args: {
   const activeRun = ref<Promise<void> | null>(null);
   let suggestTimer: number | null = null;
 
-  function getAnalyzeGate(activeProvider: string, foodLogText: string): AnalyzeGate {
+  function getAnalyzeGate(_activeProvider: string, foodLogText: string): AnalyzeGate {
     if (!args.profile.value?.age || !args.profile.value?.height || !args.profile.value.activityPrompt.trim()) {
       return { ok: false, reason: "incomplete-profile" };
     }
@@ -79,7 +61,7 @@ export function useAnalysisFlow(args: {
       return { ok: false, reason: "offline" };
     }
 
-    if (!providerHasKey(activeProvider)) {
+    if (!hasGeminiApiKey()) {
       return { ok: false, reason: "missing-key" };
     }
 
@@ -191,6 +173,7 @@ export function useAnalysisFlow(args: {
       }
     }
 
+    await args.saveProvider(nextProvider);
     // Clear any stuck queue items (including "processing"), then retry with suggested model.
     await clearQueueForDate(args.selectedDate.value);
     await queueAnalysis(args.selectedDate.value, nextProvider);

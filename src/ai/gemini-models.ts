@@ -1,4 +1,5 @@
 import { translations } from "../i18n/translations";
+import { formatGeminiModelLabel } from "./gemini-config";
 import type { AiProviderOption, AppLocale } from "../types";
 
 type GeminiModel = {
@@ -41,8 +42,8 @@ export async function fetchGeminiModelOptions(apiKey: string, locale: AppLocale)
 
   return unique.map((id) => ({
     id,
-    label: friendlyGeminiLabel(id),
-    helper: translations[locale].providerHelperDetected,
+    label: formatGeminiModelLabel(id),
+    helper: translations[locale].analysisModelDetectedHelper,
     experimental: id.includes("preview") || id.includes("experimental"),
     source: "detected",
   }));
@@ -51,19 +52,6 @@ export async function fetchGeminiModelOptions(apiKey: string, locale: AppLocale)
 function normalizeModelId(name: string) {
   // The API returns "models/<id>".
   return name.startsWith("models/") ? name.slice("models/".length) : name;
-}
-
-function friendlyGeminiLabel(id: string) {
-  // gemini-2.5-flash -> Gemini 2.5 Flash
-  const normalized = id.replace(/^gemini-/, "");
-  const parts = normalized.split("-");
-  const version = parts.shift();
-  const rest = parts.join("-");
-  const suffix = rest
-    .split("-")
-    .map((p) => (p.length ? p[0].toUpperCase() + p.slice(1) : p))
-    .join(" ");
-  return `Gemini ${version} ${suffix}`.trim();
 }
 
 function compareModelPreference(a: string, b: string) {

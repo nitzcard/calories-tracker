@@ -1,4 +1,5 @@
 import type { ExportedAppData } from "../storage/repository";
+import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
 import type { DailyEntry, FoodRule, Profile, SyncQueueItem } from "../types";
 
 export function mergeExportedAppData(local: ExportedAppData, remote: ExportedAppData | null) {
@@ -46,7 +47,7 @@ function mergeProfilePreservingData(
 	  const DEFAULT = {
 	    sex: "male" as const,
 	    tdeeEquation: "mifflinStJeor" as const,
-	    aiModel: "gemini-2.5-flash",
+	    aiModel: DEFAULT_GEMINI_MODEL,
 	    locale: "en" as const,
 	    themeMode: "system" as const,
       goalMode: "maingain" as const,

@@ -50,31 +50,17 @@ const issueText = computed(() => {
     case "offline":
       return t("offlineAnalyzeIssue");
     case "missing-key":
-      return missingKeyText(props.provider);
+      return t("missingGeminiKeyNotice");
     default:
       return "";
   }
 });
 
-function missingKeyText(provider: string) {
-  if (provider.startsWith("groq-")) {
-    return t("missingGroqKeyNotice");
-  }
-
-  if (provider.startsWith("deepseek-")) {
-    return t("missingDeepSeekKeyNotice");
-  }
-
-  if (provider.startsWith("kimi-")) {
-    return t("missingKimiKeyNotice");
-  }
-
-  return t("missingGeminiKeyNotice");
-}
-
 const activeProvider = computed(() =>
   props.providerOptions.find((option) => option.id === props.provider),
 );
+
+const selectValue = computed(() => (props.canSelectProvider ? props.provider : ""));
 
 const providerSelectWidth = computed(() => {
   const longest = Math.max(
@@ -87,6 +73,14 @@ const providerSelectWidth = computed(() => {
 });
 
 const showAnalyzingNotice = computed(() => props.isAnalyzing);
+const showModelSwitchAction = computed(
+  () => Boolean(props.showModelSwitchPrompt && props.suggestedModelLabel),
+);
+const analysisNoticeText = computed(() =>
+  showModelSwitchAction.value
+    ? t("analysisSwitchSuggestionHelper", { model: props.suggestedModelLabel ?? "" })
+    : t("analyzeSlowNotice"),
+);
 </script>
 
 <template>
@@ -146,16 +140,17 @@ const showAnalyzingNotice = computed(() => props.isAnalyzing);
       <div class="actions">
         <FormField
           class="provider-field"
-          :label="t('provider')"
-          :helper="canSelectProvider ? activeProvider?.helper : t('providerNeedsKey')"
+          :label="t('analysisModelLabel')"
+          :helper="canSelectProvider ? activeProvider?.helper : t('analysisModelNeedsGeminiKey')"
           :style="{ '--provider-select-width': providerSelectWidth }"
         >
           <FieldControl as="select" :is-saving="isSavingProvider">
             <select
-              :value="provider"
+              :value="selectValue"
               :disabled="!canSelectProvider"
               @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
             >
+              <option v-if="!canSelectProvider" value=""></option>
               <option v-for="option in providerOptions" :key="option.id" :value="option.id">
                 {{ option.label }}
               </option>
@@ -183,19 +178,17 @@ const showAnalyzingNotice = computed(() => props.isAnalyzing);
           <span class="analysis-notice__spinner" aria-hidden="true"></span>
           <div class="analysis-notice__copy">
             <strong>{{ t("analysisInProgressTitle") }}</strong>
-            <p>{{ t("analyzeSlowNotice") }}</p>
+            <p>{{ analysisNoticeText }}</p>
           </div>
-        </div>
-        <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="analysis-suggestion" role="status" aria-live="polite">
-          <div class="analysis-suggestion__copy">
-            <strong>{{ t("analysisSwitchSuggestionTitle") }}</strong>
-            <p>{{ t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel }) }}</p>
-          </div>
-          <div class="analysis-suggestion__actions">
+          <div v-if="showModelSwitchAction" class="analysis-notice__actions">
             <button class="secondary-action" type="button" @click="emit('accept-model-switch')">
-              {{ t("analysisSwitchSuggestionAccept", { model: suggestedModelLabel }) }}
+              {{ t("analysisSwitchSuggestionUseModel") }}
             </button>
-            <button class="secondary-action secondary-action--subtle" type="button" @click="emit('dismiss-model-switch')">
+            <button
+              class="secondary-action secondary-action--subtle"
+              type="button"
+              @click="emit('dismiss-model-switch')"
+            >
               {{ t("analysisSwitchSuggestionDismiss") }}
             </button>
           </div>
@@ -254,16 +247,17 @@ const showAnalyzingNotice = computed(() => props.isAnalyzing);
     <div class="actions">
       <FormField
         class="provider-field"
-        :label="t('provider')"
-        :helper="canSelectProvider ? activeProvider?.helper : t('providerNeedsKey')"
+        :label="t('analysisModelLabel')"
+        :helper="canSelectProvider ? activeProvider?.helper : t('analysisModelNeedsGeminiKey')"
         :style="{ '--provider-select-width': providerSelectWidth }"
       >
         <FieldControl as="select" :is-saving="isSavingProvider">
           <select
-            :value="provider"
+            :value="selectValue"
             :disabled="!canSelectProvider"
             @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
           >
+            <option v-if="!canSelectProvider" value=""></option>
             <option v-for="option in providerOptions" :key="option.id" :value="option.id">
               {{ option.label }}
             </option>
@@ -294,19 +288,17 @@ const showAnalyzingNotice = computed(() => props.isAnalyzing);
         <span class="analysis-notice__spinner" aria-hidden="true"></span>
         <div class="analysis-notice__copy">
           <strong>{{ t("analysisInProgressTitle") }}</strong>
-          <p>{{ t("analyzeSlowNotice") }}</p>
+          <p>{{ analysisNoticeText }}</p>
         </div>
-      </div>
-      <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="analysis-suggestion" role="status" aria-live="polite">
-        <div class="analysis-suggestion__copy">
-          <strong>{{ t("analysisSwitchSuggestionTitle") }}</strong>
-          <p>{{ t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel }) }}</p>
-        </div>
-        <div class="analysis-suggestion__actions">
+        <div v-if="showModelSwitchAction" class="analysis-notice__actions">
           <button class="secondary-action" type="button" @click="emit('accept-model-switch')">
-            {{ t("analysisSwitchSuggestionAccept", { model: suggestedModelLabel }) }}
+            {{ t("analysisSwitchSuggestionUseModel") }}
           </button>
-          <button class="secondary-action secondary-action--subtle" type="button" @click="emit('dismiss-model-switch')">
+          <button
+            class="secondary-action secondary-action--subtle"
+            type="button"
+            @click="emit('dismiss-model-switch')"
+          >
             {{ t("analysisSwitchSuggestionDismiss") }}
           </button>
         </div>
@@ -480,38 +472,6 @@ const showAnalyzingNotice = computed(() => props.isAnalyzing);
     );
 }
 
-.analysis-suggestion {
-  display: grid;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
-  box-shadow: var(--bevel-sunken);
-}
-
-.analysis-suggestion__copy {
-  display: grid;
-  gap: 4px;
-}
-
-.analysis-suggestion__copy p {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-.analysis-suggestion__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-start;
-}
-
-.analysis-suggestion__actions .secondary-action--subtle {
-  background: var(--surface-2);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
 .analysis-notice__spinner {
   inline-size: 1.15rem;
   block-size: 1.15rem;
@@ -535,6 +495,19 @@ const showAnalyzingNotice = computed(() => props.isAnalyzing);
   color: var(--text-muted);
   max-inline-size: 34rem;
   line-height: 1.4;
+}
+
+.analysis-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.analysis-notice__actions .secondary-action--subtle {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 @media (max-width: 640px) {

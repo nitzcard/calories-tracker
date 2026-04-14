@@ -893,7 +893,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                   </label>
 
                   <label class="kv">
-                    <div class="k">{{ t("kcalPer100g") }}</div>
+                    <div class="k">{{ t("kcalPer100gLabel") }}</div>
                     <div class="v">
                       <input
                         class="per100-input"

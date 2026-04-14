@@ -7,6 +7,10 @@ const props = defineProps<{
   points: Array<{ x: number; y: number | null }>;
   label: string;
   yUnit?: string;
+  trendline?: {
+    label: string;
+    color?: string;
+  };
   referenceLines?: Array<{
     label: string;
     value: number | null;
@@ -45,12 +49,22 @@ const activeReferenceLines = computed(() => {
   const legacy = props.referenceLine?.value !== null && props.referenceLine?.value !== undefined ? [props.referenceLine] : [];
   return legacy.filter(Boolean) as Array<{ label: string; value: number; color?: string }>;
 });
+const activeTrendline = computed(() => {
+  if (!props.trendline || props.points.length < 2) {
+    return null;
+  }
+
+  return props.trendline;
+});
 const hasReferenceLines = computed(() => activeReferenceLines.value.length > 0);
 const normalizedPoints = computed(() =>
   props.points.map((point) => ({
     x: normalizeTimestamp(point.x),
     y: point.y,
   })),
+);
+const trendlineValues = computed(() =>
+  activeTrendline.value ? buildTrendlineValues(normalizedPoints.value) : [],
 );
 const hoveredPoint = computed(() =>
   hoverIndex.value === null ? null : normalizedPoints.value[hoverIndex.value] ?? null,
@@ -66,11 +80,12 @@ function renderChart() {
 
   const xValues = normalizedPoints.value.map((point) => point.x);
   const yValues = normalizedPoints.value.map((point) => point.y ?? null);
+  const trendValues = trendlineValues.value;
   const xSplits = uniqueSorted(xValues);
   const referenceValuesList = activeReferenceLines.value.map((line) => xValues.map(() => line.value ?? null));
   const allYValues = hasReferenceLines.value
-    ? [...yValues, ...referenceValuesList.flatMap((values) => values as Array<number | null>)]
-    : yValues;
+    ? [...yValues, ...trendValues, ...referenceValuesList.flatMap((values) => values as Array<number | null>)]
+    : [...yValues, ...trendValues];
 
   const chartWidth = chartRef.value?.clientWidth || 320;
   const maxXLabels = Math.max(3, Math.floor(chartWidth / 52));
@@ -92,6 +107,16 @@ function renderChart() {
           width: 2,
           points: { size: 8, stroke: "#0a88a3", fill: "#0a88a3", width: 2 },
         },
+        ...(activeTrendline.value
+          ? [
+              {
+                label: activeTrendline.value.label,
+                stroke: activeTrendline.value.color ?? "#5e4aa8",
+                width: 3,
+                points: { show: false },
+              },
+            ]
+          : []),
         ...activeReferenceLines.value.map((line) => ({
           label: line.label,
           stroke: line.color ?? "#9a7b24",
@@ -169,7 +194,7 @@ function renderChart() {
         ],
       },
     },
-    [xValues, yValues, ...referenceValuesList],
+    [xValues, yValues, ...(activeTrendline.value ? [trendValues] : []), ...referenceValuesList],
     chartRef.value,
   );
 }
@@ -206,6 +231,37 @@ function formatHoverValue(value: number | null | undefined) {
 
 function uniqueSorted(values: number[]) {
   return Array.from(new Set(values)).sort((a, b) => a - b);
+}
+
+function buildTrendlineValues(points: Array<{ x: number; y: number | null }>) {
+  const numeric = points.filter((point): point is { x: number; y: number } => typeof point.y === "number");
+  if (numeric.length < 2) {
+    return [];
+  }
+
+  const origin = numeric[0].x;
+  const offsets = numeric.map((point) => point.x - origin);
+  const ys = numeric.map((point) => point.y);
+  const meanX = offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
+  const meanY = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+  const numerator = offsets.reduce((sum, value, index) => sum + (value - meanX) * (ys[index] - meanY), 0);
+  const denominator = offsets.reduce((sum, value) => sum + (value - meanX) ** 2, 0);
+
+  if (denominator === 0) {
+    return points.map((point) => point.y);
+  }
+
+  const slope = numerator / denominator;
+  const intercept = meanY - slope * meanX;
+
+  return points.map((point) => {
+    if (point.y === null || point.y === undefined) {
+      return null;
+    }
+
+    const offset = point.x - origin;
+    return slope * offset + intercept;
+  });
 }
 
 function buildYRange(values: Array<number | null>): [number, number] {
@@ -283,6 +339,14 @@ onBeforeUnmount(() => {
       <div class="legend-row">
         <span class="legend-swatch legend-swatch--solid" aria-hidden="true"></span>
         <span class="legend-label">{{ label }}</span>
+      </div>
+      <div v-if="activeTrendline" class="legend-row">
+        <span
+          class="legend-swatch legend-swatch--solid"
+          :style="{ '--swatch-color': activeTrendline.color ?? '#5e4aa8' }"
+          aria-hidden="true"
+        ></span>
+        <span class="legend-label">{{ activeTrendline.label }}</span>
       </div>
       <div v-for="line in activeReferenceLines" :key="line.label" class="legend-row">
         <span
@@ -380,7 +444,7 @@ onBeforeUnmount(() => {
 }
 
 .legend-swatch--solid {
-  color: #0a88a3;
+  color: var(--swatch-color, #0a88a3);
 }
 
 .legend-swatch--dash {

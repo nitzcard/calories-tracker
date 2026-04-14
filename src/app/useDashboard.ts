@@ -44,9 +44,9 @@ import {
 import {
   ensureProviderOption,
   listProviderOptions,
-  localizeBuiltinProviderOptions,
   syncGeminiProviderOptions,
 } from "../ai/registry";
+import { DEFAULT_GEMINI_MODEL, isGeminiModelId } from "../ai/gemini-config";
 import { fetchGeminiModelOptions } from "../ai/gemini-models";
 import { mergeExportedAppData } from "../cloud/merge";
 import { localIsoDate } from "../domain/dates";
@@ -62,8 +62,7 @@ export function useDashboard() {
   const currentFoodLog = ref("");
   const currentWeight = ref("");
   const provider = ref(normalizeProvider(readStoredProvider()));
-  localizeBuiltinProviderOptions(locale.value);
-  const providerOptions = ref<AiProviderOption[]>(listProviderOptions(locale.value));
+  const providerOptions = ref<AiProviderOption[]>([]);
   const aiKeys = ref<StoredAiKeys>(getStoredAiKeys());
   const notice = ref("");
   const autoSave = useAutoSaveState();
@@ -211,6 +210,14 @@ export function useDashboard() {
   let foodDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let weightDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+  function hasEffectiveGeminiKey() {
+    return Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim());
+  }
+
+  function refreshVisibleProviderOptions(nextLocale = locale.value) {
+    providerOptions.value = hasEffectiveGeminiKey() ? listProviderOptions(nextLocale) : [];
+  }
+
   watch(currentFoodLog, () => {
     if (!isCurrentFoodLogDirty.value) {
       if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
@@ -281,9 +288,9 @@ export function useDashboard() {
     if (!profile.value) return;
     if (isCalculatingCustomTdee.value) return;
 
-    const effectiveProvider = provider.value.startsWith("gemini-")
+    const effectiveProvider = isGeminiModelId(provider.value)
       ? provider.value
-      : "gemini-2.5-flash-latest";
+      : DEFAULT_GEMINI_MODEL;
 
     const historyWindow = displayEntries.value
       .filter((entry) => entry.date <= selectedDate.value)
@@ -455,9 +462,8 @@ export function useDashboard() {
   async function onLocaleChange(nextLocale: AppLocale) {
     locale.value = nextLocale;
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, nextLocale);
-    localizeBuiltinProviderOptions(nextLocale);
     ensureProviderOption(provider.value, nextLocale);
-    providerOptions.value = listProviderOptions(nextLocale);
+    refreshVisibleProviderOptions(nextLocale);
     if (!profile.value) return;
     await autoSave.runAutoSave(async () => {
       profile.value = { ...profile.value!, locale: locale.value };
@@ -487,7 +493,7 @@ export function useDashboard() {
       profile.value = { ...profile.value!, aiModel: nextProvider };
       await saveProfile(profile.value);
     }, "settings.provider");
-    providerOptions.value = listProviderOptions(locale.value);
+    refreshVisibleProviderOptions();
     scheduleCloudPush("settings.provider");
   }
 
@@ -599,6 +605,7 @@ export function useDashboard() {
     selectedDate,
     refreshState,
     saveFoodDraft,
+    saveProvider: onProviderChange,
   });
 
   const corrections = useFoodCorrectionState({
@@ -737,9 +744,6 @@ export function useDashboard() {
     if (!remoteKeys) return localKeys;
     return {
       gemini: remoteKeys.gemini?.trim() ? remoteKeys.gemini : localKeys.gemini,
-      deepseek: remoteKeys.deepseek?.trim() ? remoteKeys.deepseek : localKeys.deepseek,
-      kimi: remoteKeys.kimi?.trim() ? remoteKeys.kimi : localKeys.kimi,
-      groq: remoteKeys.groq?.trim() ? remoteKeys.groq : localKeys.groq,
     };
   }
 
@@ -908,9 +912,8 @@ export function useDashboard() {
         localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, themeMode.value);
         provider.value = normalizeProvider(profile.value.aiModel);
         localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
-        localizeBuiltinProviderOptions(locale.value);
         ensureProviderOption(provider.value, locale.value);
-        providerOptions.value = listProviderOptions(locale.value);
+        refreshVisibleProviderOptions(locale.value);
         syncChrome();
       }
 
@@ -1111,8 +1114,7 @@ export function useDashboard() {
     async (key) => {
       const effectiveKey = (key || import.meta.env.VITE_GEMINI_API_KEY || "").trim();
       if (!effectiveKey) {
-        // No key: keep model select disabled and empty to avoid misleading options.
-        providerOptions.value = [];
+        refreshVisibleProviderOptions();
         return;
       }
       try {
@@ -1129,7 +1131,7 @@ export function useDashboard() {
         }
         const userPicked = localStorage.getItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet) === "1";
         const shouldNormalizeToLatest =
-          provider.value.startsWith("gemini-") && !detectedIds.has(provider.value);
+          isGeminiModelId(provider.value) && !detectedIds.has(provider.value);
 
         // If the saved model is not part of the latest-only API list, or the user never picked,
         // normalize to the preferred latest Flash model.
@@ -1146,11 +1148,10 @@ export function useDashboard() {
         }
 
         ensureProviderOption(provider.value, locale.value);
-        providerOptions.value = listProviderOptions(locale.value);
+        refreshVisibleProviderOptions();
       } catch {
-        localizeBuiltinProviderOptions(locale.value);
         ensureProviderOption(provider.value, locale.value);
-        providerOptions.value = listProviderOptions(locale.value);
+        refreshVisibleProviderOptions();
       }
     },
     { immediate: true },
@@ -1175,9 +1176,8 @@ export function useDashboard() {
     profile.value = await ensureDefaultProfile(locale.value, themeMode.value);
     provider.value = normalizeProvider(readStoredProvider() ?? profile.value.aiModel);
     locale.value = readStoredLocale() ?? profile.value.locale;
-    localizeBuiltinProviderOptions(locale.value);
     ensureProviderOption(provider.value, locale.value);
-    providerOptions.value = listProviderOptions(locale.value);
+    refreshVisibleProviderOptions();
     themeMode.value = readStoredThemeMode() ?? profile.value.themeMode;
     profile.value = {
       ...profile.value,

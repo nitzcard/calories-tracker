@@ -361,16 +361,6 @@ watch(
 );
 
 watch(
-  showModelSwitchPrompt,
-  (active) => {
-    if (!active) return;
-    const model = suggestedModelLabel.value;
-    if (!model) return;
-    showTransientToast("local", t("analysisSwitchSuggestionToast", { model }), 6000);
-  },
-);
-
-watch(
   cloudStatus,
   (next, previous) => {
     if (next === previous) {
@@ -471,7 +461,21 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
       <span class="global-analyzing-spinner" aria-hidden="true"></span>
       <div class="global-analyzing-copy">
         <strong class="global-analyzing-label">{{ t("analysisInProgressTitle") }}</strong>
-        <span class="global-analyzing-helper">{{ t("analyzeSlowNotice") }}</span>
+        <span class="global-analyzing-helper">
+          {{
+            showModelSwitchPrompt && suggestedModelLabel
+              ? t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel })
+              : t("analyzeSlowNotice")
+          }}
+        </span>
+        <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="global-analyzing-actions">
+          <button class="secondary-action" type="button" @click="acceptSuggestedModelSwitch">
+            {{ t("analysisSwitchSuggestionUseModel") }}
+          </button>
+          <button class="secondary-action secondary-action--subtle" type="button" @click="dismissSuggestedModelSwitch">
+            {{ t("analysisSwitchSuggestionDismiss") }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -691,7 +695,13 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
       </BasePanel>
 
       <BasePanel id="graphWeightPanel" class="grid-cell span-6" :title="t('graphWeight')" collapsible>
-        <MetricChart :locale="locale" :points="weightPoints" :label="t('graphWeight')" :y-unit="t('unitKg')" />
+        <MetricChart
+          :locale="locale"
+          :points="weightPoints"
+          :label="t('graphWeight')"
+          :y-unit="t('unitKg')"
+          :trendline="{ label: t('trendLine'), color: '#7a5ec8' }"
+        />
       </BasePanel>
 
       <div class="grid-cell span-12">
@@ -741,6 +751,7 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24), var(--bevel-raised);
   text-align: center;
   backdrop-filter: blur(10px);
+  pointer-events: auto;
 }
 
 .global-analyzing-spinner {
@@ -768,6 +779,19 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
   color: var(--text-muted);
   font-size: 0.9rem;
   line-height: 1.35;
+}
+
+.global-analyzing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.global-analyzing-actions .secondary-action--subtle {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 @keyframes global-spin {

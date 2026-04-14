@@ -1,5 +1,5 @@
 import { buildGeminiNutritionPrompt } from "./gemini-prompt";
-import { readApiKeyForProvider } from "./credentials";
+import { readGeminiApiKey } from "./credentials";
 import {
   GEMINI_RESPONSE_SCHEMA,
   normalizeAiNutritionResponse,
@@ -29,7 +29,7 @@ export class GeminiProvider implements AIProvider {
   }
 
   async analyzeDailyEntry(input: AiAnalysisInput, signal?: AbortSignal): Promise<NormalizedNutritionResult> {
-    const apiKey = readApiKeyForProvider(this.id) || import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = readGeminiApiKey();
     if (!apiKey) {
       throw new Error(
         "Missing Gemini API key. Set VITE_GEMINI_API_KEY to enable AI nutrition parsing.",

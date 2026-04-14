@@ -1,4 +1,5 @@
 import { isSupportedProviderOption } from "../ai/registry";
+import { DEFAULT_GEMINI_MODEL, isGeminiModelId } from "../ai/gemini-config";
 import type { AppLocale, AiStatus, ThemeMode } from "../types";
 
 export const DASHBOARD_STORAGE_KEYS = {
@@ -14,16 +15,16 @@ export const DASHBOARD_STORAGE_KEYS = {
 } as const;
 
 export function normalizeProvider(value: string | null): string {
-  if (value && (isSupportedProviderOption(value) || value.startsWith("gemini-"))) {
+  if (value && (isSupportedProviderOption(value) || isGeminiModelId(value))) {
     return value;
   }
 
   const suggestedLatest = localStorage.getItem(DASHBOARD_STORAGE_KEYS.geminiLatestModel);
-  if (suggestedLatest && suggestedLatest.startsWith("gemini-")) {
+  if (isGeminiModelId(suggestedLatest)) {
     return suggestedLatest;
   }
 
-  return "gemini-2.5-flash-latest";
+  return DEFAULT_GEMINI_MODEL;
 }
 
 export function buildAnalyzeIssue(

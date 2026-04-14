@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
 import type {
   DailyEntry,
   DailyEntryInput,
@@ -37,7 +38,7 @@ const DEFAULT_PROFILE: Profile = {
   tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
   foodInstructions: "",
-  aiModel: "gemini-2.5-flash",
+  aiModel: DEFAULT_GEMINI_MODEL,
   locale: "en",
   themeMode: "system",
   updatedAt: new Date().toISOString(),

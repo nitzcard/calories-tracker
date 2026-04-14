@@ -1,4 +1,5 @@
-import { getProvider } from "./registry";
+import { DEFAULT_GEMINI_MODEL } from "./gemini-config";
+import { getGeminiProvider } from "./registry";
 import {
   clearQueueItemsByDate,
   enqueueSync,
@@ -11,7 +12,7 @@ import {
 } from "../storage/repository";
 import type { NormalizedNutritionResult } from "../types";
 
-export async function queueAnalysis(date: string, provider = "gemini-2.5-flash"): Promise<void> {
+export async function queueAnalysis(date: string, provider = DEFAULT_GEMINI_MODEL): Promise<void> {
   const existing = await getEntry(date);
 
   await enqueueSync({
@@ -54,7 +55,7 @@ export async function runPendingAnalysis(signal?: AbortSignal): Promise<void> {
     });
 
     try {
-      const result: NormalizedNutritionResult = await getProvider(item.provider).analyzeDailyEntry({
+      const result: NormalizedNutritionResult = await getGeminiProvider(item.provider).analyzeDailyEntry({
         date: item.date,
         foodLogText: entry.foodLogText,
         profile,
