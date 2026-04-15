@@ -578,28 +578,30 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
 </script>
 
 <template>
-  <div v-if="isAnalyzing" class="global-analyzing-overlay" role="status" :aria-label="t('analysisInProgressTitle')">
-    <div class="global-analyzing-bar">
-      <span class="global-analyzing-spinner" aria-hidden="true"></span>
-      <div class="global-analyzing-copy">
-        <strong class="global-analyzing-label">{{ t("analysisInProgressTitle") }}</strong>
-        <span class="global-analyzing-helper">
-          {{
-            showModelSwitchPrompt && suggestedModelLabel
-              ? t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel })
-              : t("analyzeSlowNotice")
-          }}
-        </span>
-        <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="global-analyzing-actions" dir="ltr">
-          <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
-          <button class="inline-action-link" type="button" @click="acceptSuggestedModelSwitch">
-            {{ suggestedModelLabel }}
-          </button>
-          <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+  <Teleport to="body">
+    <div v-if="isAnalyzing" class="global-analyzing-overlay" role="status" :aria-label="t('analysisInProgressTitle')">
+      <div class="global-analyzing-bar">
+        <span class="global-analyzing-spinner" aria-hidden="true"></span>
+        <div class="global-analyzing-copy">
+          <strong class="global-analyzing-label">{{ t("analysisInProgressTitle") }}</strong>
+          <span class="global-analyzing-helper">
+            {{
+              showModelSwitchPrompt && suggestedModelLabel
+                ? t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel })
+                : t("analyzeSlowNotice")
+            }}
+          </span>
+          <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="global-analyzing-actions" dir="ltr">
+            <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
+            <button class="inline-action-link" type="button" @click="acceptSuggestedModelSwitch">
+              {{ suggestedModelLabel }}
+            </button>
+            <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 
   <JasmineThemePrompt
     :confirmed-username="cloudConfirmedUsername"

@@ -115,7 +115,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     analyzeHelper:
       "Draft text saves automatically. Use the button only when you want a fresh analysis.",
     analyzeSlowNotice:
-      "Your food log is being processed now. This usually takes about 10-30 seconds.",
+      "Your food log is being processed now. This usually takes up to 1 min…",
     resultsUpdated: "Results updated.",
     resultsQueued: "Saved locally. Analysis will run automatically when the app can reach AI.",
     instructionSavedNeedsReanalysis: "Saved for future. Re-analyze to apply to this day.",
@@ -493,7 +493,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     analysisRetrySuggestionInstead: "instead.",
     analyzeHelper: "טיוטת הטקסט נשמרת אוטומטית. השתמש בכפתור רק כשרוצים ניתוח חדש.",
     analyzeSlowNotice:
-      "יומן האוכל שלך נמצא עכשיו בעיבוד. בדרך כלל זה לוקח בערך 10-30 שניות.",
+      "יומן האוכל שלך נמצא עכשיו בעיבוד. בדרך כלל זה לוקח עד דקה…",
     resultsUpdated: "התוצאות עודכנו.",
     resultsQueued: "נשמר מקומית. הניתוח ירוץ אוטומטית כשהאפליקציה תוכל להגיע ל-AI.",
     instructionSavedNeedsReanalysis: "נשמר להבא. כדי להחיל על היום הזה, מריצים ניתוח מחדש.",

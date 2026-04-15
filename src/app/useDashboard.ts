@@ -415,11 +415,11 @@ export function useDashboard() {
     applyTheme(themeMode.value);
   }
 
-  async function refreshState() {
+  async function refreshState(opts?: { skipReloadFoodLog?: boolean }) {
     entries.value = await listEntries();
     const savedProfile = await getProfile();
     profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value, themeMode.value));
-    loadSelectedEntry();
+    loadSelectedEntry(opts?.skipReloadFoodLog);
   }
 
   async function persistDraftsForDate(date: string) {
@@ -454,9 +454,11 @@ export function useDashboard() {
     if (weightDirty) scheduleCloudPush("today.weight");
   }
 
-  function loadSelectedEntry() {
+  function loadSelectedEntry(skipFoodLog?: boolean) {
     const draft = dailyEntryDraft(findEntryByDate(entries.value, selectedDate.value));
-    currentFoodLog.value = draft.foodLogText;
+    if (!skipFoodLog) {
+      currentFoodLog.value = draft.foodLogText;
+    }
     currentWeight.value = draft.weight;
   }
 
@@ -520,7 +522,7 @@ export function useDashboard() {
         date: selectedDate.value,
         foodLogText: currentFoodLog.value,
       });
-      await refreshState();
+      await refreshState({ skipReloadFoodLog: true });
     }, "today.foodLog");
     scheduleCloudPush("today.foodLog");
   }
