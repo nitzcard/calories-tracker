@@ -1,5 +1,5 @@
 import { computed, ref, type Ref } from "vue";
-import { FALLBACK_GEMINI_MODEL, formatGeminiModelLabel } from "../ai/gemini-config";
+import { FALLBACK_GEMINI_MODEL, LIGHTWEIGHT_GEMINI_LATEST_MODEL, formatGeminiModelLabel } from "../ai/gemini-config";
 import { hasGeminiApiKey } from "../ai/registry";
 import { clearQueueForDate, queueAnalysis, runPendingAnalysis } from "../ai/service";
 import { getPendingQueue } from "../storage/repository";
@@ -22,10 +22,12 @@ function friendlyModelLabel(providerId: string) {
 
 function suggestedProviderFor(primaryProvider: string): string | null {
   if (primaryProvider.includes("lite")) {
+    // Lite model is slow → suggest the regular flash for better quality
     return FALLBACK_GEMINI_MODEL;
   }
 
-  return null;
+  // Non-lite model is slow → suggest the lighter/faster lite model
+  return LIGHTWEIGHT_GEMINI_LATEST_MODEL;
 }
 
 export function useAnalysisFlow(args: {
