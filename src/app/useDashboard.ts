@@ -604,6 +604,7 @@ export function useDashboard() {
   const analysis = useAnalysisFlow({
     profile,
     provider,
+    providerOptions,
     currentFoodLog,
     selectedDate,
     refreshState,

@@ -10,6 +10,7 @@ const props = withDefaults(
     loading?: boolean;
     loadingTitle?: string;
     loadingHelper?: string;
+    loadingOverlay?: boolean;
     collapsible?: boolean;
     defaultOpen?: boolean;
   }>(),
@@ -19,6 +20,7 @@ const props = withDefaults(
     loading: false,
     loadingTitle: "",
     loadingHelper: undefined,
+    loadingOverlay: false,
     collapsible: false,
     defaultOpen: true,
   },
@@ -77,7 +79,7 @@ function onToggle(event: Event) {
       </div>
     </div>
 
-    <slot v-else />
+    <slot v-if="!loading || loadingOverlay" />
   </details>
 
   <section v-else :id="id" class="panel base-panel">
@@ -95,7 +97,7 @@ function onToggle(event: Event) {
       </div>
     </div>
 
-    <slot v-else />
+    <slot v-if="!loading || loadingOverlay" />
   </section>
 </template>
 

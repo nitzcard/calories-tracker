@@ -628,6 +628,7 @@ const proteinPerLeanBodyWeight = computed(() => {
     :helper="t('nutritionHelper')"
     collapsible
     :loading="isAnalyzing && !entry?.aiError"
+    :loading-overlay="Boolean(entry?.nutritionSnapshot)"
     :loading-title="t('analysisInProgressTitle')"
     :loading-helper="t('analyzeSlowNotice')"
   >
@@ -1294,13 +1295,13 @@ const proteinPerLeanBodyWeight = computed(() => {
       <p dir="ltr">{{ entry.aiError }}</p>
       <p v-if="analysisRetryModelLabel && analysisRetryModelId" class="error-box__retry" dir="ltr">
         <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
-        <button
+        <a
           class="inline-action-link"
-          type="button"
-          @click="emit('retry-analysis-with-model', analysisRetryModelId)"
+          href="#"
+          @click.prevent="emit('retry-analysis-with-model', analysisRetryModelId)"
         >
           {{ analysisRetryModelLabel }}
-        </button>
+        </a>
         <span>{{ t("analysisRetrySuggestionInstead") }}</span>
       </p>
     </div>

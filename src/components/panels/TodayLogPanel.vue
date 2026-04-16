@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
+import AnalysisSwitchSuggestion from "../shared/AnalysisSwitchSuggestion.vue";
 import type { AiProviderOption, AppLocale } from "../../types";
 
 const props = defineProps<{
@@ -81,11 +82,6 @@ const showModelSwitchAction = computed(
 );
 const showAnalysisRetryAction = computed(
   () => Boolean(props.analysisError && props.analysisRetryModelLabel && props.analysisRetryModelId),
-);
-const analysisNoticeText = computed(() =>
-  showModelSwitchAction.value
-    ? t("analysisSwitchSuggestionHelper", { model: props.suggestedModelLabel ?? "" })
-    : t("analyzeSlowNotice"),
 );
 </script>
 
@@ -184,13 +180,13 @@ const analysisNoticeText = computed(() =>
           <p>{{ analysisError }}</p>
           <p v-if="showAnalysisRetryAction" class="analyze-error__retry">
             <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
-            <button
+            <a
               class="inline-action-link"
-              type="button"
-              @click="emit('retry-analysis-with-model', analysisRetryModelId ?? '')"
+              href="#"
+              @click.prevent="emit('retry-analysis-with-model', analysisRetryModelId ?? '')"
             >
               {{ analysisRetryModelLabel }}
-            </button>
+            </a>
             <span>{{ t("analysisRetrySuggestionInstead") }}</span>
           </p>
         </div>
@@ -198,16 +194,12 @@ const analysisNoticeText = computed(() =>
           <span class="analysis-notice__spinner" aria-hidden="true"></span>
           <div class="analysis-notice__copy">
             <strong>{{ t("analysisInProgressTitle") }}</strong>
-            <p>{{ analysisNoticeText }}</p>
-          </div>
-          <div v-if="showModelSwitchAction" class="analysis-notice__actions">
-            <span class="analysis-notice__switch">
-              {{ t("analysisRetrySuggestionPrefix") }}
-              <button class="inline-action-link" type="button" @click="emit('accept-model-switch')">
-                {{ suggestedModelLabel }}
-              </button>
-              <span>{{ t("analysisRetrySuggestionInstead") }}</span>
-            </span>
+            <AnalysisSwitchSuggestion
+              v-if="(showModelSwitchAction && suggestedModelLabel)"
+              :model-label="suggestedModelLabel"
+              @accept="emit('accept-model-switch')"
+            />
+            <p v-else>{{ t("analyzeSlowNotice") }}</p>
           </div>
         </div>
       </div>
@@ -299,13 +291,13 @@ const analysisNoticeText = computed(() =>
         <p>{{ analysisError }}</p>
         <p v-if="showAnalysisRetryAction" class="analyze-error__retry">
           <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
-          <button
+          <a
             class="inline-action-link"
-            type="button"
-            @click="emit('retry-analysis-with-model', analysisRetryModelId ?? '')"
+            href="#"
+            @click.prevent="emit('retry-analysis-with-model', analysisRetryModelId ?? '')"
           >
             {{ analysisRetryModelLabel }}
-          </button>
+          </a>
           <span>{{ t("analysisRetrySuggestionInstead") }}</span>
         </p>
       </div>
@@ -316,16 +308,12 @@ const analysisNoticeText = computed(() =>
         <span class="analysis-notice__spinner" aria-hidden="true"></span>
         <div class="analysis-notice__copy">
           <strong>{{ t("analysisInProgressTitle") }}</strong>
-          <p>{{ analysisNoticeText }}</p>
-        </div>
-        <div v-if="showModelSwitchAction" class="analysis-notice__actions">
-          <span class="analysis-notice__switch">
-            {{ t("analysisRetrySuggestionPrefix") }}
-            <button class="inline-action-link" type="button" @click="emit('accept-model-switch')">
-              {{ suggestedModelLabel }}
-            </button>
-            <span>{{ t("analysisRetrySuggestionInstead") }}</span>
-          </span>
+          <AnalysisSwitchSuggestion
+            v-if="showModelSwitchAction && suggestedModelLabel"
+            :model-label="suggestedModelLabel"
+            @accept="emit('accept-model-switch')"
+          />
+          <p v-else>{{ t("analyzeSlowNotice") }}</p>
         </div>
       </div>
     </div>
@@ -540,19 +528,6 @@ const analysisNoticeText = computed(() =>
   color: var(--text-muted);
   max-inline-size: 34rem;
   line-height: 1.4;
-}
-
-.analysis-notice__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.analysis-notice__actions .secondary-action--subtle {
-  background: var(--surface-2);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
 }
 
 @media (max-width: 640px) {

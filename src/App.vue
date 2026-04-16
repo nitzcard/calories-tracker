@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "./components/base/BasePanel.vue";
 import AppHeader from "./components/header/AppHeader.vue";
 import JasmineThemePrompt from "./components/JasmineThemePrompt.vue";
+import AnalysisSwitchSuggestion from "./components/shared/AnalysisSwitchSuggestion.vue";
 import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
 import { useDashboard } from "./app/useDashboard";
 import { FALLBACK_GEMINI_MODEL, formatGeminiModelLabel } from "./ai/gemini-config";
@@ -575,6 +576,7 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
   profile.value = nextProfile;
   void saveProfileAndHighlight(nextProfile);
 }
+
 </script>
 
 <template>
@@ -584,20 +586,12 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
         <span class="global-analyzing-spinner" aria-hidden="true"></span>
         <div class="global-analyzing-copy">
           <strong class="global-analyzing-label">{{ t("analysisInProgressTitle") }}</strong>
-          <span class="global-analyzing-helper">
-            {{
-              showModelSwitchPrompt && suggestedModelLabel
-                ? t("analysisSwitchSuggestionHelper", { model: suggestedModelLabel })
-                : t("analyzeSlowNotice")
-            }}
-          </span>
-          <div v-if="showModelSwitchPrompt && suggestedModelLabel" class="global-analyzing-actions" dir="ltr">
-            <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
-            <button class="inline-action-link" type="button" @click="acceptSuggestedModelSwitch">
-              {{ suggestedModelLabel }}
-            </button>
-            <span>{{ t("analysisRetrySuggestionInstead") }}</span>
-          </div>
+          <AnalysisSwitchSuggestion
+            v-if="showModelSwitchPrompt && suggestedModelLabel"
+            :model-label="suggestedModelLabel"
+            @accept="acceptSuggestedModelSwitch"
+          />
+          <span v-else>{{ t("analyzeSlowNotice") }}</span>
         </div>
       </div>
     </div>
@@ -911,25 +905,6 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
 .global-analyzing-label {
   font-size: 0.98rem;
   line-height: 1.2;
-}
-
-.global-analyzing-helper {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  line-height: 1.35;
-}
-
-.global-analyzing-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.global-analyzing-actions .secondary-action--subtle {
-  background: var(--surface-2);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
 }
 
 @keyframes global-spin {

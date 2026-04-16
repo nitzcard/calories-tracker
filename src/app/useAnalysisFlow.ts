@@ -1,10 +1,10 @@
 import { computed, ref, type Ref } from "vue";
-import { FALLBACK_GEMINI_MODEL, LIGHTWEIGHT_GEMINI_LATEST_MODEL, formatGeminiModelLabel } from "../ai/gemini-config";
+import { formatGeminiModelLabel, isGeminiModelId } from "../ai/gemini-config";
 import { hasGeminiApiKey } from "../ai/registry";
 import { clearQueueForDate, queueAnalysis, runPendingAnalysis } from "../ai/service";
 import { getPendingQueue } from "../storage/repository";
 import { buildAnalyzeIssue } from "./dashboard-helpers";
-import type { Profile } from "../types";
+import type { AiProviderOption, Profile } from "../types";
 
 type AnalyzeGate =
   | { ok: true }
@@ -20,19 +20,34 @@ function friendlyModelLabel(providerId: string) {
   return formatGeminiModelLabel(providerId);
 }
 
-function suggestedProviderFor(primaryProvider: string): string | null {
-  if (primaryProvider.includes("lite")) {
-    // Lite model is slow → suggest the regular flash for better quality
-    return FALLBACK_GEMINI_MODEL;
+function suggestedProviderFor(primaryProvider: string, providerOptions: AiProviderOption[]): string | null {
+  const detected = providerOptions.filter(
+    (option) => option.source === "detected" && isGeminiModelId(option.id),
+  );
+  if (!detected.length) {
+    return null;
   }
 
-  // Non-lite model is slow → suggest the lighter/faster lite model
-  return LIGHTWEIGHT_GEMINI_LATEST_MODEL;
+  const family = primaryProvider.includes("lite") ? "flash" : "flash-lite";
+  const candidates = detected
+    .filter((option) => option.id.includes(family))
+    .sort((a, b) => rankSuggestion(a.id) - rankSuggestion(b.id) || a.id.localeCompare(b.id));
+
+  return candidates[0]?.id ?? null;
+}
+
+function rankSuggestion(id: string) {
+  const lowered = id.toLowerCase();
+  const is25 = lowered.includes("2.5") ? 0 : 1;
+  const isLatest = lowered.includes("latest") ? 0 : 1;
+  const isPreview = lowered.includes("preview") || lowered.includes("experimental") ? 1 : 0;
+  return is25 * 100 + isLatest * 10 + isPreview;
 }
 
 export function useAnalysisFlow(args: {
   profile: Ref<Profile | null>;
   provider: Ref<string>;
+  providerOptions: Ref<AiProviderOption[]>;
   currentFoodLog: Ref<string>;
   selectedDate: Ref<string>;
   refreshState: () => Promise<void>;
@@ -130,7 +145,7 @@ export function useAnalysisFlow(args: {
 
     if (suggestTimer) window.clearTimeout(suggestTimer);
     suggestTimer = window.setTimeout(() => {
-      const suggestion = suggestedProviderFor(args.provider.value);
+      const suggestion = suggestedProviderFor(args.provider.value, args.providerOptions.value);
       if (!suggestion) return;
       suggestedProviderId.value = suggestion;
       showModelSwitchPrompt.value = true;
