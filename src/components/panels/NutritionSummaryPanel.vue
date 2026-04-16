@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
-import type { AppLocale, DailyEntry, FoodBreakdownItem, MealBreakdownItem, Profile } from "../../types";
+import type { AppLocale, DailyEntry, FoodBreakdownItem, MealBreakdownItem, NutritionTotals, Profile } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -42,6 +42,8 @@ const emit = defineEmits<{
 }>();
 
 const editableMeals = ref<MealBreakdownItem[]>([]);
+const editableMealTotals = ref<Record<string, NutritionTotals>>({});
+const originalMealTotals = ref<Record<string, NutritionTotals>>({});
 const showCorrectionCue = ref(false);
 const showNewResultsCue = ref(false);
 let correctionCueTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -64,6 +66,15 @@ watch(
           foods: meal.foods.map((food) => ({ ...food })),
         }))
       : [];
+    const totalsInit: Record<string, NutritionTotals> = {};
+    for (const meal of editableMeals.value) {
+      totalsInit[meal.id] = { ...meal.totals };
+    }
+    editableMealTotals.value = { ...totalsInit };
+    originalMealTotals.value = {};
+    for (const [id, tot] of Object.entries(totalsInit)) {
+      originalMealTotals.value[id] = { ...tot };
+    }
   },
   { immediate: true },
 );
@@ -172,6 +183,37 @@ function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
     food.caloriesPer100g ?? null,
   );
   closeRowActionMenu(food);
+}
+
+function updateMealTotal(mealId: string, key: keyof NutritionTotals, rawValue: string) {
+  const current = editableMealTotals.value[mealId];
+  if (!current) return;
+  editableMealTotals.value = {
+    ...editableMealTotals.value,
+    [mealId]: { ...current, [key]: rawValue ? Number(rawValue) : null },
+  };
+}
+
+function resetMealTotal(mealId: string) {
+  const original = originalMealTotals.value[mealId];
+  if (!original) return;
+  editableMealTotals.value = {
+    ...editableMealTotals.value,
+    [mealId]: { ...original },
+  };
+}
+
+function isMealTotalModified(mealId: string) {
+  const editable = editableMealTotals.value[mealId];
+  const original = originalMealTotals.value[mealId];
+  if (!editable || !original) return false;
+  return (
+    editable.calories !== original.calories ||
+    editable.protein !== original.protein ||
+    editable.carbs !== original.carbs ||
+    editable.fat !== original.fat ||
+    editable.fiber !== original.fiber
+  );
 }
 
 function displayMealLabel(mealKey: MealBreakdownItem["mealKey"], fallback: string) {
@@ -915,6 +957,63 @@ const proteinPerLeanBodyWeight = computed(() => {
                   </td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr class="meal-total-row">
+                  <td class="food-cell meal-total-label">
+                    <span class="food-name">{{ t("mealTotal") }}</span>
+                  </td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="editableMealTotals[meal.id]?.calories ?? ''"
+                      @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
+                    />
+                  </td>
+                  <td>—</td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="editableMealTotals[meal.id]?.protein ?? ''"
+                      @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="editableMealTotals[meal.id]?.carbs ?? ''"
+                      @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="editableMealTotals[meal.id]?.fat ?? ''"
+                      @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="editableMealTotals[meal.id]?.fiber ?? ''"
+                      @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
+                    />
+                  </td>
+                  <td class="action-cell">
+                    <button
+                      class="row-action-menu__toggle"
+                      type="button"
+                      :disabled="!isMealTotalModified(meal.id)"
+                      @click="resetMealTotal(meal.id)"
+                      :title="t('mealTotalReset')"
+                      :aria-label="t('mealTotalReset')"
+                    >
+                      ↺
+                    </button>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
 
             <div class="meal-cards" aria-label="Meal foods">
@@ -1044,17 +1143,91 @@ const proteinPerLeanBodyWeight = computed(() => {
                   </div>
                 </div>
               </div>
+              <div class="food-card meal-total-card">
+                <div class="food-card__head">
+                  <div class="food-name">{{ t("mealTotal") }}</div>
+                </div>
+                <div class="food-card__grid">
+                  <label class="kv">
+                    <div class="k">{{ t("calories") }}</div>
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="editableMealTotals[meal.id]?.calories ?? ''"
+                        @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>
+                        <span class="macro-heading-text">{{ t("protein") }}</span>
+                      </span>
+                    </div>
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="editableMealTotals[meal.id]?.protein ?? ''"
+                        @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>
+                        <span class="macro-heading-text">{{ t("carbs") }}</span>
+                      </span>
+                    </div>
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="editableMealTotals[meal.id]?.carbs ?? ''"
+                        @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>
+                        <span class="macro-heading-text">{{ t("fat") }}</span>
+                      </span>
+                    </div>
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="editableMealTotals[meal.id]?.fat ?? ''"
+                        @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
+                    <div class="k">
+                      <span class="macro-heading">
+                        <span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>
+                        <span class="macro-heading-text">{{ t("fiber") }}</span>
+                      </span>
+                    </div>
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="editableMealTotals[meal.id]?.fiber ?? ''"
+                        @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
+                  </label>
+                </div>
+                <div v-if="isMealTotalModified(meal.id)" class="food-card__actions">
+                  <div class="card-action-links">
+                    <button class="card-action-link" type="button" @click="resetMealTotal(meal.id)">
+                      {{ t("mealTotalReset") }}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-
-          <div class="meal-footer">
-            <span class="meal-total">
-              {{ t("mealTotal") }}: {{ meal.totals.calories ?? "-" }} {{ t("unitKcal") }} /
-              {{ macroEmoji("protein") }} {{ t("protein") }} {{ meal.totals.protein ?? "-" }} /
-              {{ macroEmoji("carbs") }} {{ t("carbs") }} {{ meal.totals.carbs ?? "-" }} /
-              {{ macroEmoji("fat") }} {{ t("fat") }} {{ meal.totals.fat ?? "-" }} /
-              {{ macroEmoji("fiber") }} {{ t("fiber") }} {{ meal.totals.fiber ?? "-" }}
-            </span>
           </div>
 
         </div>
@@ -1535,13 +1708,23 @@ const proteinPerLeanBodyWeight = computed(() => {
   color: var(--text-muted);
 }
 
-.meal-footer {
-  display: flex;
-  justify-content: flex-start;
-  justify-content: start;
-  padding-block-start: 4px;
-  border-block-start: 1px solid var(--meal-border, var(--border));
-  text-align: start;
+.meal-total-row {
+  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 18%, var(--surface-3));
+}
+
+.meal-total-row td {
+  border-block-start: 2px solid var(--meal-border, var(--border));
+  font-weight: 600;
+}
+
+.meal-total-label {
+  color: var(--text-muted);
+}
+
+.meal-total-card {
+  background: color-mix(in srgb, var(--meal-accent, var(--accent)) 18%, var(--surface-3));
+  border-block-start: 2px solid var(--meal-border, var(--border)) !important;
+  font-weight: 600;
 }
 
 .day-total-line {
@@ -1756,12 +1939,13 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .card-action-link {
   padding: 0.35rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-1);
   color: var(--text-primary);
   font: inherit;
   cursor: pointer;
+  box-shadow: var(--bevel-raised);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 

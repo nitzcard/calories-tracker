@@ -34,7 +34,7 @@ const draftUsername = ref(props.cloudUsername);
 const draftPassword = ref("");
 const cloudModeSelectWidth = computed(() => {
   const offlineLabel = t("cloudModeOffline");
-  const cloudLabel = t("cloudModeCloud");
+  const cloudLabel = hasConfirmedUser.value ? t("cloudModeCloud") : t("cloudModeCloudPending");
   const longest = Math.max(offlineLabel.trim().length, cloudLabel.trim().length);
   const widthCh = Math.min(70, Math.max(36, longest + 10));
   return `${widthCh}ch`;
@@ -89,6 +89,9 @@ const usernameTooShort = computed(
 );
 const confirmedNormalized = computed(() => (props.cloudConfirmedUsername ?? "").trim().toLowerCase());
 const hasConfirmedUser = computed(() => Boolean(confirmedNormalized.value));
+const cloudModeLabel = computed(() =>
+  hasConfirmedUser.value ? t("cloudModeCloud") : t("cloudModeCloudPending"),
+);
 const draftDiffersFromConfirmed = computed(
   () =>
     hasConfirmedUser.value &&
@@ -175,7 +178,7 @@ function onSubmit() {
           @change="emit('update:cloudMode', ($event.target as HTMLSelectElement).value as 'offline' | 'cloud')"
         >
           <option value="offline">{{ t("cloudModeOffline") }}</option>
-          <option value="cloud">{{ t("cloudModeCloud") }}</option>
+          <option value="cloud">{{ cloudModeLabel }}</option>
         </select>
       </FormField>
 
@@ -272,6 +275,7 @@ function onSubmit() {
 	    </p>
 	    <p v-if="cloudError" class="status-pill status-pill--error" dir="ltr">{{ cloudError }}</p>
     <p v-if="draftDiffersFromConfirmed" class="status-pill">{{ t("cloudUsernameNeedsSync") }}</p>
+    <p v-if="cloudMode === 'cloud' && !hasConfirmedUser" class="status-pill">{{ t("cloudLoginPending") }}</p>
     <p v-if="cloudMode === 'cloud' && !draftUsername.trim()" class="status-pill">{{ t("cloudUsernameMissing") }}</p>
     <p v-else-if="usernameTooShort" class="status-pill">{{ t("cloudUsernameTooShort", { min: 3 }) }}</p>
     <p v-if="cloudMode === 'cloud' && !supabaseConfigured" class="status-pill">{{ t("cloudSupabaseMissing") }}</p>
