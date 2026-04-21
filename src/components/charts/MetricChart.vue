@@ -26,14 +26,19 @@ const props = defineProps<{
 const chartRef = ref<HTMLDivElement | null>(null);
 const hoverIndex = ref<number | null>(null);
 const hoverPosition = ref({ x: 0, y: 0 });
+const hoverPointPosition = ref({ x: 0, y: 0 });
 const axisUnitInsetStart = ref(8);
 const isPanning = ref(false);
 const activePointerId = ref<number | null>(null);
+const isTouchInteraction = ref(false);
+const plottedXValues = ref<number[]>([]);
+const plottedYValues = ref<Array<number | null>>([]);
 const panStartX = ref(0);
 const panStartScale = ref<{ min: number; max: number } | null>(null);
 const currentXScale = ref<{ min: number; max: number } | null>(null);
 let chart: uPlot | undefined;
 let resizeObserver: ResizeObserver | undefined;
+let touchHideTimer: number | undefined;
 
 const dateFormatter = computed(
   () =>
@@ -86,6 +91,8 @@ function renderChart() {
 
   const xValues = normalizedPoints.value.map((point) => point.x);
   const yValues = normalizedPoints.value.map((point) => point.y ?? null);
+  plottedXValues.value = xValues;
+  plottedYValues.value = yValues;
   const trendValues = trendlineValues.value;
   const xSplits = uniqueSorted(xValues);
   const weekBoundarySplits = buildWeekBoundarySplits(xSplits);
@@ -212,13 +219,15 @@ function renderChart() {
             const cursorX = cursorLeft + u.bbox.left;
             const cursorY = cursorTop + u.bbox.top;
             const distance = Math.hypot(pointX - cursorX, pointY - cursorY);
+            const distanceThreshold = isTouchInteraction.value ? 28 : 18;
 
-            if (distance > 18) {
+            if (distance > distanceThreshold) {
               hoverIndex.value = null;
               return;
             }
 
             hoverIndex.value = idx;
+            hoverPointPosition.value = { x: pointX, y: pointY };
             hoverPosition.value = {
               x: Math.min(Math.max(pointX + 10, 8), u.bbox.left + u.bbox.width - 150),
               y: Math.max(pointY - 54, 8),
@@ -265,6 +274,65 @@ function formatHoverValue(value: number | null | undefined) {
 
   const formatted = formatYAxisValue(value);
   return props.yUnit ? `${formatted} ${props.yUnit}` : formatted;
+}
+
+function formatPointValue(value: number | null | undefined) {
+  if (value == null) {
+    return "-";
+  }
+
+  return formatYAxisValue(value);
+}
+
+function updateHoverFromTouch(event: PointerEvent) {
+  if (!chartRef.value || !chart || !plottedXValues.value.length) {
+    hoverIndex.value = null;
+    return;
+  }
+
+  const rect = chartRef.value.getBoundingClientRect();
+  const cursorX = event.clientX - rect.left;
+  const cursorY = event.clientY - rect.top;
+  let bestIndex: number | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let idx = 0; idx < plottedXValues.value.length; idx += 1) {
+    const yValue = plottedYValues.value[idx];
+    if (yValue === null || yValue === undefined) {
+      continue;
+    }
+
+    const pointX = chart.valToPos(plottedXValues.value[idx], "x", true);
+    const pointY = chart.valToPos(yValue, "y", true);
+    const distance = Math.hypot(pointX - cursorX, pointY - cursorY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = idx;
+    }
+  }
+
+  if (bestIndex === null || bestDistance > 28) {
+    hoverIndex.value = null;
+    return;
+  }
+
+  const yValue = plottedYValues.value[bestIndex];
+  if (yValue === null || yValue === undefined) {
+    hoverIndex.value = null;
+    return;
+  }
+
+  const pointX = chart.valToPos(plottedXValues.value[bestIndex], "x", true);
+  const pointY = chart.valToPos(yValue, "y", true);
+  hoverIndex.value = bestIndex;
+  hoverPointPosition.value = {
+    x: Math.min(Math.max(pointX, chart.bbox.left + 22), chart.bbox.left + chart.bbox.width - 22),
+    y: Math.max(pointY - 26, 8),
+  };
+  hoverPosition.value = {
+    x: Math.min(Math.max(pointX + 10, 8), chart.bbox.left + chart.bbox.width - 150),
+    y: Math.max(pointY - 54, 8),
+  };
 }
 
 function uniqueSorted(values: number[]) {
@@ -367,6 +435,17 @@ function onPanPointerDown(event: PointerEvent) {
     return;
   }
 
+  if (event.pointerType === "touch") {
+    if (touchHideTimer) {
+      window.clearTimeout(touchHideTimer);
+      touchHideTimer = undefined;
+    }
+    isTouchInteraction.value = true;
+    updateHoverFromTouch(event);
+    return;
+  }
+
+  isTouchInteraction.value = false;
   const domain = getXDomain();
   const min = chart.scales.x.min;
   const max = chart.scales.x.max;
@@ -384,6 +463,11 @@ function onPanPointerDown(event: PointerEvent) {
 }
 
 function onPanPointerMove(event: PointerEvent) {
+  if (event.pointerType === "touch") {
+    updateHoverFromTouch(event);
+    return;
+  }
+
   if (!chartRef.value || !chart || !isPanning.value || activePointerId.value !== event.pointerId || !panStartScale.value) {
     return;
   }
@@ -411,6 +495,19 @@ function onPanPointerMove(event: PointerEvent) {
 }
 
 function onPanPointerUp(event: PointerEvent) {
+  if (event.pointerType === "touch") {
+    isTouchInteraction.value = false;
+    if (touchHideTimer) {
+      window.clearTimeout(touchHideTimer);
+    }
+
+    touchHideTimer = window.setTimeout(() => {
+      hoverIndex.value = null;
+      touchHideTimer = undefined;
+    }, 1200);
+    return;
+  }
+
   if (!chartRef.value || activePointerId.value !== event.pointerId) {
     return;
   }
@@ -484,6 +581,10 @@ watch(() => props.yUnit, renderChart);
 watch(() => props.referenceLine, renderChart, { deep: true });
 watch(() => props.referenceLines, renderChart, { deep: true });
 onBeforeUnmount(() => {
+  if (touchHideTimer) {
+    window.clearTimeout(touchHideTimer);
+    touchHideTimer = undefined;
+  }
   resizeObserver?.disconnect();
   chart?.destroy();
   document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -507,6 +608,16 @@ onBeforeUnmount(() => {
         @pointerup="onPanPointerUp"
         @pointercancel="onPanPointerUp"
       ></div>
+      <div
+        v-if="hoveredPoint"
+        class="hover-point-value"
+        :style="{
+          insetInlineStart: `${hoverPointPosition.x}px`,
+          insetBlockStart: `${hoverPointPosition.y}px`,
+        }"
+      >
+        {{ formatPointValue(hoveredPoint.y) }}
+      </div>
       <div
         v-if="hoveredPoint"
         class="hover-readout"
@@ -601,6 +712,23 @@ onBeforeUnmount(() => {
   pointer-events: none;
   display: grid;
   gap: 0.15rem;
+}
+
+.hover-point-value {
+  position: absolute;
+  z-index: 4;
+  transform: translateX(-50%);
+  padding: 2px 7px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-2) 88%, black 12%);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px color-mix(in srgb, black 25%, transparent);
 }
 
 .hover-date {

@@ -114,7 +114,7 @@ const localizedSelectedDate = computed(() =>
             />
             <p class="localized-date">{{ localizedSelectedDate }}</p>
 	          </FormField>
-	          <FormField :label="t('todayWeight')">
+          <FormField :label="t('todayWeight')" :helper="t('weightHelper')">
 	            <div class="unit-field">
 		              <FieldControl class="weight-control" :is-saving="isSavingWeight">
 		                <input
@@ -229,7 +229,7 @@ const localizedSelectedDate = computed(() =>
           />
           <p class="localized-date">{{ localizedSelectedDate }}</p>
 	        </FormField>
-	        <FormField :label="t('todayWeight')">
+	        <FormField :label="t('todayWeight')" :helper="t('weightHelper')">
 	          <div class="unit-field">
 	            <FieldControl class="weight-control" :is-saving="isSavingWeight">
 	              <input

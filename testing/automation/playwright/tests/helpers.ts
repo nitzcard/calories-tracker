@@ -33,6 +33,8 @@ type FoodSeedOptions = {
   carbs: number | null;
   fat: number | null;
   fiber?: number | null;
+  solubleFiber?: number | null;
+  insolubleFiber?: number | null;
 };
 
 export function makeFoodSeed(options: FoodSeedOptions) {
@@ -52,6 +54,8 @@ export function makeFoodSeed(options: FoodSeedOptions) {
     carbs: options.carbs,
     fat: options.fat,
     fiber: options.fiber ?? null,
+    solubleFiber: options.solubleFiber ?? null,
+    insolubleFiber: options.insolubleFiber ?? null,
     confidence: 0.95,
     assumptions: [],
     needsReview: false,

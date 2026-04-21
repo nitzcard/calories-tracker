@@ -252,6 +252,8 @@ function normalizeNutritionSnapshot(snapshot: NutritionSnapshot): NutritionSnaps
         gramsEstimated: Boolean(food.gramsEstimated),
         caloriesEstimated: Boolean(food.caloriesEstimated),
         fiber: food.fiber ?? null,
+        solubleFiber: food.solubleFiber ?? null,
+        insolubleFiber: food.insolubleFiber ?? null,
       })),
     })),
     foods: (snapshot.foods ?? []).map((food) => ({
@@ -262,6 +264,8 @@ function normalizeNutritionSnapshot(snapshot: NutritionSnapshot): NutritionSnaps
         food.caloriesPer100g ??
         (food.grams && food.calories ? Math.round((food.calories / food.grams) * 100) : null),
       fiber: food.fiber ?? null,
+      solubleFiber: food.solubleFiber ?? null,
+      insolubleFiber: food.insolubleFiber ?? null,
     })),
     unmatchedItems: snapshot.unmatchedItems ?? [],
     assumptions: snapshot.assumptions ?? [],

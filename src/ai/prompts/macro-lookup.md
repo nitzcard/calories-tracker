@@ -23,6 +23,7 @@ Find macros per 100g for one food using reliable web sources.
 
 - `sourceLabel`: short source name
 - `sourceUrl`: canonical source URL if available
-- `per100`: calories, protein, carbs, fat, fiber per 100g
+- `per100`: calories, protein, carbs, fat, fiber, solubleFiber, insolubleFiber per 100g
+- if soluble vs insoluble fiber is unknown, keep them `null` instead of guessing
 - `confidence`: 0..1
 - `notes`: short assumptions or normalization notes

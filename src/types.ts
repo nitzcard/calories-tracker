@@ -92,6 +92,8 @@ export interface FoodBreakdownItem {
   carbs: number | null;
   fat: number | null;
   fiber?: number | null;
+  solubleFiber?: number | null;
+  insolubleFiber?: number | null;
   confidence: number | null;
   assumptions: string[];
   needsReview: boolean;

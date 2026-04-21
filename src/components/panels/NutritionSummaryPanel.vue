@@ -3,7 +3,16 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import { lookupFoodMacrosPer100WithGemini } from "../../ai/gemini-macro-lookup";
-import type { AppLocale, DailyEntry, FoodBreakdownItem, MealBreakdownItem, NutritionTotals, Profile } from "../../types";
+import { buildAnalysisErrorPresentation } from "../../app/analysis-errors";
+import type {
+  AiProviderOption,
+  AppLocale,
+  DailyEntry,
+  FoodBreakdownItem,
+  MealBreakdownItem,
+  NutritionTotals,
+  Profile,
+} from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -13,6 +22,7 @@ const props = defineProps<{
   statusText: string;
   isStale?: boolean;
   providerId?: string;
+  providerOptions?: AiProviderOption[];
   correctionToken?: number;
   analysisError?: string | null;
   analysisRetryModelLabel?: string | null;
@@ -30,6 +40,8 @@ const emit = defineEmits<{
     carbs?: number | null,
     fat?: number | null,
     fiber?: number | null,
+    solubleFiber?: number | null,
+    insolubleFiber?: number | null,
   ];
   "apply-correction": [
     foodId: string,
@@ -41,6 +53,8 @@ const emit = defineEmits<{
     carbs?: number | null,
     fat?: number | null,
     fiber?: number | null,
+    solubleFiber?: number | null,
+    insolubleFiber?: number | null,
   ];
   "save-correction-only": [
     foodId: string,
@@ -52,6 +66,8 @@ const emit = defineEmits<{
     carbs?: number | null,
     fat?: number | null,
     fiber?: number | null,
+    solubleFiber?: number | null,
+    insolubleFiber?: number | null,
   ];
   "apply-meal-total": [
     mealId: string,
@@ -68,7 +84,15 @@ const pendingFoodDrafts = ref<
     Partial<
       Pick<
         FoodBreakdownItem,
-        "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber"
+        | "grams"
+        | "calories"
+        | "caloriesPer100g"
+        | "protein"
+        | "carbs"
+        | "fat"
+        | "fiber"
+        | "solubleFiber"
+        | "insolubleFiber"
       >
     >
   >
@@ -88,12 +112,23 @@ const visibleUnmatchedItems = computed(() =>
 const pendingAutoApplyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingMealTotalApplyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const per100MacroDrafts = ref<
-  Record<string, { protein: string; carbs: string; fat: string; fiber: string }>
+  Record<
+    string,
+    {
+      protein: string;
+      carbs: string;
+      fat: string;
+      fiber: string;
+      solubleFiber: string;
+      insolubleFiber: string;
+    }
+  >
 >({});
 const sourceUrlDrafts = ref<Record<string, string>>({});
 const aiLookupLoading = ref<Record<string, boolean>>({});
 const aiLookupError = ref<Record<string, string>>({});
 const macroAssistantSourceMode = ref<Record<string, "ai" | "url">>({});
+const macroAssistantLastLookupMode = ref<Record<string, "search" | "url">>({});
 const dailyTotals = computed(() => {
   const foods = editableMeals.value.flatMap((meal) => meal.foods);
   if (foods.length) {
@@ -135,7 +170,9 @@ watch(
           (pending.protein === undefined || pending.protein === food.protein) &&
           (pending.carbs === undefined || pending.carbs === food.carbs) &&
           (pending.fat === undefined || pending.fat === food.fat) &&
-          (pending.fiber === undefined || pending.fiber === (food.fiber ?? null));
+          (pending.fiber === undefined || pending.fiber === (food.fiber ?? null)) &&
+          (pending.solubleFiber === undefined || pending.solubleFiber === (food.solubleFiber ?? null)) &&
+          (pending.insolubleFiber === undefined || pending.insolubleFiber === (food.insolubleFiber ?? null));
 
         if (pendingMatchesPersisted) {
           const next = { ...pendingFoodDrafts.value };
@@ -199,7 +236,16 @@ watch(
 
 function updateFood(
   foodId: string,
-  key: "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber",
+  key:
+    | "grams"
+    | "calories"
+    | "caloriesPer100g"
+    | "protein"
+    | "carbs"
+    | "fat"
+    | "fiber"
+    | "solubleFiber"
+    | "insolubleFiber",
   rawValue: string,
 ) {
   const nextValue = rawValue.trim() ? Number(rawValue) : null;
@@ -234,7 +280,16 @@ function updateFood(
 
 function onFoodInput(
   foodId: string,
-  key: "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber",
+  key:
+    | "grams"
+    | "calories"
+    | "caloriesPer100g"
+    | "protein"
+    | "carbs"
+    | "fat"
+    | "fiber"
+    | "solubleFiber"
+    | "insolubleFiber",
   event: Event,
 ) {
   const rawValue = (event.target as HTMLInputElement).value;
@@ -245,7 +300,13 @@ function onFoodInput(
     .find((food) => food.id === foodId);
   if (editedFood) {
     scheduleAutoApply(editedFood, {
-      includeMacros: key === "protein" || key === "carbs" || key === "fat" || key === "fiber",
+      includeMacros:
+        key === "protein" ||
+        key === "carbs" ||
+        key === "fat" ||
+        key === "fiber" ||
+        key === "solubleFiber" ||
+        key === "insolubleFiber",
     });
   }
 }
@@ -271,7 +332,9 @@ function commitFoodEdit(foodId: string) {
       (pending.protein !== undefined ||
         pending.carbs !== undefined ||
         pending.fat !== undefined ||
-        pending.fiber !== undefined),
+        pending.fiber !== undefined ||
+        pending.solubleFiber !== undefined ||
+        pending.insolubleFiber !== undefined),
   );
 
   emitApplyCorrection(editedFood, { includeMacros });
@@ -289,6 +352,8 @@ function emitSaveCorrection(food: FoodBreakdownItem) {
     food.carbs ?? null,
     food.fat ?? null,
     food.fiber ?? null,
+    food.solubleFiber ?? null,
+    food.insolubleFiber ?? null,
   );
 }
 
@@ -305,6 +370,8 @@ function emitApplyCorrection(food: FoodBreakdownItem, options?: { includeMacros?
       food.carbs ?? null,
       food.fat ?? null,
       food.fiber ?? null,
+      food.solubleFiber ?? null,
+      food.insolubleFiber ?? null,
     );
     return;
   }
@@ -364,6 +431,19 @@ function formatPer100FromFoodValue(value: number | null | undefined, grams: numb
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
+function normalizeFiberValue(
+  totalFiber: number | null | undefined,
+  solubleFiber: number | null | undefined,
+  insolubleFiber: number | null | undefined,
+) {
+  const hasTypedFiber = [solubleFiber, insolubleFiber].some((value) => value != null && Number.isFinite(value));
+  if (hasTypedFiber) {
+    return Math.round((Math.max(0, solubleFiber ?? 0) + Math.max(0, insolubleFiber ?? 0)) * 10) / 10;
+  }
+
+  return totalFiber != null && Number.isFinite(totalFiber) ? totalFiber : null;
+}
+
 function ensurePer100MacroDraft(food: FoodBreakdownItem) {
   if (per100MacroDrafts.value[food.id]) {
     return;
@@ -376,16 +456,24 @@ function ensurePer100MacroDraft(food: FoodBreakdownItem) {
       carbs: formatPer100FromFoodValue(food.carbs, food.grams),
       fat: formatPer100FromFoodValue(food.fat, food.grams),
       fiber: formatPer100FromFoodValue(food.fiber ?? null, food.grams),
+      solubleFiber: formatPer100FromFoodValue(food.solubleFiber ?? null, food.grams),
+      insolubleFiber: formatPer100FromFoodValue(food.insolubleFiber ?? null, food.grams),
     },
   };
 }
 
-function setPer100MacroDraft(foodId: string, key: "protein" | "carbs" | "fat" | "fiber", value: string) {
+function setPer100MacroDraft(
+  foodId: string,
+  key: "protein" | "carbs" | "fat" | "fiber" | "solubleFiber" | "insolubleFiber",
+  value: string,
+) {
   const existing = per100MacroDrafts.value[foodId] ?? {
     protein: "",
     carbs: "",
     fat: "",
     fiber: "",
+    solubleFiber: "",
+    insolubleFiber: "",
   };
 
   per100MacroDrafts.value = {
@@ -433,6 +521,7 @@ function toDraftToken(value: number | null) {
 }
 
 async function runAiMacroLookup(food: FoodBreakdownItem, mode: "search" | "url") {
+  macroAssistantLastLookupMode.value = { ...macroAssistantLastLookupMode.value, [food.id]: mode };
   aiLookupLoading.value = { ...aiLookupLoading.value, [food.id]: true };
   aiLookupError.value = { ...aiLookupError.value, [food.id]: "" };
 
@@ -452,6 +541,8 @@ async function runAiMacroLookup(food: FoodBreakdownItem, mode: "search" | "url")
         carbs: toDraftToken(result.per100.carbs),
         fat: toDraftToken(result.per100.fat),
         fiber: toDraftToken(result.per100.fiber),
+        solubleFiber: toDraftToken(result.per100.solubleFiber),
+        insolubleFiber: toDraftToken(result.per100.insolubleFiber),
       },
     };
 
@@ -482,6 +573,59 @@ async function runAiMacroLookup(food: FoodBreakdownItem, mode: "search" | "url")
   }
 }
 
+function macroLookupErrorPresentation(foodId: string) {
+  return buildAnalysisErrorPresentation(
+    aiLookupError.value[foodId],
+    props.locale,
+    props.providerId ?? "",
+    props.providerOptions ?? [],
+  );
+}
+
+function retryMacroLookupWithModel(food: FoodBreakdownItem, providerId: string) {
+  if (!providerId) return;
+  const mode = macroAssistantLastLookupMode.value[food.id] ?? "search";
+  void (async () => {
+    aiLookupLoading.value = { ...aiLookupLoading.value, [food.id]: true };
+    aiLookupError.value = { ...aiLookupError.value, [food.id]: "" };
+    try {
+      const sourceUrl = mode === "url" ? sourceUrlDrafts.value[food.id]?.trim() || null : null;
+      const result = await lookupFoodMacrosPer100WithGemini({
+        providerId,
+        foodName: food.canonicalName || food.name,
+        locale: props.locale,
+        sourceUrl,
+      });
+
+      per100MacroDrafts.value = {
+        ...per100MacroDrafts.value,
+        [food.id]: {
+          protein: toDraftToken(result.per100.protein),
+          carbs: toDraftToken(result.per100.carbs),
+          fat: toDraftToken(result.per100.fat),
+          fiber: toDraftToken(result.per100.fiber),
+          solubleFiber: toDraftToken(result.per100.solubleFiber),
+          insolubleFiber: toDraftToken(result.per100.insolubleFiber),
+        },
+      };
+
+      if (result.sourceUrl) {
+        sourceUrlDrafts.value = {
+          ...sourceUrlDrafts.value,
+          [food.id]: result.sourceUrl,
+        };
+      }
+    } catch (error) {
+      aiLookupError.value = {
+        ...aiLookupError.value,
+        [food.id]: error instanceof Error ? error.message : t("macroLookupFailed"),
+      };
+    } finally {
+      aiLookupLoading.value = { ...aiLookupLoading.value, [food.id]: false };
+    }
+  })();
+}
+
 function parseOptionalNumber(value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -503,8 +647,10 @@ function calculateCaloriesFromMacros(macros: {
   carbs: number | null | undefined;
   fat: number | null | undefined;
   fiber: number | null | undefined;
+  solubleFiber?: number | null | undefined;
+  insolubleFiber?: number | null | undefined;
 }) {
-  const hasMacroValue = [macros.protein, macros.carbs, macros.fat, macros.fiber].some(
+  const hasMacroValue = [macros.protein, macros.carbs, macros.fat, macros.fiber, macros.solubleFiber, macros.insolubleFiber].some(
     (value) => value != null && Number.isFinite(value),
   );
 
@@ -515,8 +661,9 @@ function calculateCaloriesFromMacros(macros: {
   const protein = Math.max(0, macros.protein ?? 0);
   const carbs = Math.max(0, macros.carbs ?? 0);
   const fat = Math.max(0, macros.fat ?? 0);
+  const solubleFiber = Math.max(0, macros.solubleFiber ?? 0);
 
-  return Math.round((protein * 4 + carbs * 4 + fat * 9) * 10) / 10;
+  return Math.round((protein * 4 + carbs * 4 + fat * 9 + solubleFiber * 2) * 10) / 10;
 }
 
 function applyPer100MacroData(food: FoodBreakdownItem) {
@@ -530,24 +677,33 @@ function applyPer100MacroData(food: FoodBreakdownItem) {
     carbs: "",
     fat: "",
     fiber: "",
+    solubleFiber: "",
+    insolubleFiber: "",
   };
 
   const proteinPer100 = parseOptionalNumber(draft.protein);
   const carbsPer100 = parseOptionalNumber(draft.carbs);
   const fatPer100 = parseOptionalNumber(draft.fat);
   const fiberPer100 = parseOptionalNumber(draft.fiber);
+  const solubleFiberPer100 = parseOptionalNumber(draft.solubleFiber);
+  const insolubleFiberPer100 = parseOptionalNumber(draft.insolubleFiber);
+  const normalizedFiberPer100 = normalizeFiberValue(fiberPer100, solubleFiberPer100, insolubleFiberPer100);
 
   const protein = macroForServingFromPer100(proteinPer100, grams);
   const carbs = macroForServingFromPer100(carbsPer100, grams);
   const fat = macroForServingFromPer100(fatPer100, grams);
-  const fiber = macroForServingFromPer100(fiberPer100, grams);
+  const fiber = macroForServingFromPer100(normalizedFiberPer100, grams);
+  const solubleFiber = macroForServingFromPer100(solubleFiberPer100, grams);
+  const insolubleFiber = macroForServingFromPer100(insolubleFiberPer100, grams);
 
   const caloriesPer100g =
     calculateCaloriesFromMacros({
       protein: proteinPer100,
       carbs: carbsPer100,
       fat: fatPer100,
-      fiber: fiberPer100,
+      fiber: normalizedFiberPer100,
+      solubleFiber: solubleFiberPer100,
+      insolubleFiber: insolubleFiberPer100,
     }) ?? food.caloriesPer100g ?? null;
   const calories =
     caloriesPer100g != null
@@ -562,6 +718,8 @@ function applyPer100MacroData(food: FoodBreakdownItem) {
     carbs,
     fat,
     fiber,
+    solubleFiber,
+    insolubleFiber,
     caloriesEstimated: false,
   };
 
@@ -583,6 +741,8 @@ function applyPer100MacroData(food: FoodBreakdownItem) {
       carbs,
       fat,
       fiber,
+      solubleFiber,
+      insolubleFiber,
     },
   };
 
@@ -607,6 +767,8 @@ function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
     food.carbs ?? null,
     food.fat ?? null,
     food.fiber ?? null,
+    food.solubleFiber ?? null,
+    food.insolubleFiber ?? null,
   );
   closeRowActionMenu(food);
 }
@@ -713,7 +875,16 @@ function containsHebrew(value: string) {
 
 function applyFoodEdit(
   food: FoodBreakdownItem,
-  key: "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber",
+  key:
+    | "grams"
+    | "calories"
+    | "caloriesPer100g"
+    | "protein"
+    | "carbs"
+    | "fat"
+    | "fiber"
+    | "solubleFiber"
+    | "insolubleFiber",
   value: number | null,
 ): FoodBreakdownItem {
   const scaleMacro = (macro: number | null | undefined, ratio: number) => {
@@ -724,17 +895,36 @@ function applyFoodEdit(
     return Math.round(macro * ratio * 10) / 10;
   };
 
-  if (key === "protein" || key === "carbs" || key === "fat" || key === "fiber") {
+  if (
+    key === "protein" ||
+    key === "carbs" ||
+    key === "fat" ||
+    key === "fiber" ||
+    key === "solubleFiber" ||
+    key === "insolubleFiber"
+  ) {
     const nextMacros = {
       protein: key === "protein" ? value : food.protein,
       carbs: key === "carbs" ? value : food.carbs,
       fat: key === "fat" ? value : food.fat,
-      fiber: key === "fiber" ? value : food.fiber,
+      fiber:
+        key === "fiber"
+          ? value
+          : normalizeFiberValue(
+              food.fiber,
+              key === "solubleFiber" ? value : food.solubleFiber,
+              key === "insolubleFiber" ? value : food.insolubleFiber,
+            ),
+      solubleFiber: key === "solubleFiber" ? value : key === "fiber" ? null : food.solubleFiber,
+      insolubleFiber: key === "insolubleFiber" ? value : key === "fiber" ? null : food.insolubleFiber,
     };
     const nextCalories = calculateCaloriesFromMacros(nextMacros);
     return {
       ...food,
       [key]: value,
+      fiber: nextMacros.fiber,
+      solubleFiber: nextMacros.solubleFiber,
+      insolubleFiber: nextMacros.insolubleFiber,
       calories: nextCalories != null ? Math.round(nextCalories) : food.calories,
       caloriesPer100g:
         nextCalories != null && food.grams ? Math.round((nextCalories / food.grams) * 100) : food.caloriesPer100g,
@@ -754,6 +944,8 @@ function applyFoodEdit(
       carbs: scaleMacro(food.carbs, ratio),
       fat: scaleMacro(food.fat, ratio),
       fiber: scaleMacro(food.fiber, ratio),
+      solubleFiber: scaleMacro(food.solubleFiber, ratio),
+      insolubleFiber: scaleMacro(food.insolubleFiber, ratio),
       caloriesEstimated: false,
     };
   }
@@ -770,6 +962,8 @@ function applyFoodEdit(
       carbs: scaleMacro(food.carbs, ratio),
       fat: scaleMacro(food.fat, ratio),
       fiber: scaleMacro(food.fiber, ratio),
+      solubleFiber: scaleMacro(food.solubleFiber, ratio),
+      insolubleFiber: scaleMacro(food.insolubleFiber, ratio),
       gramsEstimated: false,
     };
   }
@@ -786,6 +980,8 @@ function applyFoodEdit(
     carbs: scaleMacro(food.carbs, ratio),
     fat: scaleMacro(food.fat, ratio),
     fiber: scaleMacro(food.fiber, ratio),
+    solubleFiber: scaleMacro(food.solubleFiber, ratio),
+    insolubleFiber: scaleMacro(food.insolubleFiber, ratio),
     caloriesEstimated: false,
   };
 }
@@ -1977,9 +2173,25 @@ const proteinPerLeanBodyWeight = computed(() => {
                 {{ t("findMacrosByLink") }}
               </a>
 
-              <p v-if="aiLookupError[food.id]" class="per100-macro-editor__hint">
-                {{ aiLookupError[food.id] }}
-              </p>
+              <div v-if="macroLookupErrorPresentation(food.id).message" class="error-box">
+                <strong>{{ t("aiError") }}</strong>
+                <p>{{ macroLookupErrorPresentation(food.id).message }}</p>
+                <p
+                  v-if="macroLookupErrorPresentation(food.id).retryModelLabel && macroLookupErrorPresentation(food.id).retryModelId"
+                  class="error-box__retry"
+                  dir="ltr"
+                >
+                  <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
+                  <a
+                    class="inline-action-link"
+                    href="#"
+                    @click.prevent="retryMacroLookupWithModel(food, macroLookupErrorPresentation(food.id).retryModelId ?? '')"
+                  >
+                    {{ macroLookupErrorPresentation(food.id).retryModelLabel }}
+                  </a>
+                  <span>{{ t("analysisRetrySuggestionInstead") }}</span>
+                </p>
+              </div>
 
               <div class="macro-assistant__manual-title">{{ t("providePer100Macros") }}</div>
               <p class="per100-macro-editor__hint">{{ t("macroManualHint") }}</p>
@@ -2017,6 +2229,22 @@ const proteinPerLeanBodyWeight = computed(() => {
                     type="number"
                     :value="per100MacroDrafts[food.id]?.fiber ?? ''"
                     @input="setPer100MacroDraft(food.id, 'fiber', ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label>
+                  <span>{{ t("solubleFiber") }}</span>
+                  <input
+                    type="number"
+                    :value="per100MacroDrafts[food.id]?.solubleFiber ?? ''"
+                    @input="setPer100MacroDraft(food.id, 'solubleFiber', ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label>
+                  <span>{{ t("insolubleFiber") }}</span>
+                  <input
+                    type="number"
+                    :value="per100MacroDrafts[food.id]?.insolubleFiber ?? ''"
+                    @input="setPer100MacroDraft(food.id, 'insolubleFiber', ($event.target as HTMLInputElement).value)"
                   />
                 </label>
               </div>

@@ -18,6 +18,8 @@ type MacroLookupResult = {
     carbs: number | null;
     fat: number | null;
     fiber: number | null;
+    solubleFiber: number | null;
+    insolubleFiber: number | null;
   };
   confidence: number | null;
   notes: string[];
@@ -32,13 +34,15 @@ const LOOKUP_SCHEMA = {
     sourceUrl: { type: "STRING", nullable: true },
     per100: {
       type: "OBJECT",
-      required: ["calories", "protein", "carbs", "fat", "fiber"],
+      required: ["calories", "protein", "carbs", "fat", "fiber", "solubleFiber", "insolubleFiber"],
       properties: {
         calories: { type: "NUMBER", nullable: true },
         protein: { type: "NUMBER", nullable: true },
         carbs: { type: "NUMBER", nullable: true },
         fat: { type: "NUMBER", nullable: true },
         fiber: { type: "NUMBER", nullable: true },
+        solubleFiber: { type: "NUMBER", nullable: true },
+        insolubleFiber: { type: "NUMBER", nullable: true },
       },
     },
     confidence: { type: "NUMBER", nullable: true },
@@ -106,6 +110,8 @@ function parseResult(value: unknown): MacroLookupResult {
     !isNumberOrNull(per100.carbs) ||
     !isNumberOrNull(per100.fat) ||
     !isNumberOrNull(per100.fiber) ||
+    !isNumberOrNull(per100.solubleFiber) ||
+    !isNumberOrNull(per100.insolubleFiber) ||
     !(value.sourceLabel === null || typeof value.sourceLabel === "string") ||
     !(value.sourceUrl === null || typeof value.sourceUrl === "string") ||
     !(value.confidence === null || (typeof value.confidence === "number" && Number.isFinite(value.confidence))) ||
@@ -125,6 +131,8 @@ function parseResult(value: unknown): MacroLookupResult {
       carbs: per100.carbs,
       fat: per100.fat,
       fiber: per100.fiber,
+      solubleFiber: per100.solubleFiber,
+      insolubleFiber: per100.insolubleFiber,
     },
     confidence: value.confidence,
     notes: value.notes,

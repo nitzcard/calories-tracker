@@ -551,6 +551,8 @@ async function saveFoodCorrectionInstructionAndRefresh(
   carbs?: number | null,
   fat?: number | null,
   fiber?: number | null,
+  solubleFiber?: number | null,
+  insolubleFiber?: number | null,
 ) {
   await saveFoodCorrectionInstruction(
     foodId,
@@ -562,6 +564,8 @@ async function saveFoodCorrectionInstructionAndRefresh(
     carbs,
     fat,
     fiber,
+    solubleFiber,
+    insolubleFiber,
   );
   await analyzeCurrentDay();
 }
@@ -576,6 +580,8 @@ async function saveFoodCorrectionInstructionOnlyAndRefresh(
   carbs?: number | null,
   fat?: number | null,
   fiber?: number | null,
+  solubleFiber?: number | null,
+  insolubleFiber?: number | null,
 ) {
   await saveFoodCorrectionInstructionOnly(
     foodId,
@@ -587,6 +593,8 @@ async function saveFoodCorrectionInstructionOnlyAndRefresh(
     carbs,
     fat,
     fiber,
+    solubleFiber,
+    insolubleFiber,
   );
 }
 
@@ -600,6 +608,8 @@ async function applyFoodCorrectionForCurrentEntry(
   carbs?: number | null,
   fat?: number | null,
   fiber?: number | null,
+  solubleFiber?: number | null,
+  insolubleFiber?: number | null,
 ) {
   await applyFoodCorrectionToCurrentEntry(
     foodId,
@@ -611,6 +621,8 @@ async function applyFoodCorrectionForCurrentEntry(
     carbs,
     fat,
     fiber,
+    solubleFiber,
+    insolubleFiber,
   );
   correctionNoticeToken.value += 1;
 }
@@ -917,6 +929,7 @@ async function confirmDeleteDay() {
           :entry="currentEntry"
           :profile="profile"
           :provider-id="provider"
+          :provider-options="providerOptions"
           :is-analyzing="isAnalyzing"
           :is-stale="Boolean(currentEntry?.analysisStale)"
           :status-text="statusLabel((key: string) => t(key), currentEntry?.aiStatus ?? 'idle')"

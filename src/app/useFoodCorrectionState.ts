@@ -42,6 +42,8 @@ export function useFoodCorrectionState(args: {
     _carbs?: number | null,
     _fat?: number | null,
     _fiber?: number | null,
+    _solubleFiber?: number | null,
+    _insolubleFiber?: number | null,
   ) {
     await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, true);
   }
@@ -56,6 +58,8 @@ export function useFoodCorrectionState(args: {
     _carbs?: number | null,
     _fat?: number | null,
     _fiber?: number | null,
+    _solubleFiber?: number | null,
+    _insolubleFiber?: number | null,
   ) {
     await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, false);
   }
@@ -238,6 +242,8 @@ export function useFoodCorrectionState(args: {
     carbs?: number | null,
     fat?: number | null,
     fiber?: number | null,
+    solubleFiber?: number | null,
+    insolubleFiber?: number | null,
   ) {
     if (!args.currentEntry.value?.nutritionSnapshot) return;
 
@@ -277,6 +283,10 @@ export function useFoodCorrectionState(args: {
               carbs: carbs !== undefined ? carbs : scaleMacro(food.carbs, macroRatio),
               fat: fat !== undefined ? fat : scaleMacro(food.fat, macroRatio),
               fiber: fiber !== undefined ? fiber : scaleMacro(food.fiber, macroRatio),
+              solubleFiber:
+                solubleFiber !== undefined ? solubleFiber : scaleMacro(food.solubleFiber, macroRatio),
+              insolubleFiber:
+                insolubleFiber !== undefined ? insolubleFiber : scaleMacro(food.insolubleFiber, macroRatio),
             }
           : food,
       );

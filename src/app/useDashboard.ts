@@ -1519,6 +1519,8 @@ export function useDashboard() {
       carbs?: number | null,
       fat?: number | null,
       fiber?: number | null,
+      solubleFiber?: number | null,
+      insolubleFiber?: number | null,
     ) => {
       await corrections.saveFoodCorrectionInstruction(
         foodId,
@@ -1530,6 +1532,8 @@ export function useDashboard() {
         carbs,
         fat,
         fiber,
+        solubleFiber,
+        insolubleFiber,
       );
       scheduleCloudPush("nutrition.correction");
     },
@@ -1543,6 +1547,8 @@ export function useDashboard() {
       carbs?: number | null,
       fat?: number | null,
       fiber?: number | null,
+      solubleFiber?: number | null,
+      insolubleFiber?: number | null,
     ) => {
       await corrections.saveFoodCorrectionInstructionOnly(
         foodId,
@@ -1554,6 +1560,8 @@ export function useDashboard() {
         carbs,
         fat,
         fiber,
+        solubleFiber,
+        insolubleFiber,
       );
       scheduleCloudPush("nutrition.correction");
     },
@@ -1567,6 +1575,8 @@ export function useDashboard() {
       carbs?: number | null,
       fat?: number | null,
       fiber?: number | null,
+      solubleFiber?: number | null,
+      insolubleFiber?: number | null,
     ) => {
       await corrections.applyFoodCorrectionToCurrentEntry(
         foodId,
@@ -1578,6 +1588,8 @@ export function useDashboard() {
         carbs,
         fat,
         fiber,
+        solubleFiber,
+        insolubleFiber,
       );
       scheduleCloudPush("nutrition.correction");
     },
