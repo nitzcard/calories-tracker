@@ -1390,6 +1390,7 @@ const proteinPerLeanBodyWeight = computed(() => {
           v-for="meal in editableMeals"
           :key="meal.id"
           :style="mealBlockStyle(meal.color)"
+          :data-testid="`meal-block-${meal.id}`"
         >
           <div class="meal-header">
             <strong>{{ displayMealLabel(meal.mealKey, meal.mealLabel) }}</strong>
@@ -1460,6 +1461,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                       :class="{ 'is-estimated': food.gramsEstimated }"
                       type="number"
                       :value="food.grams ?? ''"
+                      :data-testid="`food-input-${food.id}-grams`"
                       @input="onFoodInput(food.id, 'grams', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1472,6 +1474,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                       :class="{ 'is-estimated': food.caloriesEstimated }"
                       type="number"
                       :value="food.calories ?? ''"
+                      :data-testid="`food-input-${food.id}-calories`"
                       @input="onFoodInput(food.id, 'calories', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1485,6 +1488,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                       type="number"
                       :value="food.caloriesPer100g ?? ''"
                       :placeholder="t('usuallyDerived')"
+                      :data-testid="`food-input-${food.id}-caloriesPer100g`"
                       @input="onFoodInput(food.id, 'caloriesPer100g', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1493,6 +1497,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="food.protein ?? ''"
+                      :data-testid="`food-input-${food.id}-protein`"
                       @input="onFoodInput(food.id, 'protein', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1501,6 +1506,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="food.carbs ?? ''"
+                      :data-testid="`food-input-${food.id}-carbs`"
                       @input="onFoodInput(food.id, 'carbs', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1509,6 +1515,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="food.fat ?? ''"
+                      :data-testid="`food-input-${food.id}-fat`"
                       @input="onFoodInput(food.id, 'fat', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1517,6 +1524,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="food.fiber ?? ''"
+                      :data-testid="`food-input-${food.id}-fiber`"
                       @input="onFoodInput(food.id, 'fiber', $event)"
                       @blur="commitFoodEdit(food.id)"
                     />
@@ -1544,6 +1552,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.calories ?? ''"
+                      :data-testid="`meal-total-input-${meal.id}-calories`"
                       @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
                       @blur="commitMealTotalEdit(meal.id)"
                     />
@@ -1553,6 +1562,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.protein ?? ''"
+                      :data-testid="`meal-total-input-${meal.id}-protein`"
                       @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
                       @blur="commitMealTotalEdit(meal.id)"
                     />
@@ -1561,6 +1571,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.carbs ?? ''"
+                      :data-testid="`meal-total-input-${meal.id}-carbs`"
                       @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
                       @blur="commitMealTotalEdit(meal.id)"
                     />
@@ -1569,6 +1580,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.fat ?? ''"
+                      :data-testid="`meal-total-input-${meal.id}-fat`"
                       @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
                       @blur="commitMealTotalEdit(meal.id)"
                     />
@@ -1577,6 +1589,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.fiber ?? ''"
+                      :data-testid="`meal-total-input-${meal.id}-fiber`"
                       @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
                       @blur="commitMealTotalEdit(meal.id)"
                     />

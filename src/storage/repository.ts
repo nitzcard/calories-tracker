@@ -3,6 +3,7 @@ import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
 import type {
   DailyEntry,
   DailyEntryInput,
+  DeletedDailyEntryTombstone,
   FoodRule,
   NutritionSnapshot,
   Profile,
@@ -16,6 +17,7 @@ export interface ExportedAppData {
   exportedAt: string;
   profile: Profile[];
   dailyEntries: DailyEntry[];
+  deletedDailyEntryTombstones: DeletedDailyEntryTombstone[];
   foodRules: FoodRule[];
   syncQueue: SyncQueueItem[];
   encryptedSecrets?: {
@@ -131,6 +133,7 @@ export async function getEntry(date: string): Promise<DailyEntry | undefined> {
 export async function deleteDailyEntry(date: string): Promise<void> {
   await db.dailyEntries.delete(date);
   await db.syncQueue.where("date").equals(date).delete();
+  await upsertDeletedDailyEntryTombstone(date);
 }
 
 export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEntry> {
@@ -172,6 +175,7 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
   };
 
   await db.dailyEntries.put(toPlain(next));
+  await clearDeletedDailyEntryTombstone(input.date);
   return next;
 }
 
@@ -194,6 +198,7 @@ export async function saveNutritionResult(
       updatedAt: new Date().toISOString(),
     }),
   );
+  await clearDeletedDailyEntryTombstone(date);
 }
 
 export async function saveEntry(entry: DailyEntry): Promise<void> {
@@ -203,6 +208,7 @@ export async function saveEntry(entry: DailyEntry): Promise<void> {
       updatedAt: new Date().toISOString(),
     }),
   );
+  await clearDeletedDailyEntryTombstone(entry.date);
 }
 
 function normalizeEntry(entry: DailyEntry): DailyEntry {
@@ -307,10 +313,66 @@ export async function getPendingQueue(): Promise<SyncQueueItem[]> {
   return db.syncQueue.where("status").anyOf("pending", "failed").sortBy("enqueuedAt");
 }
 
+const SETTINGS_ID = {
+  aiKeys: "aiKeys",
+  deletedDailyEntryTombstones: "deletedDailyEntryTombstones",
+} as const;
+
+export async function getDeletedDailyEntryTombstones(): Promise<DeletedDailyEntryTombstone[]> {
+  const row = await db.settings.get(SETTINGS_ID.deletedDailyEntryTombstones);
+  const value = (row as { tombstones?: DeletedDailyEntryTombstone[] } | undefined)?.tombstones;
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(
+      (item): item is DeletedDailyEntryTombstone =>
+        Boolean(item) && typeof item.date === "string" && typeof item.deletedAt === "string",
+    )
+    .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+}
+
+export async function saveDeletedDailyEntryTombstones(
+  tombstones: DeletedDailyEntryTombstone[],
+): Promise<void> {
+  const normalized = new Map<string, DeletedDailyEntryTombstone>();
+  for (const item of tombstones) {
+    if (!item?.date || !item?.deletedAt) continue;
+    const previous = normalized.get(item.date);
+    if (!previous || previous.deletedAt < item.deletedAt) {
+      normalized.set(item.date, { date: item.date, deletedAt: item.deletedAt });
+    }
+  }
+
+  await db.settings.put({
+    id: SETTINGS_ID.deletedDailyEntryTombstones,
+    tombstones: toPlain(Array.from(normalized.values())),
+  } as any);
+}
+
+async function upsertDeletedDailyEntryTombstone(date: string): Promise<void> {
+  const existing = await getDeletedDailyEntryTombstones();
+  const next = existing.filter((item) => item.date !== date);
+  next.push({ date, deletedAt: new Date().toISOString() });
+  await saveDeletedDailyEntryTombstones(next);
+}
+
+async function clearDeletedDailyEntryTombstone(date: string): Promise<void> {
+  const existing = await getDeletedDailyEntryTombstones();
+  const next = existing.filter((item) => item.date !== date);
+  if (next.length === existing.length) {
+    return;
+  }
+
+  await saveDeletedDailyEntryTombstones(next);
+}
+
 export async function exportAppData(): Promise<ExportedAppData> {
-  const [profile, dailyEntries, foodRules, syncQueue] = await Promise.all([
+  const [profile, dailyEntries, deletedDailyEntryTombstones, foodRules, syncQueue] = await Promise.all([
     db.profile.toArray(),
     db.dailyEntries.toArray(),
+    getDeletedDailyEntryTombstones(),
     db.foodRules.toArray(),
     db.syncQueue.toArray(),
   ]);
@@ -320,6 +382,7 @@ export async function exportAppData(): Promise<ExportedAppData> {
     exportedAt: new Date().toISOString(),
     profile: toPlain(profile),
     dailyEntries: toPlain(dailyEntries),
+    deletedDailyEntryTombstones: toPlain(deletedDailyEntryTombstones),
     foodRules: toPlain(foodRules),
     syncQueue: toPlain(syncQueue),
   };
@@ -330,7 +393,7 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
     throw new Error("Unsupported backup format.");
   }
 
-  await db.transaction("rw", db.profile, db.dailyEntries, db.foodRules, db.syncQueue, async () => {
+  await db.transaction("rw", [db.profile, db.dailyEntries, db.foodRules, db.syncQueue, db.settings], async () => {
     await db.profile.clear();
     await db.dailyEntries.clear();
     await db.foodRules.clear();
@@ -352,6 +415,7 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
       })) as DailyEntry[];
       await db.dailyEntries.bulkPut(toPlain(normalizedEntries));
     }
+    await saveDeletedDailyEntryTombstones(data.deletedDailyEntryTombstones ?? []);
     if (data.foodRules.length) {
       await db.foodRules.bulkPut(toPlain(data.foodRules));
     }
@@ -360,10 +424,6 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
     }
   });
 }
-
-const SETTINGS_ID = {
-  aiKeys: "aiKeys",
-} as const;
 
 export async function getStoredAiKeysFromDb(): Promise<StoredAiKeys | null> {
   const row = await db.settings.get(SETTINGS_ID.aiKeys);

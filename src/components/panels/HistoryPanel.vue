@@ -158,6 +158,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               :value="entry.weight"
               :fallback-value="deducedWeightFromEntries(entries, entry.date)"
               :is-saving="Boolean(savingWeight[entry.date])"
+              :input-test-id="`history-weight-${entry.date}`"
               @save="emit('save-weight', entry.date, $event)"
             />
           </td>
@@ -167,6 +168,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
                 :value="entry.manualCalories"
                 :fallback-value="resolvedDailyCalories(entry)"
                 :is-saving="Boolean(savingCalories[entry.date])"
+                :input-test-id="`history-calories-${entry.date}`"
                 @save="emit('save-calories', entry.date, $event)"
               />
               <small v-if="tdeeReference != null" class="tdee-footnote" dir="ltr">

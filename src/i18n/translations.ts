@@ -125,6 +125,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     instructionSavedOnly: "Saved to instructions.",
     dayDeleted: "Day deleted.",
     deleteDayConfirm: "Delete all data for this day? This cannot be undone.",
+    deleteDayModalTitle: "Delete this day?",
+    deleteDayModalBody: "Delete all saved data for {date}? This cannot be undone.",
+    deleteDayModalCancel: "Cancel",
+    deleteDayModalConfirm: "Delete day",
     instructionSavedOpenLink: "Open instructions",
     missingGeminiKeyNotice:
       "Gemini key is not loaded in the running app. Restart `npm run dev` after editing `.env`.",
@@ -527,6 +531,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     instructionSavedOnly: "נשמר בהנחיות.",
     dayDeleted: "היום נמחק.",
     deleteDayConfirm: "למחוק את כל הנתונים של היום הזה? אי אפשר לשחזר.",
+    deleteDayModalTitle: "למחוק את היום הזה?",
+    deleteDayModalBody: "למחוק את כל הנתונים השמורים עבור {date}? אי אפשר לשחזר.",
+    deleteDayModalCancel: "ביטול",
+    deleteDayModalConfirm: "מחק יום",
     instructionSavedOpenLink: "פתח הנחיות",
     missingGeminiKeyNotice:
       "מפתח Gemini לא נטען באפליקציה שרצה כרגע. צריך להפעיל מחדש את `npm run dev` אחרי עדכון `.env`.",

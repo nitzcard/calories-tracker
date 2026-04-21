@@ -172,6 +172,11 @@ export interface DailyEntry {
   createdAt: string;
 }
 
+export interface DeletedDailyEntryTombstone {
+  date: string;
+  deletedAt: string;
+}
+
 export interface SyncQueueItem {
   id?: number;
   date: string;

@@ -1,6 +1,12 @@
 import type { ExportedAppData } from "../storage/repository";
 import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
-import type { DailyEntry, FoodRule, Profile, SyncQueueItem } from "../types";
+import type {
+  DailyEntry,
+  DeletedDailyEntryTombstone,
+  FoodRule,
+  Profile,
+  SyncQueueItem,
+} from "../types";
 
 export function mergeExportedAppData(local: ExportedAppData, remote: ExportedAppData | null) {
   if (!remote) {
@@ -11,12 +17,18 @@ export function mergeExportedAppData(local: ExportedAppData, remote: ExportedApp
   // When syncing a fresh device, local can look "newer" while being empty. Prefer the
   // side that contains more useful data in that case.
   const preferRemoteOverall = isBaselineBlob(local) && !isBaselineBlob(remote);
+  const mergedTombstones = mergeDeletedDailyEntryTombstones(
+    local.deletedDailyEntryTombstones,
+    remote.deletedDailyEntryTombstones,
+  );
+  const mergedEntries = mergeDailyEntries(local.dailyEntries, remote.dailyEntries, mergedTombstones);
 
   return {
     schemaVersion: "1" as const,
     exportedAt: new Date().toISOString(),
     profile: mergeProfile(local.profile, remote.profile, preferRemoteOverall),
-    dailyEntries: mergeDailyEntries(local.dailyEntries, remote.dailyEntries),
+    deletedDailyEntryTombstones: pruneDeletedDailyEntryTombstones(mergedTombstones, mergedEntries),
+    dailyEntries: mergedEntries,
     foodRules: mergeFoodRules(local.foodRules, remote.foodRules, preferRemoteOverall),
     // Queue is local-only operational state; don't risk pulling old queue items over.
     syncQueue: local.syncQueue as SyncQueueItem[],
@@ -125,12 +137,19 @@ function mergeProfilePreservingData(
 	  };
 	}
 
-function mergeDailyEntries(local: DailyEntry[], remote: DailyEntry[]): DailyEntry[] {
+function mergeDailyEntries(
+  local: DailyEntry[],
+  remote: DailyEntry[],
+  tombstones: DeletedDailyEntryTombstone[],
+): DailyEntry[] {
   const byDate = new Map<string, DailyEntry>();
+  const deletedAtByDate = new Map(tombstones.map((item) => [item.date, item.deletedAt]));
   for (const entry of remote) {
+    if (!shouldKeepEntry(entry, deletedAtByDate.get(entry.date))) continue;
     byDate.set(entry.date, entry);
   }
   for (const entry of local) {
+    if (!shouldKeepEntry(entry, deletedAtByDate.get(entry.date))) continue;
     const previous = byDate.get(entry.date);
     if (!previous) {
       byDate.set(entry.date, entry);
@@ -139,6 +158,38 @@ function mergeDailyEntries(local: DailyEntry[], remote: DailyEntry[]): DailyEntr
     byDate.set(entry.date, mergeEntryPreservingData(previous, entry));
   }
   return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function mergeDeletedDailyEntryTombstones(
+  local: DeletedDailyEntryTombstone[] = [],
+  remote: DeletedDailyEntryTombstone[] = [],
+): DeletedDailyEntryTombstone[] {
+  const byDate = new Map<string, DeletedDailyEntryTombstone>();
+  for (const item of [...remote, ...local]) {
+    if (!item?.date || !item?.deletedAt) continue;
+    const previous = byDate.get(item.date);
+    if (!previous || previous.deletedAt < item.deletedAt) {
+      byDate.set(item.date, item);
+    }
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+}
+
+function shouldKeepEntry(entry: DailyEntry, deletedAt?: string): boolean {
+  if (!deletedAt) return true;
+  return (entry.updatedAt || entry.createdAt || "") > deletedAt;
+}
+
+function pruneDeletedDailyEntryTombstones(
+  tombstones: DeletedDailyEntryTombstone[],
+  entries: DailyEntry[],
+): DeletedDailyEntryTombstone[] {
+  const entryUpdatedAtByDate = new Map(entries.map((entry) => [entry.date, entry.updatedAt || entry.createdAt || ""]));
+  return tombstones.filter((item) => {
+    const entryUpdatedAt = entryUpdatedAtByDate.get(item.date);
+    return !entryUpdatedAt || entryUpdatedAt <= item.deletedAt;
+  });
 }
 
 function scoreEntry(entry: DailyEntry) {

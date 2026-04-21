@@ -9,6 +9,7 @@ import PaneScrubber from "./components/shared/PaneScrubber.vue";
 import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
 import { buildAnalysisErrorPresentation } from "./app/analysis-errors";
 import { useDashboard } from "./app/useDashboard";
+import { formatEntryDate } from "./domain/entries";
 
 const MetricChart = defineAsyncComponent(() => import("./components/charts/MetricChart.vue"));
 const ApiKeysPanel = defineAsyncComponent(() => import("./components/panels/ApiKeysPanel.vue"));
@@ -142,6 +143,8 @@ const localToastVisibleUntil = ref(0);
 const cloudToastVisibleUntil = ref(0);
 let localToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 let cloudToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
+const deleteDayDialogRef = ref<HTMLDialogElement | null>(null);
+const deleteDayPendingDate = ref<string | null>(null);
 const isProfileReady = computed(
   () =>
     Boolean(
@@ -195,6 +198,9 @@ const mobilePanes = computed(() => [
   { id: "graphCaloriesPanel", label: t("graphCalories"), icon: "graphs" as const },
   { id: "historyPanel", label: t("history"), icon: "history" as const },
 ]);
+const deleteDayPendingLabel = computed(() =>
+  deleteDayPendingDate.value ? formatEntryDate(deleteDayPendingDate.value, locale.value) : "",
+);
 
 function openFoodRulesFromToast() {
   const panel = document.getElementById("dailyDeskPanel");
@@ -620,8 +626,29 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   tdeeHighlightToken.value += 1;
 }
 
-async function deleteHistoryDayWithConfirm(date: string) {
-  if (!window.confirm(t("deleteDayConfirm"))) {
+function closeDeleteDayDialog() {
+  deleteDayDialogRef.value?.close();
+  deleteDayPendingDate.value = null;
+}
+
+function openDeleteDayDialog(date: string) {
+  deleteDayPendingDate.value = date;
+  const dialog = deleteDayDialogRef.value;
+  if (!dialog) {
+    return;
+  }
+
+  if (dialog.open) {
+    dialog.close();
+  }
+
+  dialog.showModal();
+}
+
+async function confirmDeleteDay() {
+  const date = deleteDayPendingDate.value;
+  closeDeleteDayDialog();
+  if (!date) {
     return;
   }
 
@@ -653,6 +680,28 @@ async function deleteHistoryDayWithConfirm(date: string) {
     :is-theme-active="isJasmineThemeActive"
     @apply="applyJasmineThemeFromDialog"
   />
+
+  <dialog ref="deleteDayDialogRef" class="confirm-delete-dialog" @close="deleteDayPendingDate = null">
+    <form method="dialog" class="confirm-delete-dialog__form" @submit.prevent="confirmDeleteDay">
+      <h2 class="confirm-delete-dialog__title">{{ t("deleteDayModalTitle") }}</h2>
+      <p class="confirm-delete-dialog__copy">
+        {{ t("deleteDayModalBody", { date: deleteDayPendingLabel }) }}
+      </p>
+      <div class="confirm-delete-dialog__actions">
+        <button
+          type="button"
+          class="secondary-action confirm-delete-dialog__cancel"
+          data-delete-dialog-cancel
+          @click="closeDeleteDayDialog"
+        >
+          {{ t("deleteDayModalCancel") }}
+        </button>
+        <button type="submit" class="confirm-delete-dialog__confirm" data-delete-dialog-confirm>
+          {{ t("deleteDayModalConfirm") }}
+        </button>
+      </div>
+    </form>
+  </dialog>
 
   <main class="app-shell">
     <PaneScrubber :panes="mobilePanes" :aria-label="t('paneNavigation')" />
@@ -902,7 +951,7 @@ async function deleteHistoryDayWithConfirm(date: string) {
           :target-weight-reference="tdee.targetWeight"
           @save-calories="saveHistoryCalories"
           @save-weight="saveHistoryWeight"
-          @delete-day="deleteHistoryDayWithConfirm"
+          @delete-day="openDeleteDayDialog"
         />
       </div>
     </section>
@@ -1183,6 +1232,66 @@ async function deleteHistoryDayWithConfirm(date: string) {
   gap: var(--space-3);
   align-items: start;
   padding: 2px 12px 12px 12px;
+}
+
+.confirm-delete-dialog {
+  inline-size: min(30rem, calc(100vw - 2rem));
+  border: 1px solid var(--border-strong);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 94%, black 6%);
+  color: var(--text-primary);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.35), var(--bevel-raised);
+  padding: 0;
+}
+
+.confirm-delete-dialog::backdrop {
+  background: rgba(7, 10, 14, 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.confirm-delete-dialog__form {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.05rem 1.15rem 1rem;
+}
+
+.confirm-delete-dialog__title {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.confirm-delete-dialog__copy {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.confirm-delete-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.confirm-delete-dialog__cancel,
+.confirm-delete-dialog__confirm {
+  min-inline-size: 8.5rem;
+}
+
+.confirm-delete-dialog__confirm {
+  border: 1px solid color-mix(in srgb, #b91c1c 60%, var(--border));
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.96), rgba(127, 29, 29, 0.96));
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.72rem 1.12rem;
+  cursor: pointer;
+}
+
+.confirm-delete-dialog__confirm:hover {
+  filter: brightness(1.05);
 }
 
 .constant-data-grid > :deep(.panel) {

@@ -880,6 +880,9 @@ export function useDashboard() {
         : toArray<DailyEntry>(obj.entries); // legacy key
     const foodRules = toArray<import("../types").FoodRule>(obj.foodRules);
     const syncQueue = toArray<import("../types").SyncQueueItem>(obj.syncQueue);
+    const deletedDailyEntryTombstones = toArray<import("../types").DeletedDailyEntryTombstone>(
+      obj.deletedDailyEntryTombstones,
+    );
 
     const encryptedSecrets =
       obj.encryptedSecrets && typeof obj.encryptedSecrets === "object"
@@ -891,6 +894,7 @@ export function useDashboard() {
       exportedAt,
       profile,
       dailyEntries,
+      deletedDailyEntryTombstones,
       foodRules,
       syncQueue,
       encryptedSecrets,

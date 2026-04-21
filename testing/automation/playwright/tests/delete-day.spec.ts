@@ -16,8 +16,8 @@ test("@delete deleting selected day removes it from history", async ({ page }) =
 
   await expect(page.locator("#historyPanel .history-table-wrap button[data-delete-date]")).toHaveCount(2);
 
-  page.once("dialog", (dialog) => dialog.accept());
   await page.locator(`#historyPanel .history-table-wrap button[data-delete-date='${yesterday}']`).first().click();
+  await page.locator("[data-delete-dialog-confirm]").click();
 
   await page.waitForTimeout(700);
   await page.reload({ waitUntil: "networkidle" });

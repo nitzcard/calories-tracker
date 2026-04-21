@@ -9,10 +9,13 @@ export default defineConfig({
     timeout: 8_000,
   },
   fullyParallel: false,
-  reporter: [["list"]],
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,
     headless: true,
+    trace: "retain-on-failure",
+    video: "on",
+    screenshot: "only-on-failure",
   },
   webServer: {
     command: "npm run dev",

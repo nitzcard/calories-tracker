@@ -7,6 +7,7 @@ const props = defineProps<{
   fallbackValue: number | null;
   isSaving: boolean;
   useFallbackAsValue?: boolean;
+  inputTestId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -49,6 +50,7 @@ function emitSave() {
       dir="ltr"
       :value="draft"
       :placeholder="placeholder"
+      :data-testid="inputTestId"
       @input="draft = ($event.target as HTMLInputElement).value"
       @blur="emitSave"
       @keydown.enter.prevent="emitSave"
