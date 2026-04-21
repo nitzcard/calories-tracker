@@ -139,7 +139,15 @@ export function calculateFormulaTdee(
   latestWeight: number | null,
 ): FormulaTdeeResult {
   if (!profile.age || !profile.height || !latestWeight) {
-    return { average: null, breakdown: {}, activityMultiplier: null };
+    return {
+      average: null,
+      breakdown: {
+        mifflinStJeor: null,
+        harrisBenedict: null,
+        cunningham: null,
+      },
+      activityMultiplier: null,
+    };
   }
 
   const kg = latestWeight;
@@ -331,7 +339,15 @@ export function buildTdeeSnapshot(
       : null;
   const targetFormulas = normalizedTargetWeight !== null
     ? calculateFormulaTdee(profile, normalizedTargetWeight)
-    : { average: null, breakdown: {}, activityMultiplier: null };
+    : {
+        average: null,
+        breakdown: {
+          mifflinStJeor: null,
+          harrisBenedict: null,
+          cunningham: null,
+        },
+        activityMultiplier: null,
+      };
   const targetTdee =
     normalizedTargetWeight !== null
       ? (profile.tdeeEquation === "observedTdee"
