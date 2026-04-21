@@ -14,12 +14,23 @@ const providers = new Map<string, AIProvider>();
 let providerOptions: AiProviderOption[] = [];
 
 export function getGeminiProvider(id: string): AIProvider {
-  if (!providers.has(id) && isGeminiModelId(id)) {
-    const label = formatGeminiModelLabel(id);
-    providers.set(id, new GeminiProvider(id, label));
+  const resolvedId = resolveProviderId(id);
+  if (!providers.has(resolvedId) && isGeminiModelId(resolvedId)) {
+    const label = formatGeminiModelLabel(resolvedId);
+    providers.set(resolvedId, new GeminiProvider(resolvedId, label));
   }
   const fallbackId = providerOptions[0]?.id ?? DEFAULT_GEMINI_MODEL;
-  return providers.get(id) ?? providers.get(fallbackId) ?? new GeminiProvider(fallbackId, formatGeminiModelLabel(fallbackId));
+  return providers.get(resolvedId)
+    ?? providers.get(fallbackId)
+    ?? new GeminiProvider(fallbackId, formatGeminiModelLabel(fallbackId));
+}
+
+export function resolveProviderId(id: string) {
+  if (providerOptions.some((option) => option.id === id)) {
+    return id;
+  }
+
+  return providerOptions[0]?.id ?? id ?? DEFAULT_GEMINI_MODEL;
 }
 
 export function listProviderOptions(_locale?: AppLocale): AiProviderOption[] {

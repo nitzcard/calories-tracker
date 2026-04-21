@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
+import { lookupFoodMacrosPer100WithGemini } from "../../ai/gemini-macro-lookup";
 import type { AppLocale, DailyEntry, FoodBreakdownItem, MealBreakdownItem, NutritionTotals, Profile } from "../../types";
 
 const props = defineProps<{
@@ -11,7 +12,9 @@ const props = defineProps<{
   isAnalyzing: boolean;
   statusText: string;
   isStale?: boolean;
+  providerId?: string;
   correctionToken?: number;
+  analysisError?: string | null;
   analysisRetryModelLabel?: string | null;
   analysisRetryModelId?: string | null;
 }>();
@@ -23,6 +26,10 @@ const emit = defineEmits<{
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
+    protein?: number | null,
+    carbs?: number | null,
+    fat?: number | null,
+    fiber?: number | null,
   ];
   "apply-correction": [
     foodId: string,
@@ -30,6 +37,10 @@ const emit = defineEmits<{
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
+    protein?: number | null,
+    carbs?: number | null,
+    fat?: number | null,
+    fiber?: number | null,
   ];
   "save-correction-only": [
     foodId: string,
@@ -37,13 +48,32 @@ const emit = defineEmits<{
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
+    protein?: number | null,
+    carbs?: number | null,
+    fat?: number | null,
+    fiber?: number | null,
+  ];
+  "apply-meal-total": [
+    mealId: string,
+    totals: NutritionTotals,
   ];
   "retry-analysis-with-model": [provider: string];
 }>();
 
 const editableMeals = ref<MealBreakdownItem[]>([]);
 const editableMealTotals = ref<Record<string, NutritionTotals>>({});
-const originalMealTotals = ref<Record<string, NutritionTotals>>({});
+const pendingFoodDrafts = ref<
+  Record<
+    string,
+    Partial<
+      Pick<
+        FoodBreakdownItem,
+        "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber"
+      >
+    >
+  >
+>({});
+const pendingMealTotalDrafts = ref<Record<string, Partial<NutritionTotals>>>({});
 const showCorrectionCue = ref(false);
 const showNewResultsCue = ref(false);
 let correctionCueTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -55,7 +85,24 @@ const visibleUnmatchedItems = computed(() =>
     (item) => props.locale === "he" || !containsHebrew(item),
   ),
 );
-const dailyTotals = computed(() => props.entry?.nutritionSnapshot?.dailyTotals ?? null);
+const pendingAutoApplyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingMealTotalApplyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const per100MacroDrafts = ref<
+  Record<string, { protein: string; carbs: string; fat: string; fiber: string }>
+>({});
+const sourceUrlDrafts = ref<Record<string, string>>({});
+const aiLookupLoading = ref<Record<string, boolean>>({});
+const aiLookupError = ref<Record<string, string>>({});
+const aiLookupQuotaBlocked = ref(false);
+const macroAssistantSourceMode = ref<Record<string, "ai" | "url" | "manual">>({});
+const dailyTotals = computed(() => {
+  const foods = editableMeals.value.flatMap((meal) => meal.foods);
+  if (foods.length) {
+    return sumNutritionTotals(foods);
+  }
+
+  return props.entry?.nutritionSnapshot?.dailyTotals ?? null;
+});
 
 watch(
   () => props.entry?.nutritionSnapshot?.meals,
@@ -63,18 +110,58 @@ watch(
     editableMeals.value = meals
       ? meals.map((meal) => ({
           ...meal,
-          foods: meal.foods.map((food) => ({ ...food })),
+          foods: meal.foods.map((food) => ({
+            ...food,
+            ...(pendingFoodDrafts.value[food.id] ?? {}),
+          })),
         }))
       : [];
     const totalsInit: Record<string, NutritionTotals> = {};
     for (const meal of editableMeals.value) {
-      totalsInit[meal.id] = { ...meal.totals };
+      totalsInit[meal.id] = {
+        ...meal.totals,
+        ...(pendingMealTotalDrafts.value[meal.id] ?? {}),
+      };
+
+      for (const food of meal.foods) {
+        const pending = pendingFoodDrafts.value[food.id];
+        if (!pending) {
+          continue;
+        }
+
+        const pendingMatchesPersisted =
+          (pending.grams === undefined || pending.grams === food.grams) &&
+          (pending.calories === undefined || pending.calories === food.calories) &&
+          (pending.caloriesPer100g === undefined || pending.caloriesPer100g === food.caloriesPer100g) &&
+          (pending.protein === undefined || pending.protein === food.protein) &&
+          (pending.carbs === undefined || pending.carbs === food.carbs) &&
+          (pending.fat === undefined || pending.fat === food.fat) &&
+          (pending.fiber === undefined || pending.fiber === (food.fiber ?? null));
+
+        if (pendingMatchesPersisted) {
+          const next = { ...pendingFoodDrafts.value };
+          delete next[food.id];
+          pendingFoodDrafts.value = next;
+        }
+      }
+
+      const pendingTotals = pendingMealTotalDrafts.value[meal.id];
+      if (pendingTotals) {
+        const pendingMatchesPersisted =
+          (pendingTotals.calories === undefined || pendingTotals.calories === meal.totals.calories) &&
+          (pendingTotals.protein === undefined || pendingTotals.protein === meal.totals.protein) &&
+          (pendingTotals.carbs === undefined || pendingTotals.carbs === meal.totals.carbs) &&
+          (pendingTotals.fat === undefined || pendingTotals.fat === meal.totals.fat) &&
+          (pendingTotals.fiber === undefined || pendingTotals.fiber === meal.totals.fiber);
+
+        if (pendingMatchesPersisted) {
+          const next = { ...pendingMealTotalDrafts.value };
+          delete next[meal.id];
+          pendingMealTotalDrafts.value = next;
+        }
+      }
     }
     editableMealTotals.value = { ...totalsInit };
-    originalMealTotals.value = {};
-    for (const [id, tot] of Object.entries(totalsInit)) {
-      originalMealTotals.value[id] = { ...tot };
-    }
   },
   { immediate: true },
 );
@@ -99,8 +186,7 @@ watch(
 watch(
   () => props.entry?.nutritionSnapshot?.updatedAt ?? null,
   (next, previous) => {
-    // Flash only when results appear for the first time.
-    if (next && !previous) {
+    if (next && next !== previous) {
       showNewResultsCue.value = true;
       if (newResultsCueTimeout) {
         clearTimeout(newResultsCueTimeout);
@@ -114,16 +200,82 @@ watch(
 
 function updateFood(
   foodId: string,
-  key: "grams" | "calories" | "caloriesPer100g",
+  key: "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber",
   rawValue: string,
 ) {
-  const nextValue = rawValue ? Number(rawValue) : null;
+  const nextValue = rawValue.trim() ? Number(rawValue) : null;
+  let updatedFood: FoodBreakdownItem | null = null;
+
   editableMeals.value = editableMeals.value.map((meal) => ({
     ...meal,
-    foods: meal.foods.map((food) =>
-      food.id === foodId ? applyFoodEdit(food, key, nextValue) : food,
-    ),
+    foods: meal.foods.map((food) => {
+      if (food.id !== foodId) {
+        return food;
+      }
+
+      updatedFood = applyFoodEdit(food, key, nextValue);
+      return updatedFood;
+    }),
   }));
+
+  editableMealTotals.value = Object.fromEntries(
+    editableMeals.value.map((meal) => [meal.id, sumNutritionTotals(meal.foods)]),
+  );
+
+  if (updatedFood) {
+    pendingFoodDrafts.value = {
+      ...pendingFoodDrafts.value,
+      [foodId]: {
+        ...(pendingFoodDrafts.value[foodId] ?? {}),
+        [key]: nextValue,
+      },
+    };
+  }
+}
+
+function onFoodInput(
+  foodId: string,
+  key: "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber",
+  event: Event,
+) {
+  const rawValue = (event.target as HTMLInputElement).value;
+  updateFood(foodId, key, rawValue);
+
+  const editedFood = editableMeals.value
+    .flatMap((meal) => meal.foods)
+    .find((food) => food.id === foodId);
+  if (editedFood) {
+    scheduleAutoApply(editedFood, {
+      includeMacros: key === "protein" || key === "carbs" || key === "fat" || key === "fiber",
+    });
+  }
+}
+
+function commitFoodEdit(foodId: string) {
+  const editedFood = editableMeals.value
+    .flatMap((meal) => meal.foods)
+    .find((food) => food.id === foodId);
+
+  if (!editedFood) {
+    return;
+  }
+
+  const existingTimer = pendingAutoApplyTimers.get(foodId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    pendingAutoApplyTimers.delete(foodId);
+  }
+
+  const pending = pendingFoodDrafts.value[foodId];
+  const includeMacros = Boolean(
+    pending &&
+      (pending.protein !== undefined ||
+        pending.carbs !== undefined ||
+        pending.fat !== undefined ||
+        pending.fiber !== undefined),
+  );
+
+  emitApplyCorrection(editedFood, { includeMacros });
 }
 
 function emitSaveCorrection(food: FoodBreakdownItem) {
@@ -134,10 +286,30 @@ function emitSaveCorrection(food: FoodBreakdownItem) {
     food.grams ?? null,
     food.calories ?? null,
     food.caloriesPer100g ?? null,
+    food.protein ?? null,
+    food.carbs ?? null,
+    food.fat ?? null,
+    food.fiber ?? null,
   );
 }
 
-function emitApplyCorrection(food: FoodBreakdownItem) {
+function emitApplyCorrection(food: FoodBreakdownItem, options?: { includeMacros?: boolean }) {
+  if (options?.includeMacros) {
+    emit(
+      "apply-correction",
+      food.id,
+      food.name,
+      food.grams ?? null,
+      food.calories ?? null,
+      food.caloriesPer100g ?? null,
+      food.protein ?? null,
+      food.carbs ?? null,
+      food.fat ?? null,
+      food.fiber ?? null,
+    );
+    return;
+  }
+
   emit(
     "apply-correction",
     food.id,
@@ -148,7 +320,28 @@ function emitApplyCorrection(food: FoodBreakdownItem) {
   );
 }
 
+function scheduleAutoApply(food: FoodBreakdownItem, options?: { includeMacros?: boolean }) {
+  const existingTimer = pendingAutoApplyTimers.get(food.id);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    emitApplyCorrection(food, options);
+    pendingAutoApplyTimers.delete(food.id);
+  }, 650);
+
+  pendingAutoApplyTimers.set(food.id, timer);
+}
+
 function openRowActionMenu(food: FoodBreakdownItem) {
+  ensurePer100MacroDraft(food);
+  if (sourceUrlDrafts.value[food.id] === undefined) {
+    sourceUrlDrafts.value = { ...sourceUrlDrafts.value, [food.id]: "" };
+  }
+  if (!macroAssistantSourceMode.value[food.id]) {
+    macroAssistantSourceMode.value = { ...macroAssistantSourceMode.value, [food.id]: "ai" };
+  }
   const dialog = document.getElementById(`action-menu-${food.id}`) as HTMLDialogElement | null;
   if (dialog) {
     dialog.showModal();
@@ -162,8 +355,212 @@ function closeRowActionMenu(food: FoodBreakdownItem) {
   }
 }
 
-function emitApplyCorrectionFromMenu(food: FoodBreakdownItem) {
-  emitApplyCorrection(food);
+function formatPer100FromFoodValue(value: number | null | undefined, grams: number | null | undefined) {
+  if (value == null || grams == null || !Number.isFinite(value) || !Number.isFinite(grams) || grams <= 0) {
+    return "";
+  }
+
+  const per100 = (value / grams) * 100;
+  const rounded = Math.round(per100 * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function ensurePer100MacroDraft(food: FoodBreakdownItem) {
+  if (per100MacroDrafts.value[food.id]) {
+    return;
+  }
+
+  per100MacroDrafts.value = {
+    ...per100MacroDrafts.value,
+    [food.id]: {
+      protein: formatPer100FromFoodValue(food.protein, food.grams),
+      carbs: formatPer100FromFoodValue(food.carbs, food.grams),
+      fat: formatPer100FromFoodValue(food.fat, food.grams),
+      fiber: formatPer100FromFoodValue(food.fiber ?? null, food.grams),
+    },
+  };
+}
+
+function setPer100MacroDraft(foodId: string, key: "protein" | "carbs" | "fat" | "fiber", value: string) {
+  const existing = per100MacroDrafts.value[foodId] ?? {
+    protein: "",
+    carbs: "",
+    fat: "",
+    fiber: "",
+  };
+
+  per100MacroDrafts.value = {
+    ...per100MacroDrafts.value,
+    [foodId]: {
+      ...existing,
+      [key]: value,
+    },
+  };
+}
+
+function nutritionLookupUrl(food: FoodBreakdownItem) {
+  const query = `${food.name} nutrition per 100g`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function setSourceUrlDraft(foodId: string, value: string) {
+  sourceUrlDrafts.value = {
+    ...sourceUrlDrafts.value,
+    [foodId]: value,
+  };
+}
+
+function setMacroAssistantSourceMode(foodId: string, mode: "ai" | "url" | "manual") {
+  macroAssistantSourceMode.value = {
+    ...macroAssistantSourceMode.value,
+    [foodId]: mode,
+  };
+}
+
+function toDraftToken(value: number | null) {
+  if (value == null || !Number.isFinite(value)) {
+    return "";
+  }
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+async function runAiMacroLookup(food: FoodBreakdownItem, mode: "search" | "url") {
+  aiLookupLoading.value = { ...aiLookupLoading.value, [food.id]: true };
+  aiLookupError.value = { ...aiLookupError.value, [food.id]: "" };
+
+  try {
+    const sourceUrl = mode === "url" ? sourceUrlDrafts.value[food.id]?.trim() || null : null;
+    const result = await lookupFoodMacrosPer100WithGemini({
+      providerId: props.providerId ?? "",
+      foodName: food.canonicalName || food.name,
+      locale: props.locale,
+      sourceUrl,
+    });
+
+    per100MacroDrafts.value = {
+      ...per100MacroDrafts.value,
+      [food.id]: {
+        protein: toDraftToken(result.per100.protein),
+        carbs: toDraftToken(result.per100.carbs),
+        fat: toDraftToken(result.per100.fat),
+        fiber: toDraftToken(result.per100.fiber),
+      },
+    };
+
+    if (result.sourceUrl) {
+      sourceUrlDrafts.value = {
+        ...sourceUrlDrafts.value,
+        [food.id]: result.sourceUrl,
+      };
+    }
+    aiLookupQuotaBlocked.value = false;
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : t("macroLookupFailed");
+    const isQuota = /quota|rate\s*limit|429|billing|exceeded\s+your\s+current\s+quota/i.test(rawMessage);
+    const isBusy = /503|high\s*demand|overload|temporarily\s*unavailable/i.test(rawMessage);
+
+    if (isQuota) {
+      aiLookupQuotaBlocked.value = true;
+    }
+
+    const message = isQuota
+      ? t("macroLookupQuotaExceeded")
+      : isBusy
+        ? t("macroLookupBusy")
+        : rawMessage;
+
+    aiLookupError.value = {
+      ...aiLookupError.value,
+      [food.id]: message,
+    };
+  } finally {
+    aiLookupLoading.value = { ...aiLookupLoading.value, [food.id]: false };
+  }
+}
+
+function parseOptionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function macroForServingFromPer100(per100: number | null, grams: number | null) {
+  if (per100 == null || grams == null || !Number.isFinite(per100) || !Number.isFinite(grams) || grams <= 0) {
+    return null;
+  }
+  return Math.round(((per100 * grams) / 100) * 10) / 10;
+}
+
+function applyPer100MacroData(food: FoodBreakdownItem) {
+  const grams = food.grams;
+  if (grams == null || !Number.isFinite(grams) || grams <= 0) {
+    return;
+  }
+
+  const draft = per100MacroDrafts.value[food.id] ?? {
+    protein: "",
+    carbs: "",
+    fat: "",
+    fiber: "",
+  };
+
+  const proteinPer100 = parseOptionalNumber(draft.protein);
+  const carbsPer100 = parseOptionalNumber(draft.carbs);
+  const fatPer100 = parseOptionalNumber(draft.fat);
+  const fiberPer100 = parseOptionalNumber(draft.fiber);
+
+  const protein = macroForServingFromPer100(proteinPer100, grams);
+  const carbs = macroForServingFromPer100(carbsPer100, grams);
+  const fat = macroForServingFromPer100(fatPer100, grams);
+  const fiber = macroForServingFromPer100(fiberPer100, grams);
+
+  const hasKcalDrivers = proteinPer100 != null || carbsPer100 != null || fatPer100 != null;
+  const caloriesPer100g =
+    hasKcalDrivers
+      ? Math.round((Math.max(0, proteinPer100 ?? 0) * 4 + Math.max(0, carbsPer100 ?? 0) * 4 + Math.max(0, fatPer100 ?? 0) * 9) * 10) / 10
+      : food.caloriesPer100g ?? null;
+  const calories =
+    caloriesPer100g != null
+      ? Math.round((caloriesPer100g * grams) / 100)
+      : food.calories ?? null;
+
+  const nextFood: FoodBreakdownItem = {
+    ...food,
+    calories,
+    caloriesPer100g,
+    protein,
+    carbs,
+    fat,
+    fiber,
+    caloriesEstimated: false,
+  };
+
+  editableMeals.value = editableMeals.value.map((meal) => ({
+    ...meal,
+    foods: meal.foods.map((item) => (item.id === food.id ? nextFood : item)),
+  }));
+  editableMealTotals.value = Object.fromEntries(
+    editableMeals.value.map((meal) => [meal.id, sumNutritionTotals(meal.foods)]),
+  );
+
+  pendingFoodDrafts.value = {
+    ...pendingFoodDrafts.value,
+    [food.id]: {
+      ...(pendingFoodDrafts.value[food.id] ?? {}),
+      calories,
+      caloriesPer100g,
+      protein,
+      carbs,
+      fat,
+      fiber,
+    },
+  };
+
+  emitApplyCorrection(nextFood, { includeMacros: true });
   closeRowActionMenu(food);
 }
 
@@ -173,7 +570,6 @@ function emitSaveCorrectionFromMenu(food: FoodBreakdownItem) {
 }
 
 function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
-  console.log('Emitting save-correction-only for', food.name);
   emit(
     "save-correction-only",
     food.id,
@@ -181,6 +577,10 @@ function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
     food.grams ?? null,
     food.calories ?? null,
     food.caloriesPer100g ?? null,
+    food.protein ?? null,
+    food.carbs ?? null,
+    food.fat ?? null,
+    food.fiber ?? null,
   );
   closeRowActionMenu(food);
 }
@@ -188,32 +588,49 @@ function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
 function updateMealTotal(mealId: string, key: keyof NutritionTotals, rawValue: string) {
   const current = editableMealTotals.value[mealId];
   if (!current) return;
+  const nextValue = rawValue.trim() ? Number(rawValue) : null;
   editableMealTotals.value = {
     ...editableMealTotals.value,
-    [mealId]: { ...current, [key]: rawValue ? Number(rawValue) : null },
+    [mealId]: { ...current, [key]: nextValue },
   };
+  pendingMealTotalDrafts.value = {
+    ...pendingMealTotalDrafts.value,
+    [mealId]: {
+      ...(pendingMealTotalDrafts.value[mealId] ?? {}),
+      [key]: nextValue,
+    },
+  };
+
+  scheduleMealTotalAutoApply(mealId);
 }
 
-function resetMealTotal(mealId: string) {
-  const original = originalMealTotals.value[mealId];
-  if (!original) return;
-  editableMealTotals.value = {
-    ...editableMealTotals.value,
-    [mealId]: { ...original },
-  };
+function commitMealTotalEdit(mealId: string) {
+  const existingTimer = pendingMealTotalApplyTimers.get(mealId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    pendingMealTotalApplyTimers.delete(mealId);
+  }
+
+  const totals = editableMealTotals.value[mealId];
+  if (!totals) return;
+  emit("apply-meal-total", mealId, { ...totals });
 }
 
-function isMealTotalModified(mealId: string) {
-  const editable = editableMealTotals.value[mealId];
-  const original = originalMealTotals.value[mealId];
-  if (!editable || !original) return false;
-  return (
-    editable.calories !== original.calories ||
-    editable.protein !== original.protein ||
-    editable.carbs !== original.carbs ||
-    editable.fat !== original.fat ||
-    editable.fiber !== original.fiber
-  );
+function scheduleMealTotalAutoApply(mealId: string) {
+  const existingTimer = pendingMealTotalApplyTimers.get(mealId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    const totals = editableMealTotals.value[mealId];
+    if (totals) {
+      emit("apply-meal-total", mealId, { ...totals });
+    }
+    pendingMealTotalApplyTimers.delete(mealId);
+  }, 650);
+
+  pendingMealTotalApplyTimers.set(mealId, timer);
 }
 
 function displayMealLabel(mealKey: MealBreakdownItem["mealKey"], fallback: string) {
@@ -270,34 +687,117 @@ function containsHebrew(value: string) {
 
 function applyFoodEdit(
   food: FoodBreakdownItem,
-  key: "grams" | "calories" | "caloriesPer100g",
+  key: "grams" | "calories" | "caloriesPer100g" | "protein" | "carbs" | "fat" | "fiber",
   value: number | null,
 ): FoodBreakdownItem {
+  const scaleMacro = (macro: number | null | undefined, ratio: number) => {
+    if (macro == null || !Number.isFinite(macro)) {
+      return macro ?? null;
+    }
+
+    return Math.round(macro * ratio * 10) / 10;
+  };
+
+  if (key === "protein" || key === "carbs" || key === "fat" || key === "fiber") {
+    return {
+      ...food,
+      [key]: value,
+    };
+  }
+
   if (key === "caloriesPer100g") {
+    const nextCalories = value && food.grams ? Math.round((food.grams * value) / 100) : food.calories;
+    const ratio =
+      food.calories != null && nextCalories != null && food.calories > 0 ? nextCalories / food.calories : 1;
     return {
       ...food,
       caloriesPer100g: value,
-      calories: value && food.grams ? Math.round((food.grams * value) / 100) : food.calories,
+      calories: nextCalories,
+      protein: scaleMacro(food.protein, ratio),
+      carbs: scaleMacro(food.carbs, ratio),
+      fat: scaleMacro(food.fat, ratio),
+      fiber: scaleMacro(food.fiber, ratio),
       caloriesEstimated: false,
     };
   }
 
   if (key === "grams") {
+    const nextCalories =
+      value && food.caloriesPer100g ? Math.round((value * food.caloriesPer100g) / 100) : food.calories;
+    const ratio = food.grams != null && value != null && food.grams > 0 ? value / food.grams : 1;
     return {
       ...food,
       grams: value,
-      calories:
-        value && food.caloriesPer100g ? Math.round((value * food.caloriesPer100g) / 100) : food.calories,
+      calories: nextCalories,
+      protein: scaleMacro(food.protein, ratio),
+      carbs: scaleMacro(food.carbs, ratio),
+      fat: scaleMacro(food.fat, ratio),
+      fiber: scaleMacro(food.fiber, ratio),
       gramsEstimated: false,
     };
   }
+
+  const ratio =
+    food.calories != null && value != null && food.calories > 0 ? value / food.calories : 1;
 
   return {
     ...food,
     calories: value,
     caloriesPer100g:
       value && food.grams ? Math.round((value / food.grams) * 100) : food.caloriesPer100g,
+    protein: scaleMacro(food.protein, ratio),
+    carbs: scaleMacro(food.carbs, ratio),
+    fat: scaleMacro(food.fat, ratio),
+    fiber: scaleMacro(food.fiber, ratio),
     caloriesEstimated: false,
+  };
+}
+
+function sumNutritionTotals(foods: FoodBreakdownItem[]): NutritionTotals {
+  const totals = {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    fiber: 0,
+  };
+  const seen = {
+    calories: false,
+    protein: false,
+    carbs: false,
+    fat: false,
+    fiber: false,
+  };
+
+  for (const food of foods) {
+    if (food.calories != null) {
+      totals.calories += food.calories;
+      seen.calories = true;
+    }
+    if (food.protein != null) {
+      totals.protein += food.protein;
+      seen.protein = true;
+    }
+    if (food.carbs != null) {
+      totals.carbs += food.carbs;
+      seen.carbs = true;
+    }
+    if (food.fat != null) {
+      totals.fat += food.fat;
+      seen.fat = true;
+    }
+    if (food.fiber != null) {
+      totals.fiber += food.fiber;
+      seen.fiber = true;
+    }
+  }
+
+  return {
+    calories: seen.calories ? Math.round(totals.calories) : null,
+    protein: seen.protein ? Math.round(totals.protein * 10) / 10 : null,
+    carbs: seen.carbs ? Math.round(totals.carbs * 10) / 10 : null,
+    fat: seen.fat ? Math.round(totals.fat * 10) / 10 : null,
+    fiber: seen.fiber ? Math.round(totals.fiber * 10) / 10 : null,
   };
 }
 
@@ -337,6 +837,14 @@ function macroPercent(
   }
 
   return Math.round((macroCalories / totalCalories) * 100);
+}
+
+function formatPercentToken(value: number) {
+  return `${Math.round(value)}%`;
+}
+
+function formatPercentRangeToken(min: number, max: number) {
+  return `${Math.round(min)}-${Math.round(max)}%`;
 }
 
 function macroGoalTargets(mode: "cut" | "leanMass" | "maingain") {
@@ -386,11 +894,11 @@ function macroTargetText(macro: "protein" | "carbs" | "fat" | "fiber") {
   }
 
   if (macro === "carbs") {
-    return formatGoalRange(goalLabel, targets.carbsPct.min, targets.carbsPct.max, `% ${t("macroShareOfCalories")}`);
+    return `${goalLabel}: ${formatPercentRangeToken(targets.carbsPct.min, targets.carbsPct.max)} ${t("macroShareOfCalories")}`;
   }
 
   if (macro === "fat") {
-    return formatGoalRange(goalLabel, targets.fatPct.min, targets.fatPct.max, `% ${t("macroShareOfCalories")}`);
+    return `${goalLabel}: ${formatPercentRangeToken(targets.fatPct.min, targets.fatPct.max)} ${t("macroShareOfCalories")}`;
   }
 
   return `25-38 ${t("unitG")}/${props.locale === "he" ? "יום" : "day"}`;
@@ -440,7 +948,7 @@ function macroRecommendedRange(macro: "protein" | "carbs" | "fat" | "fiber") {
 
   const weight = props.profile?.estimatedWeight ?? props.entry?.weight ?? null;
   if (!weight || weight <= 0) return null;
-  return { min: weight * targets.protein.min, max: weight * targets.protein.max, unit: t("unitG") };
+  return { min: weight * 1.6, max: weight * 2.2, unit: t("unitG") };
 }
 
 function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
@@ -449,12 +957,24 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
   const actual = dailyTotals.value?.[macro] ?? null;
   if (actual == null || !Number.isFinite(actual) || range.max <= 0) return null;
 
+  const proteinWeightKg =
+    macro === "protein" ? props.profile?.estimatedWeight ?? props.entry?.weight ?? null : null;
+  const proteinInfiniteStart =
+    macro === "protein" && proteinWeightKg && proteinWeightKg > 0 ? range.max : null;
+
   // For protein, use 1.5× the max as the scale so the bar shows room beyond the recommended range
   // (eating more protein than the max is generally fine). For other macros, scale to the max.
-  const scaleMax = macro === "protein" ? Math.max(range.max * 1.5, actual) : Math.max(range.max, actual);
+  const scaleMax =
+    macro === "protein"
+      ? Math.max(range.max * 1.5, actual, proteinInfiniteStart ? proteinInfiniteStart * 1.2 : 0)
+      : Math.max(range.max, actual);
   const actualPct = Math.min(100, Math.max(0, (actual / scaleMax) * 100));
   const minPct = Math.min(100, Math.max(0, (range.min / scaleMax) * 100));
   const maxPct = Math.min(100, Math.max(0, (range.max / scaleMax) * 100));
+  const infiniteStartPct =
+    macro === "protein" && proteinInfiniteStart
+      ? Math.min(100, Math.max(0, (proteinInfiniteStart / scaleMax) * 100))
+      : 100;
   const state =
     actual < range.min ? "low" : macro !== "protein" && actual > range.max ? "high" : "ok";
 
@@ -468,6 +988,7 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
     actualPct,
     minPct,
     maxPct,
+    infiniteStartPct,
     state,
     // All macros now use a consistent min–max label; protein adds "+" to signal more is also fine
     label: formatRecommendedRange(range.min, range.max),
@@ -627,7 +1148,7 @@ const proteinPerLeanBodyWeight = computed(() => {
     :title="t('nutritionSummary')"
     :helper="t('nutritionHelper')"
     collapsible
-    :loading="isAnalyzing && !entry?.aiError"
+    :loading="isAnalyzing && !analysisError"
     :loading-overlay="Boolean(entry?.nutritionSnapshot)"
     :loading-title="t('analysisInProgressTitle')"
     :loading-helper="t('analyzeSlowNotice')"
@@ -650,12 +1171,12 @@ const proteinPerLeanBodyWeight = computed(() => {
       </div>
     </template>
 
-      <div v-if="entry?.nutritionSnapshot && isStale" class="stale-box">
-      <strong>{{ t("staleNutritionTitle") }}</strong>
-      <p>{{ t("staleNutritionHelper") }}</p>
-    </div>
+      <template v-if="entry?.nutritionSnapshot">
+        <div v-if="isStale" class="stale-box">
+          <strong>{{ t("staleNutritionTitle") }}</strong>
+          <p>{{ t("staleNutritionHelper") }}</p>
+        </div>
 
-    <template v-else-if="entry?.nutritionSnapshot">
       <div class="stats-grid">
         <div class="compact-stat compact-stat--calories">
           <strong>{{ t("calories") }}</strong>
@@ -695,10 +1216,13 @@ const proteinPerLeanBodyWeight = computed(() => {
         </div>
         <div class="compact-stat compact-stat--protein">
           <strong><span class="macro-heading-mark">{{ macroEmoji("protein") }}</span> {{ t("protein") }}</strong>
-          <span>{{ entry.nutritionSnapshot.dailyTotals.protein ?? "-" }}</span>
-          <small v-if="macroPercent('protein') !== null" class="stat-meta">
-            {{ macroPercent("protein") }}% {{ t("macroShareOfCalories") }}
-          </small>
+          <div class="macro-primary-line">
+            <span class="macro-primary-value">{{ entry.nutritionSnapshot.dailyTotals.protein ?? "-" }}</span>
+            <small class="stat-meta macro-inline-meta" v-if="macroPercent('protein') !== null">
+              <span class="macro-percent-token" dir="ltr">{{ formatPercentToken(macroPercent("protein") ?? 0) }}</span>
+              {{ t("macroShareOfCalories") }}
+            </small>
+          </div>
           <div v-if="proteinGauge" class="macro-gauge" :data-state="proteinGauge.state">
             <div class="macro-bar" aria-hidden="true">
               <div
@@ -706,6 +1230,14 @@ const proteinPerLeanBodyWeight = computed(() => {
                 :style="{
                   left: `${proteinGauge.minPct}%`,
                   width: `${Math.max(0, proteinGauge.maxPct - proteinGauge.minPct)}%`,
+                }"
+              ></div>
+              <div
+                v-if="proteinGauge.infiniteStartPct < 100"
+                class="macro-bar__protein-infinite"
+                :style="{
+                  left: `${proteinGauge.infiniteStartPct}%`,
+                  width: `${Math.max(0, 100 - proteinGauge.infiniteStartPct)}%`,
                 }"
               ></div>
               <div class="macro-bar__marker" :style="{ left: `${proteinGauge.actualPct}%` }"></div>
@@ -721,22 +1253,33 @@ const proteinPerLeanBodyWeight = computed(() => {
             <div class="stat-stack">
               <small class="stat-meta">{{ formatActual(proteinGauge.actual, proteinGauge.unit) }}</small>
               <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(proteinGauge) }}</small>
-              <small class="stat-meta">{{ macroTargetText("protein") }}</small>
+              <small class="stat-meta">{{ t("proteinNoUpperLimit") }}</small>
+              <small
+                v-if="proteinPerEstimatedWeight !== null || proteinPerLeanBodyWeight !== null"
+                class="stat-meta protein-current-divider"
+              >
+                {{ t("currentLabel") }}
+              </small>
               <small v-if="proteinPerEstimatedWeight !== null" class="stat-meta">
-                {{ proteinPerEstimatedWeight }} {{ t("proteinPerBodyWeight") }}
+                <span class="macro-percent-token">{{ proteinPerEstimatedWeight }}</span>
+                {{ t("proteinPerBodyWeight") }}
               </small>
               <small v-if="proteinPerLeanBodyWeight !== null" class="stat-meta">
-                {{ proteinPerLeanBodyWeight }} {{ t("proteinPerLeanBodyWeight") }}
+                <span class="macro-percent-token">{{ proteinPerLeanBodyWeight }}</span>
+                {{ t("proteinPerLeanBodyWeight") }}
               </small>
             </div>
           </div>
         </div>
         <div class="compact-stat compact-stat--carbs">
           <strong><span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span> {{ t("carbs") }}</strong>
-          <span>{{ entry.nutritionSnapshot.dailyTotals.carbs ?? "-" }}</span>
-          <small v-if="macroPercent('carbs') !== null" class="stat-meta">
-            {{ macroPercent("carbs") }}% {{ t("macroShareOfCalories") }}
-          </small>
+          <div class="macro-primary-line">
+            <span class="macro-primary-value">{{ entry.nutritionSnapshot.dailyTotals.carbs ?? "-" }}</span>
+            <small class="stat-meta macro-inline-meta" v-if="macroPercent('carbs') !== null">
+              <span class="macro-percent-token" dir="ltr">{{ formatPercentToken(macroPercent("carbs") ?? 0) }}</span>
+              {{ t("macroShareOfCalories") }}
+            </small>
+          </div>
           <div v-if="carbsGauge" class="macro-gauge" :data-state="carbsGauge.state">
             <div class="macro-bar" aria-hidden="true">
               <div
@@ -765,10 +1308,13 @@ const proteinPerLeanBodyWeight = computed(() => {
         </div>
         <div class="compact-stat compact-stat--fat">
           <strong><span class="macro-heading-mark">{{ macroEmoji("fat") }}</span> {{ t("fat") }}</strong>
-          <span>{{ entry.nutritionSnapshot.dailyTotals.fat ?? "-" }}</span>
-          <small v-if="macroPercent('fat') !== null" class="stat-meta">
-            {{ macroPercent("fat") }}% {{ t("macroShareOfCalories") }}
-          </small>
+          <div class="macro-primary-line">
+            <span class="macro-primary-value">{{ entry.nutritionSnapshot.dailyTotals.fat ?? "-" }}</span>
+            <small class="stat-meta macro-inline-meta" v-if="macroPercent('fat') !== null">
+              <span class="macro-percent-token" dir="ltr">{{ formatPercentToken(macroPercent("fat") ?? 0) }}</span>
+              {{ t("macroShareOfCalories") }}
+            </small>
+          </div>
           <div v-if="fatGauge" class="macro-gauge" :data-state="fatGauge.state">
             <div class="macro-bar" aria-hidden="true">
               <div
@@ -797,8 +1343,10 @@ const proteinPerLeanBodyWeight = computed(() => {
         </div>
         <div class="compact-stat compact-stat--fiber">
           <strong><span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span> {{ t("fiber") }}</strong>
-          <span>{{ entry.nutritionSnapshot.dailyTotals.fiber ?? "-" }}</span>
-          <small class="stat-meta" style="visibility: hidden;">-</small>
+          <div class="macro-primary-line">
+            <span class="macro-primary-value">{{ entry.nutritionSnapshot.dailyTotals.fiber ?? "-" }}</span>
+            <small class="stat-meta macro-inline-meta macro-inline-meta--placeholder">{{ t("macroShareOfCalories") }}</small>
+          </div>
           <div v-if="fiberGauge" class="macro-gauge" :data-state="fiberGauge.state">
             <div class="macro-bar" aria-hidden="true">
               <div
@@ -912,7 +1460,8 @@ const proteinPerLeanBodyWeight = computed(() => {
                       :class="{ 'is-estimated': food.gramsEstimated }"
                       type="number"
                       :value="food.grams ?? ''"
-                      @input="updateFood(food.id, 'grams', ($event.target as HTMLInputElement).value)"
+                      @input="onFoodInput(food.id, 'grams', $event)"
+                      @blur="commitFoodEdit(food.id)"
                     />
                     <small v-if="food.gramsEstimated" class="estimated-cue">
                       {{ t("estimatedValue") }}
@@ -923,9 +1472,8 @@ const proteinPerLeanBodyWeight = computed(() => {
                       :class="{ 'is-estimated': food.caloriesEstimated }"
                       type="number"
                       :value="food.calories ?? ''"
-                      @input="
-                        updateFood(food.id, 'calories', ($event.target as HTMLInputElement).value)
-                      "
+                      @input="onFoodInput(food.id, 'calories', $event)"
+                      @blur="commitFoodEdit(food.id)"
                     />
                     <small v-if="food.caloriesEstimated" class="estimated-cue">
                       {{ t("estimatedValue") }}
@@ -937,15 +1485,42 @@ const proteinPerLeanBodyWeight = computed(() => {
                       type="number"
                       :value="food.caloriesPer100g ?? ''"
                       :placeholder="t('usuallyDerived')"
-                      @input="
-                        updateFood(food.id, 'caloriesPer100g', ($event.target as HTMLInputElement).value)
-                      "
+                      @input="onFoodInput(food.id, 'caloriesPer100g', $event)"
+                      @blur="commitFoodEdit(food.id)"
                     />
                   </td>
-                  <td>{{ food.protein ?? "-" }}</td>
-                  <td>{{ food.carbs ?? "-" }}</td>
-                  <td>{{ food.fat ?? "-" }}</td>
-                  <td>{{ food.fiber ?? "-" }}</td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="food.protein ?? ''"
+                      @input="onFoodInput(food.id, 'protein', $event)"
+                      @blur="commitFoodEdit(food.id)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="food.carbs ?? ''"
+                      @input="onFoodInput(food.id, 'carbs', $event)"
+                      @blur="commitFoodEdit(food.id)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="food.fat ?? ''"
+                      @input="onFoodInput(food.id, 'fat', $event)"
+                      @blur="commitFoodEdit(food.id)"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      :value="food.fiber ?? ''"
+                      @input="onFoodInput(food.id, 'fiber', $event)"
+                      @blur="commitFoodEdit(food.id)"
+                    />
+                  </td>
                   <td class="action-cell">
                     <button
                       class="row-action-menu__toggle"
@@ -963,21 +1538,23 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <td class="food-cell meal-total-label">
                     <span class="food-name">{{ t("mealTotal") }}</span>
                   </td>
-                  <td>—</td>
-                  <td>—</td>
+                  <td></td>
+                  <td></td>
                   <td>
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.calories ?? ''"
                       @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
+                      @blur="commitMealTotalEdit(meal.id)"
                     />
                   </td>
-                  <td>—</td>
+                  <td></td>
                   <td>
                     <input
                       type="number"
                       :value="editableMealTotals[meal.id]?.protein ?? ''"
                       @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
+                      @blur="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td>
@@ -985,6 +1562,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                       type="number"
                       :value="editableMealTotals[meal.id]?.carbs ?? ''"
                       @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
+                      @blur="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td>
@@ -992,6 +1570,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                       type="number"
                       :value="editableMealTotals[meal.id]?.fat ?? ''"
                       @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
+                      @blur="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td>
@@ -999,20 +1578,10 @@ const proteinPerLeanBodyWeight = computed(() => {
                       type="number"
                       :value="editableMealTotals[meal.id]?.fiber ?? ''"
                       @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
+                      @blur="commitMealTotalEdit(meal.id)"
                     />
                   </td>
-                  <td class="action-cell">
-                    <button
-                      class="row-action-menu__toggle"
-                      type="button"
-                      :disabled="!isMealTotalModified(meal.id)"
-                      @click="resetMealTotal(meal.id)"
-                      :title="t('mealTotalReset')"
-                      :aria-label="t('mealTotalReset')"
-                    >
-                      ↺
-                    </button>
-                  </td>
+                  <td class="action-cell"></td>
                 </tr>
               </tfoot>
             </table>
@@ -1042,7 +1611,8 @@ const proteinPerLeanBodyWeight = computed(() => {
                         :class="{ 'is-estimated': food.gramsEstimated }"
                         type="number"
                         :value="food.grams ?? ''"
-                        @input="updateFood(food.id, 'grams', ($event.target as HTMLInputElement).value)"
+                        @input="onFoodInput(food.id, 'grams', $event)"
+                        @blur="commitFoodEdit(food.id)"
                       />
                       <small v-if="food.gramsEstimated" class="estimated-cue">
                         {{ t("estimatedValue") }}
@@ -1057,7 +1627,8 @@ const proteinPerLeanBodyWeight = computed(() => {
                         :class="{ 'is-estimated': food.caloriesEstimated }"
                         type="number"
                         :value="food.calories ?? ''"
-                        @input="updateFood(food.id, 'calories', ($event.target as HTMLInputElement).value)"
+                        @input="onFoodInput(food.id, 'calories', $event)"
+                        @blur="commitFoodEdit(food.id)"
                       />
                       <small v-if="food.caloriesEstimated" class="estimated-cue">
                         {{ t("estimatedValue") }}
@@ -1072,56 +1643,80 @@ const proteinPerLeanBodyWeight = computed(() => {
                         class="per100-input"
                         type="number"
                         :value="food.caloriesPer100g ?? ''"
-                        @input="
-                          updateFood(food.id, 'caloriesPer100g', ($event.target as HTMLInputElement).value)
-                        "
+                        @input="onFoodInput(food.id, 'caloriesPer100g', $event)"
+                        @blur="commitFoodEdit(food.id)"
                       />
                     </div>
                   </label>
 
-                  <div class="kv">
+                  <label class="kv">
                     <div class="k">
                       <span class="macro-heading">
                         <span class="macro-heading-mark">{{ macroEmoji("protein") }}</span>
                         <span class="macro-heading-text">{{ t("protein") }}</span>
                       </span>
                     </div>
-                    <div class="v">{{ food.protein ?? "-" }}</div>
-                  </div>
-                  <div class="kv">
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="food.protein ?? ''"
+                        @input="onFoodInput(food.id, 'protein', $event)"
+                        @blur="commitFoodEdit(food.id)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
                     <div class="k">
                       <span class="macro-heading">
                         <span class="macro-heading-mark">{{ macroEmoji("carbs") }}</span>
                         <span class="macro-heading-text">{{ t("carbs") }}</span>
                       </span>
                     </div>
-                    <div class="v">{{ food.carbs ?? "-" }}</div>
-                  </div>
-                  <div class="kv">
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="food.carbs ?? ''"
+                        @input="onFoodInput(food.id, 'carbs', $event)"
+                        @blur="commitFoodEdit(food.id)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
                     <div class="k">
                       <span class="macro-heading">
                         <span class="macro-heading-mark">{{ macroEmoji("fat") }}</span>
                         <span class="macro-heading-text">{{ t("fat") }}</span>
                       </span>
                     </div>
-                    <div class="v">{{ food.fat ?? "-" }}</div>
-                  </div>
-                  <div class="kv">
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="food.fat ?? ''"
+                        @input="onFoodInput(food.id, 'fat', $event)"
+                        @blur="commitFoodEdit(food.id)"
+                      />
+                    </div>
+                  </label>
+                  <label class="kv">
                     <div class="k">
                       <span class="macro-heading">
                         <span class="macro-heading-mark">{{ macroEmoji("fiber") }}</span>
                         <span class="macro-heading-text">{{ t("fiber") }}</span>
                       </span>
                     </div>
-                    <div class="v">{{ food.fiber ?? "-" }}</div>
-                  </div>
+                    <div class="v">
+                      <input
+                        type="number"
+                        :value="food.fiber ?? ''"
+                        @input="onFoodInput(food.id, 'fiber', $event)"
+                        @blur="commitFoodEdit(food.id)"
+                      />
+                    </div>
+                  </label>
                 </div>
 
                 <div class="food-card__actions">
                   <div class="card-action-links">
-                    <button class="card-action-link" type="button" @click="emitApplyCorrection(food)">
-                      {{ t("applyFixTodayOnly") }}
-                    </button>
                     <button
                       class="card-action-link"
                       type="button"
@@ -1133,6 +1728,10 @@ const proteinPerLeanBodyWeight = computed(() => {
                           food.grams ?? null,
                           food.calories ?? null,
                           food.caloriesPer100g ?? null,
+                          food.protein ?? null,
+                          food.carbs ?? null,
+                          food.fat ?? null,
+                          food.fiber ?? null,
                         )
                       "
                     >
@@ -1156,6 +1755,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                         type="number"
                         :value="editableMealTotals[meal.id]?.calories ?? ''"
                         @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
+                        @blur="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -1171,6 +1771,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                         type="number"
                         :value="editableMealTotals[meal.id]?.protein ?? ''"
                         @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
+                        @blur="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -1186,6 +1787,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                         type="number"
                         :value="editableMealTotals[meal.id]?.carbs ?? ''"
                         @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
+                        @blur="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -1201,6 +1803,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                         type="number"
                         :value="editableMealTotals[meal.id]?.fat ?? ''"
                         @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
+                        @blur="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -1216,16 +1819,10 @@ const proteinPerLeanBodyWeight = computed(() => {
                         type="number"
                         :value="editableMealTotals[meal.id]?.fiber ?? ''"
                         @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
+                        @blur="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
-                </div>
-                <div v-if="isMealTotalModified(meal.id)" class="food-card__actions">
-                  <div class="card-action-links">
-                    <button class="card-action-link" type="button" @click="resetMealTotal(meal.id)">
-                      {{ t("mealTotalReset") }}
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1264,35 +1861,161 @@ const proteinPerLeanBodyWeight = computed(() => {
             </button>
           </div>
           <div class="row-action-menu__content">
-            <button
-              class="secondary-action"
-              type="button"
-              @click="emitApplyCorrectionFromMenu(food)"
-            >
-              {{ t("applyFixTodayOnlyTable") }}
-            </button>
-            <button
-              class="secondary-action"
-              type="button"
-              @click="emitSaveCorrectionOnlyFromMenu(food)"
-            >
-              {{ t("saveFixOnlyTable") }}
-            </button>
-            <button
-              class="secondary-action"
-              type="button"
-              @click="emitSaveCorrectionFromMenu(food)"
-            >
-              {{ t("saveFixTable") }}
-            </button>
+            <div class="macro-assistant">
+              <div class="macro-assistant__title">{{ t("macroAssistantTitle") }}</div>
+              <p class="macro-assistant__subtitle">{{ t("macroAssistantSubtitle") }}</p>
+
+              <div class="macro-assistant__mode-switch" role="tablist" :aria-label="t('macroAssistantSourceTitle')">
+                <button
+                  type="button"
+                  class="macro-assistant__mode-btn"
+                  :class="{ 'is-active': (macroAssistantSourceMode[food.id] ?? 'ai') === 'ai' }"
+                  @click="setMacroAssistantSourceMode(food.id, 'ai')"
+                >
+                  {{ t("macroSourceAi") }}
+                </button>
+                <button
+                  type="button"
+                  class="macro-assistant__mode-btn"
+                  :class="{ 'is-active': (macroAssistantSourceMode[food.id] ?? 'ai') === 'url' }"
+                  @click="setMacroAssistantSourceMode(food.id, 'url')"
+                >
+                  {{ t("macroSourceUrlMode") }}
+                </button>
+                <button
+                  type="button"
+                  class="macro-assistant__mode-btn"
+                  :class="{ 'is-active': (macroAssistantSourceMode[food.id] ?? 'ai') === 'manual' }"
+                  @click="setMacroAssistantSourceMode(food.id, 'manual')"
+                >
+                  {{ t("macroSourceManual") }}
+                </button>
+              </div>
+
+              <div v-if="(macroAssistantSourceMode[food.id] ?? 'ai') === 'ai'" class="macro-assistant__actions">
+                <button
+                  class="secondary-action"
+                  type="button"
+                  :disabled="Boolean(aiLookupLoading[food.id]) || aiLookupQuotaBlocked"
+                  @click="runAiMacroLookup(food, 'search')"
+                >
+                  {{ aiLookupLoading[food.id] ? t("aiSearchingMacros") : t("aiSearchMacros") }}
+                </button>
+              </div>
+
+              <div v-if="(macroAssistantSourceMode[food.id] ?? 'ai') === 'url'" class="macro-assistant__actions">
+                <label class="macro-assistant__url-label">
+                  <span>{{ t("macroSourceUrl") }}</span>
+                  <input
+                    type="url"
+                    :value="sourceUrlDrafts[food.id] ?? ''"
+                    :placeholder="t('macroSourceUrlPlaceholder')"
+                    @input="setSourceUrlDraft(food.id, ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+
+                <button
+                  class="secondary-action"
+                  type="button"
+                  :disabled="Boolean(aiLookupLoading[food.id]) || aiLookupQuotaBlocked || !(sourceUrlDrafts[food.id] ?? '').trim()"
+                  @click="runAiMacroLookup(food, 'url')"
+                >
+                  {{ aiLookupLoading[food.id] ? t("aiReadingUrl") : t("aiReadUrlMacros") }}
+                </button>
+              </div>
+
+              <div v-if="(macroAssistantSourceMode[food.id] ?? 'ai') === 'manual'" class="macro-assistant__actions">
+                <p class="per100-macro-editor__hint">{{ t("macroManualHint") }}</p>
+              </div>
+
+              <a
+                class="macro-assistant__fallback-link"
+                :href="nutritionLookupUrl(food)"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {{ t("findMacrosByLink") }}
+              </a>
+
+              <p v-if="aiLookupQuotaBlocked" class="per100-macro-editor__hint">
+                {{ t("macroLookupQuotaHint") }}
+              </p>
+              <p v-else-if="aiLookupError[food.id]" class="per100-macro-editor__hint">
+                {{ aiLookupError[food.id] }}
+              </p>
+
+              <div class="macro-assistant__manual-title">{{ t("providePer100Macros") }}</div>
+              <p v-if="!(food.grams != null && Number.isFinite(food.grams) && food.grams > 0)" class="per100-macro-editor__hint">
+                {{ t("providePer100NeedsGrams") }}
+              </p>
+              <div class="per100-macro-editor__grid">
+                <label>
+                  <span>{{ t("protein") }}</span>
+                  <input
+                    type="number"
+                    :value="per100MacroDrafts[food.id]?.protein ?? ''"
+                    @input="setPer100MacroDraft(food.id, 'protein', ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label>
+                  <span>{{ t("carbs") }}</span>
+                  <input
+                    type="number"
+                    :value="per100MacroDrafts[food.id]?.carbs ?? ''"
+                    @input="setPer100MacroDraft(food.id, 'carbs', ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label>
+                  <span>{{ t("fat") }}</span>
+                  <input
+                    type="number"
+                    :value="per100MacroDrafts[food.id]?.fat ?? ''"
+                    @input="setPer100MacroDraft(food.id, 'fat', ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label>
+                  <span>{{ t("fiber") }}</span>
+                  <input
+                    type="number"
+                    :value="per100MacroDrafts[food.id]?.fiber ?? ''"
+                    @input="setPer100MacroDraft(food.id, 'fiber', ($event.target as HTMLInputElement).value)"
+                  />
+                </label>
+              </div>
+              <button
+                class="secondary-action"
+                type="button"
+                :disabled="!(food.grams != null && Number.isFinite(food.grams) && food.grams > 0)"
+                @click="applyPer100MacroData(food)"
+              >
+                {{ t("applyPer100Macros") }}
+              </button>
+            </div>
+
+            <div class="macro-assistant__save-actions">
+              <button
+                class="secondary-action"
+                type="button"
+                @click="emitSaveCorrectionOnlyFromMenu(food)"
+              >
+                {{ t("saveFixOnlyTable") }}
+              </button>
+              <button
+                class="secondary-action"
+                type="button"
+                @click="emitSaveCorrectionFromMenu(food)"
+              >
+                {{ t("saveFixTable") }}
+              </button>
+            </div>
           </div>
         </dialog>
       </template>
     </template>
 
-    <div v-else-if="entry?.aiError" class="error-box error-box--center">
+    <div v-else-if="analysisError" class="error-box error-box--center">
       <strong>{{ t("aiError") }}</strong>
-      <p dir="ltr">{{ entry.aiError }}</p>
+      <p>{{ analysisError }}</p>
       <p v-if="analysisRetryModelLabel && analysisRetryModelId" class="error-box__retry" dir="ltr">
         <span>{{ t("analysisRetrySuggestionPrefix") }}</span>
         <a
@@ -1550,6 +2273,19 @@ const proteinPerLeanBodyWeight = computed(() => {
   position: absolute;
   inset-block: 0;
   background: color-mix(in srgb, #27ae60 32%, transparent);
+  z-index: 1;
+}
+
+.macro-bar__protein-infinite {
+  position: absolute;
+  inset-block: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--protein-infinite-accent) 56%, transparent),
+    color-mix(in srgb, var(--protein-infinite-accent) 44%, transparent)
+  );
+  border-inline-start: 1px solid color-mix(in srgb, var(--protein-infinite-accent) 70%, var(--border));
+  z-index: 0;
 }
 
 .compact-stat--protein .macro-bar__range,
@@ -1573,6 +2309,44 @@ const proteinPerLeanBodyWeight = computed(() => {
   inline-size: 2px;
   background: color-mix(in srgb, var(--text-primary) 85%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 75%, transparent);
+  z-index: 2;
+}
+
+.macro-primary-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  min-block-size: 1.25rem;
+}
+
+.macro-primary-value {
+  white-space: nowrap;
+}
+
+.macro-inline-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-inline-size: 70%;
+  opacity: 0.9;
+}
+
+.macro-inline-meta--placeholder {
+  visibility: hidden;
+}
+
+.macro-percent-token {
+  unicode-bidi: isolate;
+  margin-inline-end: 0.25ch;
+}
+
+.protein-current-divider {
+  margin-block-start: 0.2rem;
+  padding-block-start: 0.28rem;
+  border-block-start: 1px solid color-mix(in srgb, var(--border-strong) 45%, transparent);
+  font-weight: 700;
 }
 
 .macro-bar__ticks {
@@ -1778,11 +2552,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 .meal-col-protein,
 .meal-col-fat,
 .meal-col-fiber {
-  width: 6.5%;
+  width: 7%;
 }
 
 .meal-col-carbs {
-  width: 8.5%;
+  width: 8%;
 }
 
 .meal-col-actions {
@@ -1806,7 +2580,7 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .meal-table :is(input[type="number"], input[type="date"], select) {
-  inline-size: min(100%, 7rem);
+  inline-size: min(100%, 7.5rem);
 }
 
 .food-cell {
@@ -1874,7 +2648,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   background: var(--surface);
   border-radius: 14px;
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
-  max-inline-size: min(90vw, 20rem);
+  max-inline-size: min(92vw, 26rem);
   z-index: 1000;
 }
 
@@ -1918,6 +2692,101 @@ const proteinPerLeanBodyWeight = computed(() => {
   gap: 0.65rem;
   padding: 0.5rem;
   min-inline-size: 11rem;
+}
+
+.macro-assistant {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 45%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+}
+
+.macro-assistant__title,
+.macro-assistant__manual-title {
+  font-weight: 700;
+}
+
+.macro-assistant__subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.macro-assistant__mode-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.macro-assistant__mode-btn {
+  border: 1px solid color-mix(in srgb, var(--border-strong) 45%, transparent);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  border-radius: 0.5rem;
+  padding: 0.38rem 0.45rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.macro-assistant__mode-btn.is-active {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-3));
+}
+
+.macro-assistant__actions,
+.macro-assistant__save-actions {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.macro-assistant__save-actions {
+  border-block-start: 1px dashed color-mix(in srgb, var(--border-strong) 45%, transparent);
+  padding-block-start: 0.6rem;
+}
+
+.macro-assistant__url-label {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.macro-assistant__fallback-link {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.per100-macro-editor {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.per100-macro-editor__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.per100-macro-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.per100-macro-editor__grid label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .row-action-menu__content .secondary-action {
@@ -2003,7 +2872,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   }
 
   .meal-table :is(input[type="number"], input[type="date"], select) {
-    inline-size: min(100%, 5.5rem);
+    inline-size: min(100%, 6.2rem);
   }
 
   .action-cell {
@@ -2059,7 +2928,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   }
 
   .food-card :is(input[type="number"], input[type="date"], select) {
-    inline-size: min(100%, 6.5rem);
+    inline-size: min(100%, 7.1rem);
     max-inline-size: 100%;
   }
 

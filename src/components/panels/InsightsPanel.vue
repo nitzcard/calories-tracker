@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
+import { formatEntryDate } from "../../domain/entries";
 import type { AppLocale, NutritionInsights } from "../../types";
 
 const props = defineProps<{
@@ -14,6 +15,13 @@ const { t } = useI18n();
 const showEmptyState = computed(() => props.insights.micronutrients.analyzedDays30d === 0);
 const weightUnitPerDay = computed(() =>
   props.locale === "he" ? `${t("unitG")}/יום` : `${t("unitG")}/day`,
+);
+const localizedAnchorDate = computed(() =>
+  formatEntryDate(props.insights.micronutrients.anchorDate, props.locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }),
 );
 
 function convertKgToGrams(valueKg: number | null): number | null {
@@ -130,7 +138,7 @@ function formatSigned(value: number | null, unit: string) {
     </div>
 
     <p class="anchor-line">
-      {{ t("insightsAnchorDate") }}: {{ insights.micronutrients.anchorDate }}
+      {{ t("insightsAnchorDate") }}: {{ localizedAnchorDate }}
     </p>
 
     <p v-if="showEmptyState" class="empty-state">{{ t("insightsEmpty") }}</p>

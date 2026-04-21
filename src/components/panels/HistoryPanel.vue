@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
 import HistoryWeightCell from "./HistoryWeightCell.vue";
-import type { AppLocale, DailyEntry, MissingWeightStrategy } from "../../types";
+import type { AppLocale, DailyEntry } from "../../types";
 import {
   deducedWeightFromEntries,
   formatEntryDate,
@@ -18,7 +18,6 @@ const props = defineProps<{
   savingWeight: Record<string, boolean>;
   tdeeReference: number | null;
   targetWeightReference?: number | null;
-  weightMissingStrategy: MissingWeightStrategy;
 }>();
 
 const { t } = useI18n();
@@ -26,7 +25,7 @@ const { t } = useI18n();
 const emit = defineEmits<{
   "save-calories": [date: string, calories: number | null];
   "save-weight": [date: string, weight: number | null];
-  "update:weight-missing-strategy": [value: MissingWeightStrategy];
+  "delete-day": [date: string];
 }>();
 
 const sortedEntries = computed(() =>
@@ -59,7 +58,7 @@ function caloriesRemainingToTarget(entry: DailyEntry) {
   }
 
   const effectiveWeight =
-    entry.weight ?? deducedWeightFromEntries(props.entries, entry.date, props.weightMissingStrategy);
+    entry.weight ?? deducedWeightFromEntries(props.entries, entry.date);
   if (effectiveWeight == null) {
     return "-";
   }
@@ -69,15 +68,16 @@ function caloriesRemainingToTarget(entry: DailyEntry) {
 }
 
 function deltaPartsFromDelta(delta: number) {
-  if (delta === 0) {
+  const normalizedDelta = parseFloat(delta.toFixed(2));
+  if (normalizedDelta === 0) {
     return { kind: "maintenance" as const, amount: null as number | null };
   }
 
-  if (delta < 0) {
-    return { kind: "deficit" as const, amount: Math.abs(delta) };
+  if (normalizedDelta < 0) {
+    return { kind: "deficit" as const, amount: Math.abs(normalizedDelta) };
   }
 
-  return { kind: "surplus" as const, amount: delta };
+  return { kind: "surplus" as const, amount: normalizedDelta };
 }
 
 function deficitOrSurplusParts(entry: DailyEntry) {
@@ -104,33 +104,6 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
 <template>
   <BasePanel id="historyPanel" class="history-panel" :title="t('history')" :helper="t('historyHelper')" collapsible>
-    <fieldset class="history-weight-strategy" :aria-label="t('missingWeightStrategy')">
-      <legend class="history-weight-strategy__legend">{{ t("missingWeightStrategy") }}</legend>
-      <div class="history-weight-strategy__helper">{{ t("missingWeightStrategyHelper") }}</div>
-
-      <label class="history-weight-strategy__option">
-        <input
-          type="radio"
-          name="historyWeightStrategy"
-          value="previousDay"
-          :checked="weightMissingStrategy === 'previousDay'"
-          @change="emit('update:weight-missing-strategy', 'previousDay')"
-        />
-        <span>{{ t("weightStrategyPreviousDay") }}</span>
-      </label>
-
-      <label class="history-weight-strategy__option">
-        <input
-          type="radio"
-          name="historyWeightStrategy"
-          value="deducedWeight"
-          :checked="weightMissingStrategy === 'deducedWeight'"
-          @change="emit('update:weight-missing-strategy', 'deducedWeight')"
-        />
-        <span>{{ t("weightStrategyDeducedWeight") }}</span>
-      </label>
-    </fieldset>
-
     <div class="history-table-wrap">
       <table>
         <thead>
@@ -140,6 +113,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             <th class="calories-column">{{ t("calories") }}</th>
             <th class="numeric-pair">{{ t("caloriesRemainingToTarget") }}</th>
             <th>{{ t("deficitSurplus") }}</th>
+            <th class="history-action-column" aria-label="Actions"></th>
           </tr>
         </thead>
         <tbody>
@@ -158,6 +132,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               </template>
               <template v-else>-</template>
             </td>
+            <td class="history-action-cell"></td>
           </tr>
           <tr class="summary-row summary-row--recent">
             <td colspan="4">{{ t("last7dDeficitSurplus") }}</td>
@@ -174,13 +149,14 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
               </template>
               <template v-else>-</template>
             </td>
+            <td class="history-action-cell"></td>
           </tr>
         <tr v-for="entry in sortedEntries" :key="entry.date">
           <td>{{ formatEntryDate(entry.date, locale) }}</td>
           <td class="weight-cell">
             <HistoryWeightCell
               :value="entry.weight"
-              :fallback-value="deducedWeightFromEntries(entries, entry.date, weightMissingStrategy)"
+              :fallback-value="deducedWeightFromEntries(entries, entry.date)"
               :is-saving="Boolean(savingWeight[entry.date])"
               @save="emit('save-weight', entry.date, $event)"
             />
@@ -214,6 +190,17 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 	              </span>
 	            </template>
 	            <template v-else>-</template>
+	          </td>
+	          <td class="history-action-cell">
+              <button
+                class="history-delete-button"
+                type="button"
+                :data-delete-date="entry.date"
+                :aria-label="`${t('deleteDay')} ${formatEntryDate(entry.date, locale)}`"
+                @click="emit('delete-day', entry.date)"
+              >
+                <span aria-hidden="true">🗑️</span>
+              </button>
 	          </td>
 	        </tr>
 	      </tbody>
@@ -264,7 +251,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
           <div class="v">
             <HistoryWeightCell
               :value="entry.weight"
-              :fallback-value="deducedWeightFromEntries(entries, entry.date, weightMissingStrategy)"
+              :fallback-value="deducedWeightFromEntries(entries, entry.date)"
               :is-saving="Boolean(savingWeight[entry.date])"
               @save="emit('save-weight', entry.date, $event)"
             />
@@ -309,6 +296,17 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 	            <template v-else>-</template>
 	          </div>
 	        </div>
+          <div class="history-card__actions">
+            <button
+              class="history-delete-button"
+              type="button"
+              :data-delete-date="entry.date"
+              :aria-label="`${t('deleteDay')} ${formatEntryDate(entry.date, locale)}`"
+              @click="emit('delete-day', entry.date)"
+            >
+              <span aria-hidden="true">🗑️</span>
+            </button>
+          </div>
 	      </div>
     </div>
   </BasePanel>
@@ -358,6 +356,29 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
 .history-cards {
   display: none;
+}
+
+.history-action-column,
+.history-action-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.history-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 2.1rem;
+  border-color: color-mix(in srgb, var(--required-outline) 72%, var(--border-strong));
+  background: color-mix(in srgb, var(--required-pane-bg) 52%, var(--surface-2));
+  color: var(--text-primary);
+  padding-inline: 0.45rem;
+}
+
+.history-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.35rem;
 }
 
 .numeric-pair {

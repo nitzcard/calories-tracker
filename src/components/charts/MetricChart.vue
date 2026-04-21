@@ -82,6 +82,7 @@ function renderChart() {
   const yValues = normalizedPoints.value.map((point) => point.y ?? null);
   const trendValues = trendlineValues.value;
   const xSplits = uniqueSorted(xValues);
+  const weekBoundarySplits = buildWeekBoundarySplits(xSplits);
   const referenceValuesList = activeReferenceLines.value.map((line) => xValues.map(() => line.value ?? null));
   const allYValues = hasReferenceLines.value
     ? [...yValues, ...trendValues, ...referenceValuesList.flatMap((values) => values as Array<number | null>)]
@@ -148,6 +149,28 @@ function renderChart() {
         },
       ],
       hooks: {
+        drawAxes: [
+          (u) => {
+            if (!weekBoundarySplits.length) {
+              return;
+            }
+
+            const ctx = u.ctx;
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(95, 90, 79, 0.34)";
+            ctx.lineWidth = 1.1;
+
+            for (const split of weekBoundarySplits) {
+              const x = Math.round(u.valToPos(split, "x", true)) + 0.5;
+              ctx.moveTo(x, u.bbox.top);
+              ctx.lineTo(x, u.bbox.top + u.bbox.height);
+            }
+
+            ctx.stroke();
+            ctx.restore();
+          },
+        ],
         setCursor: [
           (u) => {
             const idx = u.cursor.idx;
@@ -231,6 +254,35 @@ function formatHoverValue(value: number | null | undefined) {
 
 function uniqueSorted(values: number[]) {
   return Array.from(new Set(values)).sort((a, b) => a - b);
+}
+
+function buildWeekBoundarySplits(xValues: number[]) {
+  if (xValues.length < 2) {
+    return [] as number[];
+  }
+
+  const splits: number[] = [];
+  let previousWeekKey = weekStartKeyFromUnix(xValues[0]);
+
+  for (let index = 1; index < xValues.length; index += 1) {
+    const value = xValues[index];
+    const currentWeekKey = weekStartKeyFromUnix(value);
+    if (currentWeekKey !== previousWeekKey) {
+      splits.push(value);
+      previousWeekKey = currentWeekKey;
+    }
+  }
+
+  return splits;
+}
+
+function weekStartKeyFromUnix(value: number) {
+  const date = new Date(value * 1000);
+  const dayOfWeek = date.getDay(); // 0 = Sunday
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() + mondayOffset);
+  return `${weekStart.getFullYear()}-${weekStart.getMonth() + 1}-${weekStart.getDate()}`;
 }
 
 function buildTrendlineValues(points: Array<{ x: number; y: number | null }>) {

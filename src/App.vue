@@ -5,9 +5,10 @@ import BasePanel from "./components/base/BasePanel.vue";
 import AppHeader from "./components/header/AppHeader.vue";
 import JasmineThemePrompt from "./components/JasmineThemePrompt.vue";
 import AnalysisSwitchSuggestion from "./components/shared/AnalysisSwitchSuggestion.vue";
+import PaneScrubber from "./components/shared/PaneScrubber.vue";
 import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
+import { buildAnalysisErrorPresentation } from "./app/analysis-errors";
 import { useDashboard } from "./app/useDashboard";
-import { FALLBACK_GEMINI_MODEL, formatGeminiModelLabel } from "./ai/gemini-config";
 
 const MetricChart = defineAsyncComponent(() => import("./components/charts/MetricChart.vue"));
 const ApiKeysPanel = defineAsyncComponent(() => import("./components/panels/ApiKeysPanel.vue"));
@@ -75,7 +76,6 @@ const {
   currentEntry,
   tdee,
   nutritionInsights,
-  deducedWeight,
   estimatedLeanWeight,
   weightPoints,
   caloriePoints,
@@ -88,6 +88,7 @@ const {
   onProviderChange,
   saveWeightDraft,
   saveFoodDraft,
+  deleteDay,
   saveHistoryCalories,
   saveHistoryWeight,
   calculateCustomTdeeWithGemini,
@@ -102,27 +103,28 @@ const {
   saveFoodCorrectionInstruction,
   saveFoodCorrectionInstructionOnly,
   applyFoodCorrectionToCurrentEntry,
-	  exportData,
-	  importData,
-    setAutoBackupAfterAnalyze,
-	  cloudMode,
-	  cloudUsername,
-	  cloudConfirmedUsername,
-    autoBackupAfterAnalyze,
-    hasSavedCloudPassword,
-	  isCloudBusy,
+  applyMealTotalCorrectionToCurrentEntry,
+  cloudMode,
+  cloudUsername,
+  cloudConfirmedUsername,
+  autoBackupAfterAnalyze,
+  hasSavedCloudPassword,
+  isCloudBusy,
     isCloudSyncing,
-	  cloudStatus,
-	  cloudLastSyncedAt,
-	  cloudError,
-	  supabaseConfigured,
-	  setCloudMode,
-	  setCloudUsername,
+  cloudStatus,
+  cloudLastSyncedAt,
+  cloudError,
+  supabaseConfigured,
+  exportData,
+  importData,
+  setAutoBackupAfterAnalyze,
+  setCloudMode,
+  setCloudUsername,
     cloudLogout,
-	  cloudSyncNow,
-	  notice,
-	  clearNotice,
-	} = dashboard;
+  cloudSyncNow,
+  notice,
+  clearNotice,
+} = dashboard;
 
 const appSetupOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.appSetup) ?? false);
 const constantDataOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.constantData) ?? false);
@@ -181,19 +183,18 @@ const weightTrendlineLabel = computed(() => {
   const unitPerDay = locale.value === "he" ? `${t("unitG")}/יום` : `${t("unitG")}/day`;
   return `${t("averageWeightChangePerDay")} (${signedSlope} ${unitPerDay})`;
 });
-const analysisErrorRetryModelId = computed(() => {
-  const error = currentEntry.value?.aiError ?? "";
-  if (!error || provider.value === FALLBACK_GEMINI_MODEL) return null;
-
-  if (error.includes("(429)") || error.includes("(503)") || error.includes("rate limited") || error.includes("high demand")) {
-    return FALLBACK_GEMINI_MODEL;
-  }
-
-  return null;
-});
-const analysisErrorRetryModelLabel = computed(() =>
-  analysisErrorRetryModelId.value ? formatGeminiModelLabel(analysisErrorRetryModelId.value) : null,
+const analysisErrorPresentation = computed(() =>
+  buildAnalysisErrorPresentation(currentEntry.value?.aiError, locale.value, provider.value, providerOptions.value),
 );
+const analysisErrorRetryModelId = computed(() => analysisErrorPresentation.value.retryModelId);
+const analysisErrorRetryModelLabel = computed(() => analysisErrorPresentation.value.retryModelLabel);
+const formattedAnalysisError = computed(() => analysisErrorPresentation.value.message);
+const mobilePanes = computed(() => [
+  { id: "dailyDeskPanel", label: t("dailyDesk"), icon: "diary" as const },
+  { id: "nutritionSummaryPanel", label: t("nutritionSummary"), icon: "summary" as const },
+  { id: "graphCaloriesPanel", label: t("graphCalories"), icon: "graphs" as const },
+  { id: "historyPanel", label: t("history"), icon: "history" as const },
+]);
 
 function openFoodRulesFromToast() {
   const panel = document.getElementById("dailyDeskPanel");
@@ -283,15 +284,6 @@ async function applyJasmineThemeFromDialog() {
   await onThemeChange("jasmine");
 }
 
-const canAutoCloudSync = computed(() => {
-  if (cloudMode.value !== "cloud") return false;
-  if (!supabaseConfigured.value) return false;
-  if (!cloudConfirmedUsername.value.trim()) return false;
-  if (!hasSavedCloudPassword.value) return false;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
-  return true;
-});
-
 const activeToasts = computed(() => {
   const items: Array<{
     id: string;
@@ -305,7 +297,7 @@ const activeToasts = computed(() => {
   const localActive =
     isAutoSaving.value || isTransferringData.value || localToastVisibleUntil.value > Date.now();
 
-  const shouldCombine = (cloudActive && localActive) || (localActive && canAutoCloudSync.value);
+  const shouldCombine = cloudMode.value === "cloud" && (localActive || cloudActive);
 
   const activeToast =
     shouldCombine
@@ -368,6 +360,8 @@ const activeToasts = computed(() => {
   return items;
 });
 
+const primaryToast = computed(() => activeToasts.value[0] ?? null);
+
 function showTransientToast(
   kind: "local" | "cloud" | "error",
   message: string,
@@ -425,7 +419,6 @@ watch(
 watch(
   notice,
   (next, previous) => {
-    console.log('Notice changed:', { next, previous });
     if (!next || next === previous) {
       return;
     }
@@ -453,7 +446,6 @@ watch(
     }
 
     if (next === "instruction-saved") {
-      console.log('Showing instruction-saved toast');
       showTransientToast("local", `💾 ${t("instructionSavedOnly")}`, {
         duration: 5000,
         action: {
@@ -462,6 +454,11 @@ watch(
           onClick: openFoodRulesFromToast,
         },
       });
+      return;
+    }
+
+    if (next === "day-deleted") {
+      showTransientToast("local", t("dayDeleted"), { duration: 4500 });
     }
   },
 );
@@ -525,8 +522,22 @@ async function saveFoodCorrectionInstructionAndRefresh(
   grams: number | null,
   calories: number | null,
   caloriesPer100g: number | null,
+  protein?: number | null,
+  carbs?: number | null,
+  fat?: number | null,
+  fiber?: number | null,
 ) {
-  await saveFoodCorrectionInstruction(foodId, foodName, grams, calories, caloriesPer100g);
+  await saveFoodCorrectionInstruction(
+    foodId,
+    foodName,
+    grams,
+    calories,
+    caloriesPer100g,
+    protein,
+    carbs,
+    fat,
+    fiber,
+  );
   await analyzeCurrentDay();
 }
 
@@ -536,8 +547,22 @@ async function saveFoodCorrectionInstructionOnlyAndRefresh(
   grams: number | null,
   calories: number | null,
   caloriesPer100g: number | null,
+  protein?: number | null,
+  carbs?: number | null,
+  fat?: number | null,
+  fiber?: number | null,
 ) {
-  await saveFoodCorrectionInstructionOnly(foodId, foodName, grams, calories, caloriesPer100g);
+  await saveFoodCorrectionInstructionOnly(
+    foodId,
+    foodName,
+    grams,
+    calories,
+    caloriesPer100g,
+    protein,
+    carbs,
+    fat,
+    fiber,
+  );
 }
 
 async function applyFoodCorrectionForCurrentEntry(
@@ -546,8 +571,36 @@ async function applyFoodCorrectionForCurrentEntry(
   grams: number | null,
   calories: number | null,
   caloriesPer100g: number | null,
+  protein?: number | null,
+  carbs?: number | null,
+  fat?: number | null,
+  fiber?: number | null,
 ) {
-  await applyFoodCorrectionToCurrentEntry(foodId, foodName, grams, calories, caloriesPer100g);
+  await applyFoodCorrectionToCurrentEntry(
+    foodId,
+    foodName,
+    grams,
+    calories,
+    caloriesPer100g,
+    protein,
+    carbs,
+    fat,
+    fiber,
+  );
+  correctionNoticeToken.value += 1;
+}
+
+async function applyMealTotalCorrectionForCurrentEntry(
+  mealId: string,
+  totals: {
+    calories: number | null;
+    protein: number | null;
+    carbs: number | null;
+    fat: number | null;
+    fiber: number | null;
+  },
+) {
+  await applyMealTotalCorrectionToCurrentEntry(mealId, totals);
   correctionNoticeToken.value += 1;
 }
 
@@ -567,14 +620,12 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   tdeeHighlightToken.value += 1;
 }
 
-function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
-  if (!profile.value) {
+async function deleteHistoryDayWithConfirm(date: string) {
+  if (!window.confirm(t("deleteDayConfirm"))) {
     return;
   }
 
-  const nextProfile = { ...profile.value, weightMissingStrategy: value };
-  profile.value = nextProfile;
-  void saveProfileAndHighlight(nextProfile);
+  await deleteDay(date);
 }
 
 </script>
@@ -604,6 +655,8 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
   />
 
   <main class="app-shell">
+    <PaneScrubber :panes="mobilePanes" :aria-label="t('paneNavigation')" />
+
     <AppHeader
       :locale="locale"
       :theme-mode="themeMode"
@@ -621,31 +674,31 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
       <button class="notice-dismiss" @click="clearNotice">x</button>
     </p>
 
-    <div v-if="activeToasts.length" class="status-toast-stack" aria-live="polite" aria-atomic="true">
-      <transition-group name="status-toast">
+    <div v-if="primaryToast" class="status-toast-stack" aria-live="polite" aria-atomic="true">
+      <transition name="status-toast" mode="out-in">
         <div
-          v-for="toast in activeToasts"
-          :key="toast.id"
+          :key="primaryToast.id"
           class="status-toast"
-          :class="`status-toast--${toast.kind}`"
+          :class="`status-toast--${primaryToast.kind}`"
           role="status"
         >
-          <span class="status-toast__glyph" :class="{ 'is-spinning': toast.spinning }" aria-hidden="true"></span>
-          <span class="status-toast__message">{{ toast.message }}</span>
+          <span class="status-toast__glyph" :class="{ 'is-spinning': primaryToast.spinning }" aria-hidden="true"></span>
+          <span class="status-toast__message">{{ primaryToast.message }}</span>
           <a
-            v-if="toast.action"
+            v-if="primaryToast.action"
             class="status-toast__action"
-            :href="toast.action.href"
-            @click="toast.action.onClick?.()"
+            :href="primaryToast.action.href"
+            @click="primaryToast.action.onClick?.()"
           >
-            {{ toast.action.label }}
+            {{ primaryToast.action.label }}
           </a>
         </div>
-      </transition-group>
+      </transition>
     </div>
 
     <details
       v-if="profile"
+      id="appSetupPanel"
       class="panel constant-data-panel"
       :open="appSetupEffectiveOpen"
       :class="{ 'is-locked-open': !hasConfiguredGeminiKey, 'is-required-pane': !hasConfiguredGeminiKey }"
@@ -705,6 +758,7 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
 
     <details
       v-if="profile"
+      id="constantDataPanel"
       class="panel constant-data-panel"
       :open="constantDataEffectiveOpen"
       :class="{ 'is-locked-open': !isProfileReady, 'is-required-pane': !isProfileReady }"
@@ -724,7 +778,6 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
         <ProfilePanel
           :locale="locale"
           :profile="profile"
-          :deduced-weight="deducedWeight"
           :estimated-lean-weight="estimatedLeanWeight"
           :is-saving-activity="isSavingActivityPrompt"
           @update:profile="profile = $event"
@@ -769,7 +822,7 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
           :is-saving-provider="isSavingProvider"
           :can-select-provider="hasEffectiveGeminiKey"
           :analyze-issue="analyzeIssue"
-          :analysis-error="currentEntry?.aiError ?? null"
+          :analysis-error="formattedAnalysisError"
           :analysis-retry-model-label="analysisErrorRetryModelLabel"
           :analysis-retry-model-id="analysisErrorRetryModelId"
           :is-saving-weight="isSavingWeight"
@@ -795,15 +848,18 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
           :locale="locale"
           :entry="currentEntry"
           :profile="profile"
+          :provider-id="provider"
           :is-analyzing="isAnalyzing"
           :is-stale="Boolean(currentEntry?.analysisStale)"
           :status-text="statusLabel((key: string) => t(key), currentEntry?.aiStatus ?? 'idle')"
           :correction-token="correctionNoticeToken"
+          :analysis-error="formattedAnalysisError"
           :analysis-retry-model-label="analysisErrorRetryModelLabel"
           :analysis-retry-model-id="analysisErrorRetryModelId"
           @save-correction="saveFoodCorrectionInstructionAndRefresh"
           @save-correction-only="saveFoodCorrectionInstructionOnlyAndRefresh"
           @apply-correction="applyFoodCorrectionForCurrentEntry"
+          @apply-meal-total="applyMealTotalCorrectionForCurrentEntry"
           @retry-analysis-with-model="retryAnalysisWithModel"
         />
       </div>
@@ -844,10 +900,9 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
           :saving-weight="savingHistoryWeight"
           :tdee-reference="tdee.selectedValue"
           :target-weight-reference="tdee.targetWeight"
-          :weight-missing-strategy="profile.weightMissingStrategy"
-          @update:weight-missing-strategy="onWeightMissingStrategyChange"
           @save-calories="saveHistoryCalories"
           @save-weight="saveHistoryWeight"
+          @delete-day="deleteHistoryDayWithConfirm"
         />
       </div>
     </section>
@@ -866,6 +921,8 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
 }
 
 .global-analyzing-bar {
+  position: static;
+  transform: none;
   inline-size: min(32rem, calc(100vw - 2rem));
   display: grid;
   justify-items: center;
@@ -1161,6 +1218,7 @@ function onWeightMissingStrategyChange(value: "previousDay" | "deducedWeight") {
 
   .app-shell {
     padding: 10px;
+    padding-block-end: calc(6.1rem + env(safe-area-inset-bottom));
   }
 
   .content-grid,

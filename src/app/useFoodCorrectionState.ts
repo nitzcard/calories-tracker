@@ -38,6 +38,10 @@ export function useFoodCorrectionState(args: {
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
+    _protein?: number | null,
+    _carbs?: number | null,
+    _fat?: number | null,
+    _fiber?: number | null,
   ) {
     await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, true);
   }
@@ -48,6 +52,10 @@ export function useFoodCorrectionState(args: {
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
+    _protein?: number | null,
+    _carbs?: number | null,
+    _fat?: number | null,
+    _fiber?: number | null,
   ) {
     await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, false);
   }
@@ -95,7 +103,6 @@ export function useFoodCorrectionState(args: {
     await saveProfile(args.profile.value);
 
     const noticeValue = markStale ? "instruction-pending" : "instruction-saved";
-    console.log('Setting notice to:', noticeValue);
     args.setNotice(noticeValue);
 
     if (markStale) {
@@ -164,43 +171,112 @@ export function useFoodCorrectionState(args: {
     };
   }
 
+  function normalizeNutritionValue(value: number | null | undefined) {
+    if (value == null || !Number.isFinite(value)) {
+      return null;
+    }
+
+    return value;
+  }
+
+  function sumMealTotals(meals: MealBreakdownItem[]): NutritionTotals {
+    const totals = {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      fiber: 0,
+    };
+    const seen = {
+      calories: false,
+      protein: false,
+      carbs: false,
+      fat: false,
+      fiber: false,
+    };
+
+    for (const meal of meals) {
+      const mealTotals = meal.totals;
+      if (mealTotals.calories != null) {
+        totals.calories += mealTotals.calories;
+        seen.calories = true;
+      }
+      if (mealTotals.protein != null) {
+        totals.protein += mealTotals.protein;
+        seen.protein = true;
+      }
+      if (mealTotals.carbs != null) {
+        totals.carbs += mealTotals.carbs;
+        seen.carbs = true;
+      }
+      if (mealTotals.fat != null) {
+        totals.fat += mealTotals.fat;
+        seen.fat = true;
+      }
+      if (mealTotals.fiber != null) {
+        totals.fiber += mealTotals.fiber;
+        seen.fiber = true;
+      }
+    }
+
+    return {
+      calories: seen.calories ? Math.round(totals.calories) : null,
+      protein: seen.protein ? Math.round(totals.protein * 10) / 10 : null,
+      carbs: seen.carbs ? Math.round(totals.carbs * 10) / 10 : null,
+      fat: seen.fat ? Math.round(totals.fat * 10) / 10 : null,
+      fiber: seen.fiber ? Math.round(totals.fiber * 10) / 10 : null,
+    };
+  }
+
   async function applyFoodCorrectionToCurrentEntry(
     foodId: string,
     _foodName: string,
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
+    protein?: number | null,
+    carbs?: number | null,
+    fat?: number | null,
+    fiber?: number | null,
   ) {
     if (!args.currentEntry.value?.nutritionSnapshot) return;
 
     const snapshot = args.currentEntry.value.nutritionSnapshot;
     const previousFood = snapshot.foods.find((food) => food.id === foodId);
     const resolved = resolveFoodCorrection(previousFood, grams, calories, caloriesPer100g);
-    if (!resolved) {
-      return;
-    }
+    const snapshotUpdatedAt = new Date().toISOString();
+
+    const nextCalories = resolved?.calories ?? calories ?? null;
+    const nextGrams = resolved?.grams ?? grams ?? null;
+    const didCaloriesChange =
+      previousFood?.calories != null && nextCalories != null && previousFood.calories !== nextCalories;
+    const didGramsChange = previousFood?.grams != null && nextGrams != null && previousFood.grams !== nextGrams;
 
     const macroRatio =
-      previousFood?.grams && resolved.grams
-        ? resolved.grams / previousFood.grams
-        : previousFood?.calories && resolved.calories
-          ? resolved.calories / previousFood.calories
-          : 1;
+      didCaloriesChange && previousFood?.calories && previousFood.calories > 0
+        ? nextCalories! / previousFood.calories
+        : didGramsChange && previousFood?.grams && previousFood.grams > 0
+          ? nextGrams! / previousFood.grams
+          : previousFood?.calories && nextCalories != null && previousFood.calories > 0
+            ? nextCalories / previousFood.calories
+            : previousFood?.grams && nextGrams != null && previousFood.grams > 0
+              ? nextGrams / previousFood.grams
+              : 1;
 
     const nextMeals: MealBreakdownItem[] = snapshot.meals.map((meal) => {
       const nextFoods = meal.foods.map((food) =>
         food.id === foodId
           ? {
               ...food,
-              grams: resolved.grams,
-              gramsEstimated: resolved.gramsEstimated,
-              calories: resolved.calories,
-              caloriesEstimated: resolved.caloriesEstimated,
-              caloriesPer100g: resolved.caloriesPer100g,
-              protein: scaleMacro(food.protein, macroRatio),
-              carbs: scaleMacro(food.carbs, macroRatio),
-              fat: scaleMacro(food.fat, macroRatio),
-              fiber: scaleMacro(food.fiber, macroRatio),
+              grams: resolved?.grams ?? grams ?? null,
+              gramsEstimated: resolved?.gramsEstimated ?? false,
+              calories: resolved?.calories ?? calories ?? null,
+              caloriesEstimated: resolved?.caloriesEstimated ?? false,
+              caloriesPer100g: resolved?.caloriesPer100g ?? caloriesPer100g ?? null,
+              protein: protein !== undefined ? protein : scaleMacro(food.protein, macroRatio),
+              carbs: carbs !== undefined ? carbs : scaleMacro(food.carbs, macroRatio),
+              fat: fat !== undefined ? fat : scaleMacro(food.fat, macroRatio),
+              fiber: fiber !== undefined ? fiber : scaleMacro(food.fiber, macroRatio),
             }
           : food,
       );
@@ -217,6 +293,8 @@ export function useFoodCorrectionState(args: {
 
     await saveEntry({
       ...args.currentEntry.value,
+      analysisStale: false,
+      aiError: null,
       nutritionSnapshot: {
         ...snapshot,
         calories: nextDailyTotals.calories,
@@ -226,16 +304,61 @@ export function useFoodCorrectionState(args: {
         dailyTotals: nextDailyTotals,
         meals: nextMeals,
         foods: nextFoods,
+        updatedAt: snapshotUpdatedAt,
       },
     });
 
     await args.refreshState();
-    args.setNotice("correction");
+  }
+
+  async function applyMealTotalCorrectionToCurrentEntry(
+    mealId: string,
+    totals: NutritionTotals,
+  ) {
+    if (!args.currentEntry.value?.nutritionSnapshot) return;
+
+    const snapshot = args.currentEntry.value.nutritionSnapshot;
+    const snapshotUpdatedAt = new Date().toISOString();
+    const nextMeals: MealBreakdownItem[] = snapshot.meals.map((meal) =>
+      meal.id === mealId
+        ? {
+            ...meal,
+            totals: {
+              calories: normalizeNutritionValue(totals.calories),
+              protein: normalizeNutritionValue(totals.protein),
+              carbs: normalizeNutritionValue(totals.carbs),
+              fat: normalizeNutritionValue(totals.fat),
+              fiber: normalizeNutritionValue(totals.fiber),
+            },
+          }
+        : meal,
+    );
+
+    const nextDailyTotals = sumMealTotals(nextMeals);
+
+    await saveEntry({
+      ...args.currentEntry.value,
+      analysisStale: false,
+      aiError: null,
+      nutritionSnapshot: {
+        ...snapshot,
+        calories: nextDailyTotals.calories,
+        protein: nextDailyTotals.protein,
+        carbs: nextDailyTotals.carbs,
+        fat: nextDailyTotals.fat,
+        dailyTotals: nextDailyTotals,
+        meals: nextMeals,
+        updatedAt: snapshotUpdatedAt,
+      },
+    });
+
+    await args.refreshState();
   }
 
   return {
     saveFoodCorrectionInstruction,
     saveFoodCorrectionInstructionOnly,
     applyFoodCorrectionToCurrentEntry,
+    applyMealTotalCorrectionToCurrentEntry,
   };
 }

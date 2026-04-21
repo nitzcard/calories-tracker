@@ -117,22 +117,4 @@ function emitSave(provider: keyof StoredAiKeys) {
 .keys-grid :deep(input) {
   max-inline-size: none;
 }
-
-.required-pill {
-  display: inline-block;
-  padding: 0.12rem 0.42rem;
-  border: 1px solid #7c2d2d;
-  background: #f0c6c3;
-  color: #651c1c;
-  font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  box-shadow: var(--bevel-raised);
-  white-space: nowrap;
-}
-
-.keys-grid :deep(input.is-missing) {
-  border-color: #8f3333;
-  box-shadow: 0 0 0 1px rgba(143, 51, 51, 0.35);
-}
 </style>

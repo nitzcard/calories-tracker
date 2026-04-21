@@ -54,7 +54,6 @@ interface Profile {
   customTdee: number | null;
   bodyFat: number | null;
   goalMode: "cut" | "leanMass" | "maingain";
-  weightMissingStrategy: "previousDay" | "deducedWeight";
   tdeeEquation: "mifflinStJeor" | "harrisBenedict" | "cunningham" | "observedTdee";
   activityPrompt: string;
   foodInstructions: string;

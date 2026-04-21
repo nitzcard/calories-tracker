@@ -34,7 +34,6 @@ const DEFAULT_PROFILE: Profile = {
   customTdee: null,
   bodyFat: null,
   goalMode: "maingain",
-  weightMissingStrategy: "previousDay",
   tdeeEquation: "mifflinStJeor",
   activityPrompt: "",
   foodInstructions: "",
@@ -66,16 +65,6 @@ export async function ensureDefaultProfile(
       legacyGoalMode === "cut" || legacyGoalMode === "leanMass" || legacyGoalMode === "maingain"
         ? legacyGoalMode
         : DEFAULT_PROFILE.goalMode;
-    const legacyWeightMissingStrategy = (existing as any).weightMissingStrategy as
-      | Profile["weightMissingStrategy"]
-      | undefined;
-    const normalizedWeightMissingStrategy =
-      legacyWeightMissingStrategy === "previousDay" || legacyWeightMissingStrategy === "deducedWeight"
-        ? legacyWeightMissingStrategy
-        : legacyWeightMissingStrategy === "carryForward" || legacyWeightMissingStrategy === "loggedOnly"
-          ? "previousDay"
-          : DEFAULT_PROFILE.weightMissingStrategy;
-
     let migratedCustomTdee: number | null = null;
     const existingCustomTdee = (existing as any).customTdee as number | null | undefined;
     if (existingCustomTdee != null && Number.isFinite(existingCustomTdee) && existingCustomTdee > 0) {
@@ -102,7 +91,6 @@ export async function ensureDefaultProfile(
       customTdee: migratedCustomTdee ?? DEFAULT_PROFILE.customTdee,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       goalMode: normalizedGoalMode,
-      weightMissingStrategy: normalizedWeightMissingStrategy,
       tdeeEquation: normalizedEquation,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
@@ -140,6 +128,11 @@ export async function getEntry(date: string): Promise<DailyEntry | undefined> {
   return entry ? normalizeEntry(entry) : undefined;
 }
 
+export async function deleteDailyEntry(date: string): Promise<void> {
+  await db.dailyEntries.delete(date);
+  await db.syncQueue.where("date").equals(date).delete();
+}
+
 export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEntry> {
   const now = new Date().toISOString();
   const existing = await getEntry(input.date);
@@ -164,12 +157,12 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
     ...entry,
     foodLogText: input.foodLogText ?? entry.foodLogText,
     weight: input.weight === undefined ? entry.weight : input.weight,
+    // Keep manual calories unless the user explicitly changes that field.
+    // Food-log edits should mark analysis stale, not destructively wipe existing values.
     manualCalories:
       input.manualCalories !== undefined
         ? input.manualCalories
-        : foodLogChanged
-          ? null
-          : entry.manualCalories,
+        : entry.manualCalories,
     customTdee: input.customTdee === undefined ? entry.customTdee : input.customTdee,
     analysisStale: foodLogChanged ? true : entry.analysisStale ?? false,
     nutritionSnapshot: foodLogChanged ? entry.nutritionSnapshot : entry.nutritionSnapshot,
@@ -195,7 +188,8 @@ export async function saveNutritionResult(
     toPlain({
       ...existing,
       ...patch,
-      manualCalories: patch.aiStatus === "done" ? null : existing.manualCalories,
+      // Re-analysis should not erase manual calories. Users can clear it explicitly.
+      manualCalories: existing.manualCalories,
       analysisStale: patch.aiStatus === "done" ? false : existing.analysisStale ?? false,
       updatedAt: new Date().toISOString(),
     }),

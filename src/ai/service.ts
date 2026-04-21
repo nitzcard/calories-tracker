@@ -15,6 +15,8 @@ import type { NormalizedNutritionResult } from "../types";
 export async function queueAnalysis(date: string, provider = DEFAULT_GEMINI_MODEL): Promise<void> {
   const existing = await getEntry(date);
 
+  await clearQueueItemsByDate(date);
+
   await enqueueSync({
     date,
     status: "pending",

@@ -5,6 +5,7 @@ import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
 import AnalysisSwitchSuggestion from "../shared/AnalysisSwitchSuggestion.vue";
+import { formatEntryDate } from "../../domain/entries";
 import type { AiProviderOption, AppLocale } from "../../types";
 
 const props = defineProps<{
@@ -83,6 +84,14 @@ const showModelSwitchAction = computed(
 const showAnalysisRetryAction = computed(
   () => Boolean(props.analysisError && props.analysisRetryModelLabel && props.analysisRetryModelId),
 );
+const localizedSelectedDate = computed(() =>
+  formatEntryDate(props.selectedDate, props.locale, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }),
+);
 </script>
 
 <template>
@@ -103,6 +112,7 @@ const showAnalysisRetryAction = computed(
               :value="selectedDate"
               @input="emit('update:selectedDate', ($event.target as HTMLInputElement).value)"
             />
+            <p class="localized-date">{{ localizedSelectedDate }}</p>
 	          </FormField>
 	          <FormField :label="t('todayWeight')">
 	            <div class="unit-field">
@@ -217,6 +227,7 @@ const showAnalysisRetryAction = computed(
             :value="selectedDate"
             @input="emit('update:selectedDate', ($event.target as HTMLInputElement).value)"
           />
+          <p class="localized-date">{{ localizedSelectedDate }}</p>
 	        </FormField>
 	        <FormField :label="t('todayWeight')">
 	          <div class="unit-field">
@@ -330,6 +341,13 @@ const showAnalysisRetryAction = computed(
   color: var(--text-muted);
   margin: 0;
   font-size: 0.875rem;
+}
+
+.localized-date {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .today-log-content {

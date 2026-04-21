@@ -11,7 +11,6 @@ export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type GoalMode = "cut" | "leanMass" | "maingain";
-export type MissingWeightStrategy = "previousDay" | "deducedWeight";
 export type TdeeEquation =
   | "mifflinStJeor"
   | "harrisBenedict"
@@ -38,7 +37,6 @@ export interface Profile {
   customTdee: number | null;
   bodyFat: number | null;
   goalMode: GoalMode;
-  weightMissingStrategy: MissingWeightStrategy;
   tdeeEquation: TdeeEquation;
   activityPrompt: string;
   foodInstructions: string;

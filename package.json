@@ -8,6 +8,10 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
+    "test:e2e": "playwright test -c testing/automation/playwright/playwright.config.ts",
+    "test:e2e:meals": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @meals",
+    "test:e2e:weight": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @weight",
+    "test:e2e:history": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @history",
     "lint": "oxlint -c oxlint.json --vue-plugin src vite.config.ts capacitor.config.ts",
     "format": "oxfmt -c oxfmt.json --write src vite.config.ts capacitor.config.ts",
     "format:check": "oxfmt -c oxfmt.json --check src vite.config.ts capacitor.config.ts",
@@ -27,9 +31,11 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^7.1.1",
+    "@playwright/test": "^1.59.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "oxfmt": "^0.42.0",
     "oxlint": "^1.57.0",
+    "playwright": "^1.59.1",
     "typescript": "^6.0.2",
     "vite": "^7.0.0",
     "vue-tsc": "^2.2.12"

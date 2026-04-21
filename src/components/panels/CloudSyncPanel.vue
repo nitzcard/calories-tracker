@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
+import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
 import type { AppLocale, Profile } from "../../types";
 
@@ -173,37 +174,43 @@ function onSubmit() {
         :helper="t('cloudModeHelper')"
         :style="{ '--cloud-mode-select-width': cloudModeSelectWidth }"
       >
-        <select
-          :value="cloudMode"
-          @change="emit('update:cloudMode', ($event.target as HTMLSelectElement).value as 'offline' | 'cloud')"
-        >
-          <option value="offline">{{ t("cloudModeOffline") }}</option>
-          <option value="cloud">{{ cloudModeLabel }}</option>
-        </select>
+        <FieldControl as="select">
+          <select
+            :value="cloudMode"
+            @change="emit('update:cloudMode', ($event.target as HTMLSelectElement).value as 'offline' | 'cloud')"
+          >
+            <option value="offline">{{ t("cloudModeOffline") }}</option>
+            <option value="cloud">{{ cloudModeLabel }}</option>
+          </select>
+        </FieldControl>
       </FormField>
 
       <form class="auth-block" :class="{ 'auth-block--disabled': cloudMode !== 'cloud' }" @submit.prevent="onSubmit">
         <FormField :label="t('cloudUsername')" reserve-helper-space>
-          <input
-            :disabled="cloudMode !== 'cloud' || isLoggedIn"
-            :value="draftUsername"
-            autocomplete="username"
-            @input="draftUsername = ($event.target as HTMLInputElement).value"
-          />
+          <FieldControl>
+            <input
+              :disabled="cloudMode !== 'cloud' || isLoggedIn"
+              :value="draftUsername"
+              autocomplete="username"
+              @input="draftUsername = ($event.target as HTMLInputElement).value"
+            />
+          </FieldControl>
         </FormField>
 
         <FormField
           :label="t('cloudPassword')"
           :helper="cloudMode === 'cloud' ? (hasSavedCloudPassword ? t('cloudPasswordSaved') : t('cloudPasswordHint')) : ''"
         >
-	          <input
-	            type="password"
-	            autocomplete="current-password"
-	            :disabled="cloudMode !== 'cloud' || isCloudBusy || hasSavedCloudPassword"
-	            :value="draftPassword"
+	          <FieldControl>
+	            <input
+	              type="password"
+	              autocomplete="current-password"
+	              :disabled="cloudMode !== 'cloud' || isCloudBusy || hasSavedCloudPassword"
+	              :value="draftPassword"
               :placeholder="hasSavedCloudPassword ? t('cloudPasswordSavedPlaceholder') : ''"
-	            @input="draftPassword = ($event.target as HTMLInputElement).value"
-	          />
+	              @input="draftPassword = ($event.target as HTMLInputElement).value"
+	            />
+	          </FieldControl>
 	        </FormField>
 
         <FormField :helper="t('emailHelper')">
@@ -213,14 +220,16 @@ function onSubmit() {
               <span class="optional-pill">{{ t("optionalLabel") }}</span>
             </span>
           </template>
-          <input
-            :value="profile.email ?? ''"
-            type="email"
-            inputmode="email"
-            autocomplete="email"
-            :placeholder="t('emailPlaceholder')"
-            @input="saveEmail"
-          />
+          <FieldControl>
+            <input
+              :value="profile.email ?? ''"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              :placeholder="t('emailPlaceholder')"
+              @input="saveEmail"
+            />
+          </FieldControl>
         </FormField>
 
 	        <div class="cloud-actions">
@@ -294,6 +303,10 @@ function onSubmit() {
   max-inline-size: 100%;
 }
 
+.cloud-mode-field :deep(.helper-slot) {
+  white-space: pre-line;
+}
+
 .cloud-actions {
   display: flex;
   align-items: end;
@@ -302,7 +315,12 @@ function onSubmit() {
 
 .auth-block {
   display: grid;
-  gap: 8px;
+  column-gap: 12px;
+  row-gap: 8px;
+}
+
+.auth-block > * {
+  min-inline-size: 0;
 }
 
 @media (min-width: 860px) {

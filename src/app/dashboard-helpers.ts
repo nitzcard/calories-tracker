@@ -12,6 +12,7 @@ export const DASHBOARD_STORAGE_KEYS = {
   cloudMode: "calorie-tracker.cloud-mode",
   cloudUsername: "calorie-tracker.cloud-username",
   cloudConfirmedUsername: "calorie-tracker.cloud-confirmed-username",
+  dailyDraftPrefix: "calorie-tracker.daily-draft::",
 } as const;
 
 export function normalizeProvider(value: string | null): string {

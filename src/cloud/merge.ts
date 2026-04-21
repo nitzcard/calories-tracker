@@ -51,7 +51,6 @@ function mergeProfilePreservingData(
 	    locale: "en" as const,
 	    themeMode: "system" as const,
       goalMode: "maingain" as const,
-      weightMissingStrategy: "previousDay" as const,
       customTdee: null as number | null,
 	  };
 
@@ -104,12 +103,6 @@ function mergeProfilePreservingData(
     other.goalMode ?? DEFAULT.goalMode,
     DEFAULT.goalMode,
   );
-  const mergedWeightMissingStrategy = pickEnumWithWeakDefault(
-    preferred.weightMissingStrategy ?? DEFAULT.weightMissingStrategy,
-    other.weightMissingStrategy ?? DEFAULT.weightMissingStrategy,
-    DEFAULT.weightMissingStrategy,
-  );
-
 	  return {
 	    ...other,
 	    ...preferred,
@@ -120,7 +113,6 @@ function mergeProfilePreservingData(
 	    themeMode: mergedTheme,
 	    aiModel: mergedModel,
       goalMode: mergedGoalMode,
-      weightMissingStrategy: mergedWeightMissingStrategy,
 	    age: pickNullableNumber(preferred.age, other.age),
 	    height: pickNullableNumber(preferred.height, other.height),
 	    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
@@ -165,8 +157,9 @@ function mergeEntryPreservingData(a: DailyEntry, b: DailyEntry): DailyEntry {
   const older = newer === a ? b : a;
 
   const mergedFoodLogText = pickTextPreferLonger(a.foodLogText, b.foodLogText, newer);
-  const mergedWeight =
-    newer.weight != null ? newer.weight : older.weight != null ? older.weight : null;
+  // Weight can be intentionally cleared by the user. If the newest entry has `null`,
+  // keep that explicit clear instead of resurrecting an older non-null value.
+  const mergedWeight = newer.weight;
   const mergedManualCalories =
     newer.manualCalories != null
       ? newer.manualCalories

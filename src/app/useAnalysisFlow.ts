@@ -50,7 +50,7 @@ export function useAnalysisFlow(args: {
   providerOptions: Ref<AiProviderOption[]>;
   currentFoodLog: Ref<string>;
   selectedDate: Ref<string>;
-  refreshState: () => Promise<void>;
+  refreshState: (opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) => Promise<void>;
   saveFoodDraft: () => Promise<void>;
   saveProvider: (provider: string) => Promise<void>;
 }) {
@@ -111,7 +111,7 @@ export function useAnalysisFlow(args: {
 
     const task = async () => {
       await runPendingAnalysis();
-      await args.refreshState();
+      await args.refreshState({ skipReloadFoodLog: true });
     };
 
     if (showBusy) {
@@ -158,7 +158,7 @@ export function useAnalysisFlow(args: {
       activeRun.value = run;
       await run;
 
-      await args.refreshState();
+      await args.refreshState({ skipReloadFoodLog: true });
     } finally {
       if (suggestTimer) window.clearTimeout(suggestTimer);
       suggestTimer = null;
@@ -195,7 +195,7 @@ export function useAnalysisFlow(args: {
     await clearQueueForDate(args.selectedDate.value);
     await queueAnalysis(args.selectedDate.value, nextProvider);
     await runPendingAnalysis();
-    await args.refreshState();
+    await args.refreshState({ skipReloadFoodLog: true });
   }
 
   function dismissSuggestedModelSwitch() {

@@ -51,6 +51,7 @@ a[attr*="freeplan"] {
   --required-pane-bg: color-mix(in srgb, #8f3333 18%, var(--panel));
   --required-pane-border: color-mix(in srgb, #8f3333 55%, var(--border-strong));
   --required-outline: #8f3333;
+  --protein-infinite-accent: #78acd8;
   background: #c3beb2;
 }
 
@@ -90,6 +91,7 @@ a[attr*="freeplan"] {
   --required-pane-bg: color-mix(in srgb, #b45353 16%, var(--panel));
   --required-pane-border: color-mix(in srgb, #b45353 55%, var(--border-strong));
   --required-outline: #b45353;
+  --protein-infinite-accent: #7dbbea;
   background: #14181c;
 }
 
@@ -139,8 +141,8 @@ a[attr*="freeplan"] {
   --surface-1: #123632;
   --surface-2: #0f302b;
   --surface-3: #0a221f;
-  --border: #2d8f87;
-  --border-strong: #efe7bf;
+  --border: #2f746d;
+  --border-strong: #6fa39b;
   --text-primary: #e8fff8;
   --text-muted: #9fd8ce;
   --accent: #39d7bf;
@@ -154,7 +156,7 @@ a[attr*="freeplan"] {
     inset -1px -1px 0 rgba(255, 255, 255, 0.06);
   --surface: var(--surface-2);
   --input-bg: #0a201d;
-  --input-border: #3f9289;
+  --input-border: #3b7f78;
   --input-focus: #63e7cf;
   --input-disabled-bg: color-mix(in srgb, var(--surface-3) 70%, var(--input-bg));
   --input-disabled-border: color-mix(in srgb, var(--input-border) 75%, var(--surface-3));
@@ -323,6 +325,15 @@ body {
 }
 
 button,
+input:not([type]),
+input[type="date"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="text"],
+input[type="url"],
 select,
 textarea {
   font: inherit;
@@ -344,18 +355,6 @@ input[type="checkbox"] {
   min-inline-size: auto;
   inline-size: auto;
   block-size: auto;
-}
-
-/* Text-like inputs share the unified control sizing. */
-input:not([type="radio"]):not([type="checkbox"]) {
-  font: inherit;
-  color: inherit;
-  direction: inherit;
-  text-align: start;
-  padding-block: 0.42rem;
-  padding-inline-start: 0.55rem;
-  padding-inline-end: 2rem;
-  min-block-size: 2.25rem;
 }
 
 input[type="number"] {
@@ -384,7 +383,6 @@ button:active {
 textarea {
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: 140px;
   resize: vertical;
   background: var(--input-bg);
   color: var(--text-primary);
@@ -392,7 +390,14 @@ textarea {
   min-block-size: 140px;
 }
 
-input:not([type="radio"]):not([type="checkbox"]),
+input[type="date"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="text"],
+input[type="url"],
 select {
   inline-size: 100%;
   min-inline-size: 0;
@@ -410,13 +415,28 @@ textarea {
   box-shadow: var(--bevel-sunken);
 }
 
-input:not([type="radio"]):not([type="checkbox"]):hover,
+input[type="date"]:hover,
+input[type="email"]:hover,
+input[type="number"]:hover,
+input[type="password"]:hover,
+input[type="search"]:hover,
+input[type="tel"]:hover,
+input[type="text"]:hover,
+input[type="url"]:hover,
 select:hover,
 textarea:hover {
   border-color: color-mix(in srgb, var(--input-border) 74%, var(--accent));
 }
 
-input:not([type="radio"]):not([type="checkbox"]):focus,
+input[type="date"]:focus,
+input[type="email"]:focus,
+input:not([type]):focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="text"]:focus,
+input[type="url"]:focus,
 select:focus,
 textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--input-focus) 55%, transparent);
@@ -448,6 +468,24 @@ select.is-missing,
 textarea.is-missing {
   border-color: var(--required-outline);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--required-outline) 42%, transparent);
+}
+
+.required-pill {
+  display: inline-block;
+  padding: 0.12rem 0.42rem;
+  border: 1px solid #7c2d2d;
+  background: #f0c6c3;
+  color: #651c1c;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: var(--bevel-raised);
+  white-space: nowrap;
+}
+
+.constant-textarea {
+  block-size: 12rem;
+  min-block-size: 12rem;
 }
 
 button:disabled {
@@ -527,7 +565,6 @@ small,
 
 .readonly-metric {
   color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
   background: var(--surface-2);
   border: 1px solid var(--border);
   padding: 0.36rem 0.45rem;

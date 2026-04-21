@@ -1,12 +1,8 @@
-import type { AppLocale, DailyEntry, MissingWeightStrategy } from "../types";
+import type { AppLocale, DailyEntry } from "../types";
 
 export function resolvedDailyCalories(entry: DailyEntry) {
   if (entry.manualCalories !== null && entry.manualCalories !== undefined) {
     return entry.manualCalories;
-  }
-
-  if (entry.analysisStale) {
-    return null;
   }
 
   return entry.nutritionSnapshot?.calories ?? null;
@@ -45,7 +41,6 @@ export function formatEntryDate(
 export function deducedWeightFromEntries(
   entries: DailyEntry[],
   anchorDate?: string,
-  strategy: MissingWeightStrategy = "previousDay",
 ) {
   const normalizedAnchorDate = anchorDate
     ?? [...entries].sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.date;
@@ -64,26 +59,7 @@ export function deducedWeightFromEntries(
   }
 
   const previous = weightedEntries.filter((entry) => entry.date < normalizedAnchorDate).at(-1);
-  if (strategy === "previousDay") {
-    const previousWeight = previous?.weight;
-    if (previousWeight == null) return null;
-    return Math.round(previousWeight * 10) / 10;
-  }
-
-  const next = weightedEntries.find((entry) => entry.date > normalizedAnchorDate);
-  if (previous?.weight != null && next?.weight != null) {
-    const previousDay = Date.parse(`${previous.date}T00:00:00`);
-    const nextDay = Date.parse(`${next.date}T00:00:00`);
-    const anchorDay = Date.parse(`${normalizedAnchorDate}T00:00:00`);
-    const span = nextDay - previousDay;
-    if (span > 0) {
-      const ratio = (anchorDay - previousDay) / span;
-      const interpolated = previous.weight + (next.weight - previous.weight) * ratio;
-      return Math.round(interpolated * 10) / 10;
-    }
-  }
-
-  const fallbackWeight = previous?.weight ?? next?.weight ?? null;
-  if (fallbackWeight == null) return null;
-  return Math.round(fallbackWeight * 10) / 10;
+  const previousWeight = previous?.weight;
+  if (previousWeight == null) return null;
+  return Math.round(previousWeight * 10) / 10;
 }

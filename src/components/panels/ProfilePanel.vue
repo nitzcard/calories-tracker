@@ -9,7 +9,6 @@ import type { AppLocale, BiologicalSex, Profile } from "../../types";
 const props = defineProps<{
   locale: AppLocale;
   profile: Profile;
-  deducedWeight: number | null;
   estimatedLeanWeight: number | null;
   isSavingActivity: boolean;
 }>();
@@ -170,18 +169,6 @@ function saveImmediateProfile(profile: Profile) {
 	    <div class="inferred-block">
 	      <div class="inferred-title">{{ t("inferredDataTitle") }}</div>
 	      <div class="inferred-row">
-          <FormField :label="t('deducedWeight')" :helper="t('deducedWeightHelper')">
-	          <div class="unit-field">
-	            <input
-	              class="deduced-input"
-	              :value="props.deducedWeight ?? ''"
-	              type="number"
-	              disabled
-	              readonly
-	            />
-	            <span class="field-unit">{{ t("unitKg") }}</span>
-	          </div>
-	        </FormField>
 	        <FormField :label="t('estimatedLeanWeight')" :helper="t('estimatedLeanWeightHelper')">
 	          <div class="unit-field">
 	            <input
@@ -269,11 +256,6 @@ function saveImmediateProfile(profile: Profile) {
   /* no extra margin — BasePanel --panel-gap handles rhythm */
 }
 
-.constant-textarea {
-  block-size: 12rem;
-  min-block-size: 12rem;
-}
-
 .unit-field {
   display: inline-flex;
   gap: var(--field-gap);
@@ -309,28 +291,9 @@ function saveImmediateProfile(profile: Profile) {
   font-size: 0.84rem;
 }
 
-.required-pill {
-  display: inline-block;
-  padding: 0.12rem 0.42rem;
-  border: 1px solid #7c2d2d;
-  background: #f0c6c3;
-  color: #651c1c;
-  font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  box-shadow: var(--bevel-raised);
-  white-space: nowrap;
-}
-
 .helper-slot {
   min-block-size: 1.2rem;
   display: block;
-}
-
-input.is-missing,
-textarea.is-missing {
-  border-color: #8f3333;
-  box-shadow: 0 0 0 1px rgba(143, 51, 51, 0.35);
 }
 
 @media (max-width: 640px) {

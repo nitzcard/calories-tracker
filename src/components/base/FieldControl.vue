@@ -39,12 +39,6 @@ withDefaults(
   min-inline-size: 0;
 }
 
-.field-control--input :deep(input),
-.field-control--select :deep(select),
-.field-control--textarea :deep(textarea) {
-  /* Padding is now standardized globally in app.css */
-}
-
 .field-control--input .field-spinner,
 .field-control--select .field-spinner {
   inset-block-start: 50%;

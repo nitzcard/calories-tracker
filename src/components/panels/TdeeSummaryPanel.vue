@@ -591,13 +591,8 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
   inline-size: 100%;
   min-inline-size: 5.25rem;
   max-inline-size: 100%;
-  box-sizing: border-box;
-  padding: 0.18rem 0.3rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--bevel-sunken);
 }
 
 .tdee-custom-cell {

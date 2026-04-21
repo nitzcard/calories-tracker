@@ -21,6 +21,7 @@ import {
   importAppData,
   saveProfile,
   upsertDailyEntry,
+  deleteDailyEntry,
   type ExportedAppData,
   getStoredAiKeysFromDb,
   saveStoredAiKeysToDb,
@@ -53,6 +54,12 @@ import { localIsoDate } from "../domain/dates";
 import { estimateTdeeWithGemini } from "../ai/gemini-tdee";
 
 export function useDashboard() {
+  type PersistedDailyDraft = {
+    foodLogText?: string;
+    weight?: string;
+    updatedAt: number;
+  };
+
   const today = localIsoDate();
   const locale = ref<AppLocale>(readStoredLocale() ?? detectLocale());
   const themeMode = ref<ThemeMode>(readStoredThemeMode() ?? detectThemeMode());
@@ -105,6 +112,98 @@ export function useDashboard() {
 
   function normalizeUsername(value: string) {
     return value.trim().toLowerCase();
+  }
+
+  function formatCloudSyncTimestamp() {
+    return new Intl.DateTimeFormat(locale.value === "he" ? "he-IL" : "en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
+  }
+
+  function dailyDraftStorageKey(date: string) {
+    return `${DASHBOARD_STORAGE_KEYS.dailyDraftPrefix}${date}`;
+  }
+
+  function readPersistedDraft(date: string): PersistedDailyDraft | null {
+    try {
+      const raw = localStorage.getItem(dailyDraftStorageKey(date));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as PersistedDailyDraft | null;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+      return {
+        foodLogText: typeof parsed.foodLogText === "string" ? parsed.foodLogText : undefined,
+        weight: typeof parsed.weight === "string" ? parsed.weight : undefined,
+        updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function writePersistedDraft(date: string, patch: Partial<Omit<PersistedDailyDraft, "updatedAt">>) {
+    try {
+      const next: PersistedDailyDraft = {
+        ...(readPersistedDraft(date) ?? { updatedAt: Date.now() }),
+        ...patch,
+        updatedAt: Date.now(),
+      };
+
+      const hasFoodLog = typeof next.foodLogText === "string";
+      const hasWeight = typeof next.weight === "string";
+      if (!hasFoodLog && !hasWeight) {
+        localStorage.removeItem(dailyDraftStorageKey(date));
+        return;
+      }
+
+      localStorage.setItem(dailyDraftStorageKey(date), JSON.stringify(next));
+    } catch {
+      // Ignore; draft caching is best effort.
+    }
+  }
+
+  function clearPersistedDraftFieldsIfUnchanged(
+    date: string,
+    saved: { foodLogText?: string; weight?: string },
+  ) {
+    try {
+      const existing = readPersistedDraft(date);
+      if (!existing) return;
+
+      const next: PersistedDailyDraft = { ...existing };
+      if (
+        saved.foodLogText !== undefined &&
+        typeof existing.foodLogText === "string" &&
+        existing.foodLogText === saved.foodLogText
+      ) {
+        delete next.foodLogText;
+      }
+      if (
+        saved.weight !== undefined &&
+        typeof existing.weight === "string" &&
+        existing.weight === saved.weight
+      ) {
+        delete next.weight;
+      }
+
+      if (next.foodLogText === undefined && next.weight === undefined) {
+        localStorage.removeItem(dailyDraftStorageKey(date));
+        return;
+      }
+
+      localStorage.setItem(
+        dailyDraftStorageKey(date),
+        JSON.stringify({ ...next, updatedAt: Date.now() }),
+      );
+    } catch {
+      // Ignore; draft caching is best effort.
+    }
   }
 
   function isUsernameValid(value: string) {
@@ -220,10 +319,13 @@ export function useDashboard() {
 
   watch(currentFoodLog, () => {
     if (!isCurrentFoodLogDirty.value) {
+      clearPersistedDraftFieldsIfUnchanged(selectedDate.value, { foodLogText: currentFoodLog.value });
       if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
       foodDraftSaveTimer = null;
       return;
     }
+
+    writePersistedDraft(selectedDate.value, { foodLogText: currentFoodLog.value });
 
     if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
     foodDraftSaveTimer = setTimeout(() => {
@@ -233,10 +335,13 @@ export function useDashboard() {
 
   watch(currentWeight, () => {
     if (!isCurrentWeightDirty.value) {
+      clearPersistedDraftFieldsIfUnchanged(selectedDate.value, { weight: currentWeight.value });
       if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
       weightDraftSaveTimer = null;
       return;
     }
+
+    writePersistedDraft(selectedDate.value, { weight: currentWeight.value });
 
     if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
     weightDraftSaveTimer = setTimeout(() => {
@@ -245,7 +350,7 @@ export function useDashboard() {
   });
   const displayEntries = computed(() =>
     entries.value.map((entry) =>
-      entry.date === selectedDate.value && isCurrentFoodLogDirty.value
+      entry.date === selectedDate.value && isCurrentFoodLogDirty.value && !analysis.isAnalyzing.value
         ? {
             ...entry,
             analysisStale: true,
@@ -340,13 +445,7 @@ export function useDashboard() {
   const weightPoints = computed(() =>
     displayEntries.value
       .map((entry) => {
-        const effective =
-          entry.weight ??
-          deducedWeightFromEntries(
-            displayEntries.value,
-            entry.date,
-            profile.value?.weightMissingStrategy ?? "previousDay",
-          );
+        const effective = entry.weight ?? deducedWeightFromEntries(displayEntries.value, entry.date);
         return { x: chartDayTimestamp(entry.date), y: effective };
       })
       .filter((point) => point.y !== null && point.y !== undefined),
@@ -389,13 +488,6 @@ export function useDashboard() {
           topFoods30d: [],
         },
   );
-  const deducedWeight = computed(() =>
-    deducedWeightFromEntries(
-      displayEntries.value,
-      selectedDate.value,
-      "deducedWeight",
-    ),
-  );
   const estimatedLeanWeight = computed(() => {
     const weight = profile.value?.estimatedWeight;
     const bodyFat = profile.value?.bodyFat;
@@ -415,11 +507,14 @@ export function useDashboard() {
     applyTheme(themeMode.value);
   }
 
-  async function refreshState(opts?: { skipReloadFoodLog?: boolean }) {
+  async function refreshState(opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) {
     entries.value = await listEntries();
     const savedProfile = await getProfile();
     profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value, themeMode.value));
-    loadSelectedEntry(opts?.skipReloadFoodLog);
+    loadSelectedEntry({
+      skipFoodLog: opts?.skipReloadFoodLog,
+      preserveDirtyFields: opts?.preserveDirtyFields ?? true,
+    });
   }
 
   async function persistDraftsForDate(date: string) {
@@ -450,16 +545,51 @@ export function useDashboard() {
       entries.value = await listEntries();
     }, "today.persistDrafts");
 
+    clearPersistedDraftFieldsIfUnchanged(date, {
+      foodLogText: update.foodLogText,
+      weight:
+        update.weight !== undefined
+          ? normalizedWeight !== null
+            ? String(normalizedWeight)
+            : ""
+          : undefined,
+    });
+
     if (foodLogDirty) scheduleCloudPush("today.foodLog");
     if (weightDirty) scheduleCloudPush("today.weight");
   }
 
-  function loadSelectedEntry(skipFoodLog?: boolean) {
-    const draft = dailyEntryDraft(findEntryByDate(entries.value, selectedDate.value));
-    if (!skipFoodLog) {
-      currentFoodLog.value = draft.foodLogText;
+  function loadSelectedEntry(options?: { skipFoodLog?: boolean; preserveDirtyFields?: boolean }) {
+    const savedEntry = findEntryByDate(entries.value, selectedDate.value);
+    const draft = dailyEntryDraft(savedEntry);
+    const persistedDraft = readPersistedDraft(selectedDate.value);
+    const hasPersistedFoodLogDraft = typeof persistedDraft?.foodLogText === "string";
+    const hasPersistedWeightDraft = typeof persistedDraft?.weight === "string";
+    const entryUpdatedAtMs = savedEntry?.updatedAt ? Date.parse(savedEntry.updatedAt) : Number.NaN;
+    const persistedIsFresh =
+      !savedEntry ||
+      !Number.isFinite(entryUpdatedAtMs) ||
+      persistedDraft == null ||
+      persistedDraft.updatedAt >= entryUpdatedAtMs;
+
+    const nextFoodLog =
+      persistedIsFresh && persistedDraft?.foodLogText !== undefined
+        ? persistedDraft.foodLogText
+        : draft.foodLogText;
+    const nextWeight =
+      persistedIsFresh && persistedDraft?.weight !== undefined ? persistedDraft.weight : draft.weight;
+    const shouldKeepFoodLog =
+      Boolean(options?.skipFoodLog) ||
+      (Boolean(options?.preserveDirtyFields) && isCurrentFoodLogDirty.value && hasPersistedFoodLogDraft);
+    const shouldKeepWeight =
+      Boolean(options?.preserveDirtyFields) && isCurrentWeightDirty.value && hasPersistedWeightDraft;
+
+    if (!shouldKeepFoodLog) {
+      currentFoodLog.value = nextFoodLog;
     }
-    currentWeight.value = draft.weight;
+    if (!shouldKeepWeight) {
+      currentWeight.value = nextWeight;
+    }
   }
 
   async function onLocaleChange(nextLocale: AppLocale) {
@@ -501,30 +631,67 @@ export function useDashboard() {
   }
 
   async function saveWeightDraft() {
+    if (weightDraftSaveTimer) {
+      clearTimeout(weightDraftSaveTimer);
+      weightDraftSaveTimer = null;
+    }
+
     const rawWeight = currentWeight.value;
+    const date = selectedDate.value;
     await autoSave.runAutoSave(async () => {
       const parsed = rawWeight.trim() ? Number(rawWeight) : null;
       const normalizedWeight =
         parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
       await upsertDailyEntry({
-        date: selectedDate.value,
+        date,
         weight: normalizedWeight,
       });
       await refreshState();
-      currentWeight.value = rawWeight;
+      if (selectedDate.value === date) {
+        currentWeight.value = rawWeight;
+      }
     }, "today.weight");
+    clearPersistedDraftFieldsIfUnchanged(date, { weight: rawWeight });
     scheduleCloudPush("today.weight");
   }
 
   async function saveFoodDraft() {
+    if (foodDraftSaveTimer) {
+      clearTimeout(foodDraftSaveTimer);
+      foodDraftSaveTimer = null;
+    }
+
+    const foodLogText = currentFoodLog.value;
+    const date = selectedDate.value;
     await autoSave.runAutoSave(async () => {
       await upsertDailyEntry({
-        date: selectedDate.value,
-        foodLogText: currentFoodLog.value,
+        date,
+        foodLogText,
       });
       await refreshState({ skipReloadFoodLog: true });
     }, "today.foodLog");
+    clearPersistedDraftFieldsIfUnchanged(date, { foodLogText });
     scheduleCloudPush("today.foodLog");
+  }
+
+  async function deleteDay(date: string) {
+    if (foodDraftSaveTimer) {
+      clearTimeout(foodDraftSaveTimer);
+      foodDraftSaveTimer = null;
+    }
+    if (weightDraftSaveTimer) {
+      clearTimeout(weightDraftSaveTimer);
+      weightDraftSaveTimer = null;
+    }
+
+    await autoSave.runAutoSave(async () => {
+      await deleteDailyEntry(date);
+      localStorage.removeItem(dailyDraftStorageKey(date));
+      await refreshState({ preserveDirtyFields: false });
+    }, `day.delete.${date}`);
+
+    notice.value = "day-deleted";
+    scheduleCloudPush(`day.delete.${date}`);
   }
 
   async function saveHistoryCalories(date: string, calories: number | null) {
@@ -853,10 +1020,17 @@ export function useDashboard() {
     cloudStatus.value = "idle";
     cloudError.value = "";
     try {
+      const selectedDateAtSync = selectedDate.value;
+      const hadFoodDraftAtSync = isCurrentFoodLogDirty.value;
+      const hadWeightDraftAtSync = isCurrentWeightDirty.value;
+
       const { createUserBlob, fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
-      // Ensure the current UI draft is persisted before snapshotting local state for the merge.
+      // Ensure current UI drafts are persisted before snapshotting local state for merge.
       if (isCurrentFoodLogDirty.value) {
         await saveFoodDraft();
+      }
+      if (isCurrentWeightDirty.value) {
+        await saveWeightDraft();
       }
 
       const localBefore = await exportAppData();
@@ -886,6 +1060,21 @@ export function useDashboard() {
 
       // Two-way merge: keep newer daily entries on either side.
       const merged = applyUsernameThemeDefault(username, mergeExportedAppData(localBefore, remotePayload));
+      // Manual sync should never surprise-revert a field the user just edited and saved.
+      if (hadFoodDraftAtSync || hadWeightDraftAtSync) {
+        const localSelectedEntry = localBefore.dailyEntries.find((entry) => entry.date === selectedDateAtSync);
+        if (localSelectedEntry) {
+          const existingMergedIndex = merged.dailyEntries.findIndex(
+            (entry) => entry.date === selectedDateAtSync,
+          );
+          if (existingMergedIndex >= 0) {
+            merged.dailyEntries[existingMergedIndex] = localSelectedEntry;
+          } else {
+            merged.dailyEntries.push(localSelectedEntry);
+            merged.dailyEntries.sort((a, b) => b.date.localeCompare(a.date));
+          }
+        }
+      }
       // Defensive: never let a cloud login wipe local data.
       if (localBefore.dailyEntries.length > 0 && merged.dailyEntries.length === 0) {
         merged.dailyEntries = localBefore.dailyEntries;
@@ -934,7 +1123,7 @@ export function useDashboard() {
       }
 
       cloudStatus.value = "synced";
-      cloudLastSyncedAt.value = new Date().toLocaleString();
+      cloudLastSyncedAt.value = formatCloudSyncTimestamp();
       cloudConfirmedUsername.value = username;
       localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername, username);
       cloudUsername.value = username;
@@ -991,6 +1180,14 @@ export function useDashboard() {
     }
 
     try {
+      // Include unsaved in-memory drafts in the snapshot before merge/push.
+      if (isCurrentFoodLogDirty.value) {
+        await saveFoodDraft();
+      }
+      if (isCurrentWeightDirty.value) {
+        await saveWeightDraft();
+      }
+
       const { fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
       cloudPushPending = false;
       const normalized = normalizeUsername(cloudUsername.value);
@@ -1016,7 +1213,7 @@ export function useDashboard() {
       const pushed = await upsertUserBlob(normalized, await encodeCloudBlob(merged, secret));
       if (!pushed.ok) throw new Error(pushed.error);
       cloudStatus.value = "synced";
-      cloudLastSyncedAt.value = new Date().toLocaleString();
+      cloudLastSyncedAt.value = formatCloudSyncTimestamp();
     } catch (err) {
       cloudStatus.value = "failed";
       cloudError.value = err instanceof Error ? err.message : String(err);
@@ -1269,7 +1466,6 @@ export function useDashboard() {
     currentEntry,
     tdee,
     nutritionInsights,
-    deducedWeight,
     estimatedLeanWeight,
     weightPoints,
     caloriePoints,
@@ -1297,6 +1493,7 @@ export function useDashboard() {
     onProviderChange,
     saveWeightDraft,
     saveFoodDraft,
+    deleteDay,
     saveHistoryCalories,
     saveHistoryWeight,
     calculateCustomTdeeWithGemini,
@@ -1314,8 +1511,22 @@ export function useDashboard() {
       grams: number | null,
       calories: number | null,
       caloriesPer100g: number | null,
+      protein?: number | null,
+      carbs?: number | null,
+      fat?: number | null,
+      fiber?: number | null,
     ) => {
-      await corrections.saveFoodCorrectionInstruction(foodId, foodName, grams, calories, caloriesPer100g);
+      await corrections.saveFoodCorrectionInstruction(
+        foodId,
+        foodName,
+        grams,
+        calories,
+        caloriesPer100g,
+        protein,
+        carbs,
+        fat,
+        fiber,
+      );
       scheduleCloudPush("nutrition.correction");
     },
     saveFoodCorrectionInstructionOnly: async (
@@ -1324,6 +1535,10 @@ export function useDashboard() {
       grams: number | null,
       calories: number | null,
       caloriesPer100g: number | null,
+      protein?: number | null,
+      carbs?: number | null,
+      fat?: number | null,
+      fiber?: number | null,
     ) => {
       await corrections.saveFoodCorrectionInstructionOnly(
         foodId,
@@ -1331,6 +1546,10 @@ export function useDashboard() {
         grams,
         calories,
         caloriesPer100g,
+        protein,
+        carbs,
+        fat,
+        fiber,
       );
       scheduleCloudPush("nutrition.correction");
     },
@@ -1340,8 +1559,29 @@ export function useDashboard() {
       grams: number | null,
       calories: number | null,
       caloriesPer100g: number | null,
+      protein?: number | null,
+      carbs?: number | null,
+      fat?: number | null,
+      fiber?: number | null,
     ) => {
-      await corrections.applyFoodCorrectionToCurrentEntry(foodId, foodName, grams, calories, caloriesPer100g);
+      await corrections.applyFoodCorrectionToCurrentEntry(
+        foodId,
+        foodName,
+        grams,
+        calories,
+        caloriesPer100g,
+        protein,
+        carbs,
+        fat,
+        fiber,
+      );
+      scheduleCloudPush("nutrition.correction");
+    },
+    applyMealTotalCorrectionToCurrentEntry: async (
+      mealId: string,
+      totals: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null },
+    ) => {
+      await corrections.applyMealTotalCorrectionToCurrentEntry(mealId, totals);
       scheduleCloudPush("nutrition.correction");
     },
     exportData: dataTransfer.exportData,

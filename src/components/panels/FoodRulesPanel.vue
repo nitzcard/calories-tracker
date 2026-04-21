@@ -100,9 +100,4 @@ function updateDraft(event: Event) {
   display: grid;
   gap: var(--panel-gap);
 }
-
-.constant-textarea {
-  block-size: 12rem;
-  min-block-size: 12rem;
-}
 </style>

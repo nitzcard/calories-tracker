@@ -2,7 +2,6 @@ import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entri
 import type {
   DailyEntry,
   FormulaTdeeResult,
-  MissingWeightStrategy,
   Profile,
   TdeeEquation,
   TdeeSnapshot,
@@ -183,12 +182,11 @@ export function calculateFormulaTdee(
 
 export function calculateObservedTdee(
   entries: DailyEntry[],
-  strategy: MissingWeightStrategy = "previousDay",
 ): number | null {
-  return calculateObservedTdeeRange(entries, strategy).value;
+  return calculateObservedTdeeRange(entries).value;
 }
 
-function calculateObservedTdeeRange(entries: DailyEntry[], strategy: MissingWeightStrategy): {
+function calculateObservedTdeeRange(entries: DailyEntry[]): {
   value: number | null;
   fromDate: string | null;
   toDate: string | null;
@@ -199,7 +197,7 @@ function calculateObservedTdeeRange(entries: DailyEntry[], strategy: MissingWeig
   const valid = entries
     .map((entry) => ({
       ...entry,
-      effectiveWeight: deducedWeightFromEntries(entries, entry.date, strategy),
+      effectiveWeight: deducedWeightFromEntries(entries, entry.date),
     }))
     .filter((entry) => entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -291,7 +289,7 @@ function resolveFormulaWeight(entries: DailyEntry[], profile: Profile) {
     };
   }
 
-  const deducedWeight = deducedWeightFromEntries(entries, undefined, profile.weightMissingStrategy);
+  const deducedWeight = deducedWeightFromEntries(entries);
   if (deducedWeight != null && deducedWeight > 0) {
     return {
       value: deducedWeight,
@@ -354,7 +352,7 @@ export function buildTdeeSnapshot(
           ? targetFormulas.average
           : targetFormulas.breakdown[profile.tdeeEquation] ?? targetFormulas.average)
       : null;
-  const observed = calculateObservedTdeeRange(entries, profile.weightMissingStrategy);
+  const observed = calculateObservedTdeeRange(entries);
   return {
     observedTdee: observed.value,
     observedFromDate: observed.fromDate,
