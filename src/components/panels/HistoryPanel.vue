@@ -6,6 +6,7 @@ import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
 import HistoryWeightCell from "./HistoryWeightCell.vue";
 import type { AppLocale, DailyEntry } from "../../types";
 import {
+  chartDayTimestamp,
   deducedWeightFromEntries,
   formatEntryDate,
   resolvedDailyCalories,
@@ -31,8 +32,11 @@ const emit = defineEmits<{
 const sortedEntries = computed(() =>
   [...props.entries].sort((a, b) => b.date.localeCompare(a.date)),
 );
+const entriesWithCalories = computed(() =>
+  sortedEntries.value.filter((entry) => resolvedDailyCalories(entry) != null),
+);
 const cumulativeDelta = computed(() =>
-  sortedEntries.value.reduce((sum, entry) => {
+  entriesWithCalories.value.reduce((sum, entry) => {
     const calories = resolvedDailyCalories(entry);
     if (calories == null || props.tdeeReference == null) {
       return sum;
@@ -41,8 +45,17 @@ const cumulativeDelta = computed(() =>
     return sum + (calories - props.tdeeReference);
   }, 0),
 );
+const rolling7dEntries = computed(() => {
+  const anchorDate = entriesWithCalories.value[0]?.date;
+  if (!anchorDate) {
+    return [];
+  }
+
+  const cutoff = chartDayTimestamp(anchorDate) - 6 * 86400000;
+  return entriesWithCalories.value.filter((entry) => chartDayTimestamp(entry.date) >= cutoff);
+});
 const rolling7dDelta = computed(() =>
-  sortedEntries.value.slice(0, 7).reduce((sum, entry) => {
+  rolling7dEntries.value.reduce((sum, entry) => {
     const calories = resolvedDailyCalories(entry);
     if (calories == null || props.tdeeReference == null) {
       return sum;
@@ -118,14 +131,21 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
         </thead>
         <tbody>
           <tr class="summary-row">
-            <td colspan="4">{{ t("allTimeDeficitSurplus") }}</td>
+            <td colspan="4">
+              {{ t("allTimeDeficitSurplus") }}
+            </td>
             <td class="delta-cell">
               <template v-if="tdeeReference != null">
                 <span class="delta-inline">
                   <span class="delta-word">
                     {{ deltaLabel(summaryDeltaParts(cumulativeDelta).kind) }}
                   </span>
-                  <span v-if="summaryDeltaParts(cumulativeDelta).amount != null" class="delta-num" dir="ltr">
+                  <span
+                    v-if="summaryDeltaParts(cumulativeDelta).amount != null"
+                    class="delta-num"
+                    dir="ltr"
+                    data-testid="history-all-time-delta"
+                  >
                     {{ summaryDeltaParts(cumulativeDelta).amount }}
                   </span>
                 </span>
@@ -135,14 +155,21 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
             <td class="history-action-cell"></td>
           </tr>
           <tr class="summary-row summary-row--recent">
-            <td colspan="4">{{ t("last7dDeficitSurplus") }}</td>
+            <td colspan="4">
+              {{ t("last7dDeficitSurplus") }}
+            </td>
             <td class="delta-cell">
               <template v-if="tdeeReference != null">
                 <span class="delta-inline">
                   <span class="delta-word">
                     {{ deltaLabel(summaryDeltaParts(rolling7dDelta).kind) }}
                   </span>
-                  <span v-if="summaryDeltaParts(rolling7dDelta).amount != null" class="delta-num" dir="ltr">
+                  <span
+                    v-if="summaryDeltaParts(rolling7dDelta).amount != null"
+                    class="delta-num"
+                    dir="ltr"
+                    data-testid="history-last7d-delta"
+                  >
                     {{ summaryDeltaParts(rolling7dDelta).amount }}
                   </span>
                 </span>
@@ -245,11 +272,9 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 
       <div v-for="entry in sortedEntries" :key="`card-${entry.date}`" class="history-card">
         <div class="history-card__row">
-          <div class="k">{{ t("date") }}</div>
           <div class="v">{{ formatEntryDate(entry.date, locale) }}</div>
         </div>
         <div class="history-card__row">
-          <div class="k">{{ t("weightWithUnit") }}</div>
           <div class="v">
             <HistoryWeightCell
               :value="entry.weight"
