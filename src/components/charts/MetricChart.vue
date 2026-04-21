@@ -436,6 +436,11 @@ function buildInitialXWindow(xValues: number[], chartWidth: number) {
   const min = xValues[0] ?? 0;
   const max = xValues[xValues.length - 1] ?? min;
   const domainSpan = Math.max(1, max - min);
+  // On narrow screens, show the full domain first so the chart doesn't feel blank.
+  if (chartWidth < 640) {
+    return { min, max };
+  }
+
   const desiredWidth = Math.max(chartWidth, xValues.length * 46);
   const visibleSpan = Math.max(domainSpan * (chartWidth / desiredWidth), 24 * 60 * 60);
 
