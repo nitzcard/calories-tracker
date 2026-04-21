@@ -1,5 +1,11 @@
 import { readGeminiApiKey } from "./credentials";
-import { DEFAULT_GEMINI_MODEL } from "./gemini-config";
+import {
+  DEFAULT_GEMINI_MODEL,
+  LIGHTWEIGHT_GEMINI_LATEST_MODEL,
+  LIGHTWEIGHT_GEMINI_MODEL,
+} from "./gemini-config";
+import { renderPromptTemplate } from "./prompt-template";
+import macroLookupPromptTemplate from "./prompts/macro-lookup.md?raw";
 import type { AppLocale } from "../types";
 
 type MacroLookupResult = {
@@ -60,6 +66,24 @@ function buildEndpoint(providerId: string, apiKey: string) {
   return `${baseUrl}/models/${providerId || DEFAULT_GEMINI_MODEL}:generateContent?key=${apiKey}`;
 }
 
+function pickMacroLookupModel(providerId: string) {
+  const requested = providerId.trim();
+  const lowered = requested.toLowerCase();
+
+  // Macro lookup is a small search task, so prefer the lightest stable Flash model.
+  // If the user-selected model is a preview/experimental variant, avoid coupling lookup
+  // stability to that choice.
+  if (!requested || lowered.includes("preview") || lowered.includes("experimental")) {
+    return LIGHTWEIGHT_GEMINI_LATEST_MODEL || LIGHTWEIGHT_GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  }
+
+  if (lowered.includes("pro")) {
+    return LIGHTWEIGHT_GEMINI_LATEST_MODEL || LIGHTWEIGHT_GEMINI_MODEL || requested;
+  }
+
+  return requested;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -118,27 +142,20 @@ function extractText(payload: GeminiGenerateContentResponse): string {
 function buildPrompt(input: { foodName: string; locale: AppLocale; sourceUrl?: string | null }) {
   const localeLabel = input.locale === "he" ? "Hebrew" : "English";
   const explicitUrl = input.sourceUrl?.trim();
+  const localeGuidance =
+    input.locale === "he"
+      ? "Prefer Hebrew or Israeli food databases, manufacturer pages, and nutrition references when they are relevant to the food."
+      : "Prefer reliable local nutrition databases and manufacturer pages relevant to the food.";
 
-  return [
-    "You are a nutrition lookup assistant.",
-    "Find macros per 100g for one food using reliable web sources.",
-    "Return strict JSON only using the provided schema.",
-    "If data is uncertain, return null values instead of guessing.",
-    "Prefer official nutrition databases, manufacturer pages, or highly trusted nutrition references.",
-    explicitUrl
+  return renderPromptTemplate(macroLookupPromptTemplate, {
+    localeGuidance,
+    sourceGuidance: explicitUrl
       ? `Use this URL as primary evidence and verify it via web search if needed: ${explicitUrl}`
       : "Use web search to find a reliable source for this food.",
-    "",
-    `Food: ${input.foodName}`,
-    `Locale: ${input.locale} (${localeLabel})`,
-    "",
-    "Output rules:",
-    "- sourceLabel: short source name",
-    "- sourceUrl: canonical source URL if available",
-    "- per100: calories/protein/carbs/fat/fiber per 100g",
-    "- confidence: 0..1",
-    "- notes: short assumptions or normalization notes",
-  ].join("\n");
+    foodName: input.foodName,
+    locale: input.locale,
+    localeLabel,
+  });
 }
 
 async function readGeminiErrorMessage(response: Response) {
@@ -167,7 +184,8 @@ export async function lookupFoodMacrosPer100WithGemini(input: {
     throw new Error("Missing Gemini API key.");
   }
 
-  const endpoint = buildEndpoint(input.providerId, apiKey);
+  const selectedModel = pickMacroLookupModel(input.providerId);
+  const endpoint = buildEndpoint(selectedModel, apiKey);
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
     tools: [{ googleSearch: {} }],
@@ -186,7 +204,9 @@ export async function lookupFoodMacrosPer100WithGemini(input: {
 
   if (!response.ok) {
     const errorMessage = await readGeminiErrorMessage(response);
-    throw new Error(errorMessage ?? `Gemini request failed with status ${response.status}.`);
+    throw new Error(
+      `[${selectedModel}] ${errorMessage ?? `Gemini request failed with status ${response.status}.`}`,
+    );
   }
 
   const payload = (await response.json()) as GeminiGenerateContentResponse;

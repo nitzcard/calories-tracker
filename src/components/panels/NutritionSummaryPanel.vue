@@ -93,8 +93,7 @@ const per100MacroDrafts = ref<
 const sourceUrlDrafts = ref<Record<string, string>>({});
 const aiLookupLoading = ref<Record<string, boolean>>({});
 const aiLookupError = ref<Record<string, string>>({});
-const aiLookupQuotaBlocked = ref(false);
-const macroAssistantSourceMode = ref<Record<string, "ai" | "url" | "manual">>({});
+const macroAssistantSourceMode = ref<Record<string, "ai" | "url">>({});
 const dailyTotals = computed(() => {
   const foods = editableMeals.value.flatMap((meal) => meal.foods);
   if (foods.length) {
@@ -410,11 +409,19 @@ function setSourceUrlDraft(foodId: string, value: string) {
   };
 }
 
-function setMacroAssistantSourceMode(foodId: string, mode: "ai" | "url" | "manual") {
+function setMacroAssistantSourceMode(foodId: string, mode: "ai" | "url") {
   macroAssistantSourceMode.value = {
     ...macroAssistantSourceMode.value,
     [foodId]: mode,
   };
+}
+
+function isHardQuotaError(message: string) {
+  return /quota|billing|credit|free tier|exceeded your current quota|daily limit|monthly limit/i.test(message);
+}
+
+function isTransientRateLimitError(message: string) {
+  return /rate\s*limit|429|resource_exhausted|too many requests/i.test(message);
 }
 
 function toDraftToken(value: number | null) {
@@ -454,20 +461,16 @@ async function runAiMacroLookup(food: FoodBreakdownItem, mode: "search" | "url")
         [food.id]: result.sourceUrl,
       };
     }
-    aiLookupQuotaBlocked.value = false;
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : t("macroLookupFailed");
-    const isQuota = /quota|rate\s*limit|429|billing|exceeded\s+your\s+current\s+quota/i.test(rawMessage);
+    const isQuota = isHardQuotaError(rawMessage);
+    const isRateLimited = isTransientRateLimitError(rawMessage);
     const isBusy = /503|high\s*demand|overload|temporarily\s*unavailable/i.test(rawMessage);
 
-    if (isQuota) {
-      aiLookupQuotaBlocked.value = true;
-    }
-
     const message = isQuota
-      ? t("macroLookupQuotaExceeded")
-      : isBusy
-        ? t("macroLookupBusy")
+      ? `${t("macroLookupQuotaExceeded")} ${rawMessage}`
+      : isRateLimited || isBusy
+        ? `${t("macroLookupBusy")} ${rawMessage}`
         : rawMessage;
 
     aiLookupError.value = {
@@ -512,9 +515,8 @@ function calculateCaloriesFromMacros(macros: {
   const protein = Math.max(0, macros.protein ?? 0);
   const carbs = Math.max(0, macros.carbs ?? 0);
   const fat = Math.max(0, macros.fat ?? 0);
-  const fiber = Math.max(0, macros.fiber ?? 0);
 
-  return Math.round((protein * 4 + carbs * 4 + fat * 9 + fiber * 2) * 10) / 10;
+  return Math.round((protein * 4 + carbs * 4 + fat * 9) * 10) / 10;
 }
 
 function applyPer100MacroData(food: FoodBreakdownItem) {
@@ -1930,21 +1932,13 @@ const proteinPerLeanBodyWeight = computed(() => {
                 >
                   {{ t("macroSourceUrlMode") }}
                 </button>
-                <button
-                  type="button"
-                  class="macro-assistant__mode-btn"
-                  :class="{ 'is-active': (macroAssistantSourceMode[food.id] ?? 'ai') === 'manual' }"
-                  @click="setMacroAssistantSourceMode(food.id, 'manual')"
-                >
-                  {{ t("macroSourceManual") }}
-                </button>
               </div>
 
               <div v-if="(macroAssistantSourceMode[food.id] ?? 'ai') === 'ai'" class="macro-assistant__actions">
                 <button
                   class="secondary-action"
                   type="button"
-                  :disabled="Boolean(aiLookupLoading[food.id]) || aiLookupQuotaBlocked"
+                  :disabled="Boolean(aiLookupLoading[food.id])"
                   @click="runAiMacroLookup(food, 'search')"
                 >
                   {{ aiLookupLoading[food.id] ? t("aiSearchingMacros") : t("aiSearchMacros") }}
@@ -1967,15 +1961,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <button
                   class="secondary-action"
                   type="button"
-                  :disabled="Boolean(aiLookupLoading[food.id]) || aiLookupQuotaBlocked || !(sourceUrlDrafts[food.id] ?? '').trim()"
+                  :disabled="Boolean(aiLookupLoading[food.id]) || !(sourceUrlDrafts[food.id] ?? '').trim()"
                   @click="runAiMacroLookup(food, 'url')"
                 >
                   {{ aiLookupLoading[food.id] ? t("aiReadingUrl") : t("aiReadUrlMacros") }}
                 </button>
-              </div>
-
-              <div v-if="(macroAssistantSourceMode[food.id] ?? 'ai') === 'manual'" class="macro-assistant__actions">
-                <p class="per100-macro-editor__hint">{{ t("macroManualHint") }}</p>
               </div>
 
               <a
@@ -1987,14 +1977,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                 {{ t("findMacrosByLink") }}
               </a>
 
-              <p v-if="aiLookupQuotaBlocked" class="per100-macro-editor__hint">
-                {{ t("macroLookupQuotaHint") }}
-              </p>
-              <p v-else-if="aiLookupError[food.id]" class="per100-macro-editor__hint">
+              <p v-if="aiLookupError[food.id]" class="per100-macro-editor__hint">
                 {{ aiLookupError[food.id] }}
               </p>
 
               <div class="macro-assistant__manual-title">{{ t("providePer100Macros") }}</div>
+              <p class="per100-macro-editor__hint">{{ t("macroManualHint") }}</p>
               <p v-if="!(food.grams != null && Number.isFinite(food.grams) && food.grams > 0)" class="per100-macro-editor__hint">
                 {{ t("providePer100NeedsGrams") }}
               </p>
@@ -2767,7 +2755,7 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .macro-assistant__mode-switch {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.35rem;
 }
 

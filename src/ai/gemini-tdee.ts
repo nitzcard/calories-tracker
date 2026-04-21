@@ -1,4 +1,6 @@
 import { readGeminiApiKey } from "./credentials";
+import { renderPromptTemplate } from "./prompt-template";
+import tdeePromptTemplate from "./prompts/tdee.md?raw";
 import type { Profile, TdeeSnapshot } from "../types";
 
 const GEMINI_TDEE_SCHEMA = {
@@ -103,43 +105,24 @@ function buildTdeePrompt(
         .join("\n")
     : "- (not enough days with both weight and calories)";
 
-  return [
-    "Estimate my TDEE from the inputs below.",
-    "",
-    "Rules:",
-    "- Output ONLY valid JSON that matches the given response schema.",
-    "- Use metric units.",
-    "- Make conservative assumptions if something is unknown; do not ask follow-up questions.",
-    "- Prefer a data-driven estimate from my history window when possible (weight + calories).",
-    "- If the history window is insufficient, fall back to a formula-based estimate (use the app estimates).",
-    "- When using history, estimate the TDEE that best explains the weight trend given logged calories (assume ~7700 kcal per 1 kg of body mass change as a rough energy-equivalent).",
-    `- Keep tdeeKcal within ${TDEE_MIN_REASONABLE}-${TDEE_MAX_REASONABLE} kcal/day.`,
-    "- If you choose an activity multiplier, return it (or null if you avoid a multiplier).",
-    "",
-    "Inputs (metric):",
-    `- Sex: ${profile.sex}`,
-    `- Age: ${profile.age ?? "unknown"}`,
-    `- Height: ${profile.height ?? "unknown"} cm`,
-    `- Current weight: ${currentWeight ?? "unknown"} kg`,
-    `- Target weight: ${targetWeight ?? "none"} kg`,
-    `- Goal mode: ${goalMode}`,
-    "",
-    "Activity / lifestyle:",
-    activity ? `- ${activity}` : "- (not provided)",
-    "",
-    "History window (most recent days with BOTH weight and calories):",
+  return renderPromptTemplate(tdeePromptTemplate, {
+    tdeeMin: TDEE_MIN_REASONABLE,
+    tdeeMax: TDEE_MAX_REASONABLE,
+    sex: profile.sex,
+    age: profile.age ?? "unknown",
+    heightCm: profile.height ?? "unknown",
+    currentWeightKg: currentWeight ?? "unknown",
+    targetWeightKg: targetWeight ?? "none",
+    goalMode,
+    activityBlock: activity ? `- ${activity}` : "- (not provided)",
     historyLines,
-    "",
-    "App estimates (for reference):",
-    `- Formula TDEE average: ${tdee.formulaTdeeAverage ?? "unknown"} kcal/day`,
-    `- Formula breakdown: ${Object.entries(tdee.formulaBreakdown ?? {}).map(([k, v]) => `${k}=${v}`).join(", ") || "unknown"}`,
-    `- Observed TDEE: ${tdee.observedTdee ?? "unknown"} kcal/day`,
-    "",
-    "What to compute:",
-    "- tdeeKcal: one final estimated TDEE number in kcal/day (a single number).",
-    "- recommendedCaloriesKcal: give a conservative daily calorie target based on goal mode (even if target weight is not set).",
-    "- assumptions: short bullet-style strings with your key assumptions.",
-  ].join("\n");
+    formulaTdeeAverage: tdee.formulaTdeeAverage ?? "unknown",
+    formulaBreakdown:
+      Object.entries(tdee.formulaBreakdown ?? {})
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ") || "unknown",
+    observedTdee: tdee.observedTdee ?? "unknown",
+  });
 }
 
 function extractText(payload: GeminiGenerateContentResponse): string {
