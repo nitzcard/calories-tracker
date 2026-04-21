@@ -495,6 +495,28 @@ function macroForServingFromPer100(per100: number | null, grams: number | null) 
   return Math.round(((per100 * grams) / 100) * 10) / 10;
 }
 
+function calculateCaloriesFromMacros(macros: {
+  protein: number | null | undefined;
+  carbs: number | null | undefined;
+  fat: number | null | undefined;
+  fiber: number | null | undefined;
+}) {
+  const hasMacroValue = [macros.protein, macros.carbs, macros.fat, macros.fiber].some(
+    (value) => value != null && Number.isFinite(value),
+  );
+
+  if (!hasMacroValue) {
+    return null;
+  }
+
+  const protein = Math.max(0, macros.protein ?? 0);
+  const carbs = Math.max(0, macros.carbs ?? 0);
+  const fat = Math.max(0, macros.fat ?? 0);
+  const fiber = Math.max(0, macros.fiber ?? 0);
+
+  return Math.round((protein * 4 + carbs * 4 + fat * 9 + fiber * 2) * 10) / 10;
+}
+
 function applyPer100MacroData(food: FoodBreakdownItem) {
   const grams = food.grams;
   if (grams == null || !Number.isFinite(grams) || grams <= 0) {
@@ -518,11 +540,13 @@ function applyPer100MacroData(food: FoodBreakdownItem) {
   const fat = macroForServingFromPer100(fatPer100, grams);
   const fiber = macroForServingFromPer100(fiberPer100, grams);
 
-  const hasKcalDrivers = proteinPer100 != null || carbsPer100 != null || fatPer100 != null;
   const caloriesPer100g =
-    hasKcalDrivers
-      ? Math.round((Math.max(0, proteinPer100 ?? 0) * 4 + Math.max(0, carbsPer100 ?? 0) * 4 + Math.max(0, fatPer100 ?? 0) * 9) * 10) / 10
-      : food.caloriesPer100g ?? null;
+    calculateCaloriesFromMacros({
+      protein: proteinPer100,
+      carbs: carbsPer100,
+      fat: fatPer100,
+      fiber: fiberPer100,
+    }) ?? food.caloriesPer100g ?? null;
   const calories =
     caloriesPer100g != null
       ? Math.round((caloriesPer100g * grams) / 100)
@@ -699,9 +723,20 @@ function applyFoodEdit(
   };
 
   if (key === "protein" || key === "carbs" || key === "fat" || key === "fiber") {
+    const nextMacros = {
+      protein: key === "protein" ? value : food.protein,
+      carbs: key === "carbs" ? value : food.carbs,
+      fat: key === "fat" ? value : food.fat,
+      fiber: key === "fiber" ? value : food.fiber,
+    };
+    const nextCalories = calculateCaloriesFromMacros(nextMacros);
     return {
       ...food,
       [key]: value,
+      calories: nextCalories != null ? Math.round(nextCalories) : food.calories,
+      caloriesPer100g:
+        nextCalories != null && food.grams ? Math.round((nextCalories / food.grams) * 100) : food.caloriesPer100g,
+      caloriesEstimated: nextCalories != null ? false : food.caloriesEstimated,
     };
   }
 
@@ -1921,11 +1956,13 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <span>{{ t("macroSourceUrl") }}</span>
                   <input
                     type="url"
+                    dir="ltr"
                     :value="sourceUrlDrafts[food.id] ?? ''"
                     :placeholder="t('macroSourceUrlPlaceholder')"
                     @input="setSourceUrlDraft(food.id, ($event.target as HTMLInputElement).value)"
                   />
                 </label>
+                <p class="per100-macro-editor__hint macro-assistant__url-hint">{{ t("macroSourceUrlHint") }}</p>
 
                 <button
                   class="secondary-action"
@@ -2736,20 +2773,22 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .macro-assistant__mode-btn {
   border: 1px solid color-mix(in srgb, var(--border-strong) 45%, transparent);
-  background: var(--surface-3);
-  color: var(--text-muted);
-  border-radius: 0.5rem;
-  padding: 0.38rem 0.45rem;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border-radius: var(--radius);
+  padding: 0.36rem 0.56rem;
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
+  box-shadow: var(--bevel-raised);
+  text-align: center;
 }
 
 .macro-assistant__mode-btn.is-active {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface-3));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
 }
 
 .macro-assistant__actions,
@@ -2770,11 +2809,21 @@ const proteinPerLeanBodyWeight = computed(() => {
   font-size: 0.85rem;
 }
 
+.macro-assistant__url-label input {
+  direction: ltr;
+  text-align: left;
+}
+
+.macro-assistant__url-hint {
+  text-align: center;
+}
+
 .macro-assistant__fallback-link {
   color: var(--text-muted);
   font-size: 0.85rem;
   text-decoration: underline;
   text-underline-offset: 0.12em;
+  text-align: center;
 }
 
 .per100-macro-editor {
@@ -2804,6 +2853,7 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .row-action-menu__content .secondary-action {
   inline-size: 100%;
+  text-align: center;
 }
 
 .food-card__actions .secondary-action--subtle {
