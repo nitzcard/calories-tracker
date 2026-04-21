@@ -47,23 +47,16 @@ import {
   listProviderOptions,
   syncGeminiProviderOptions,
 } from "../ai/registry";
-import { DEFAULT_GEMINI_MODEL, isGeminiModelId } from "../ai/gemini-config";
+import { isGeminiModelId } from "../ai/gemini-config";
 import { fetchGeminiModelOptions } from "../ai/gemini-models";
 import { mergeExportedAppData } from "../cloud/merge";
 import { localIsoDate } from "../domain/dates";
-import { estimateTdeeWithGemini } from "../ai/gemini-tdee";
 
 export function useDashboard() {
   type PersistedDailyDraft = {
     foodLogText?: string;
     weight?: string;
     updatedAt: number;
-  };
-  type CustomTdeeEstimateResult = {
-    tdeeKcal: number;
-    activityMultiplier: number | null;
-    assumptions: string[];
-    recommendedCaloriesKcal: number | null;
   };
 
   const today = localIsoDate();
@@ -96,8 +89,6 @@ export function useDashboard() {
   const cloudStatus = ref<"idle" | "synced" | "failed">("idle");
   const cloudLastSyncedAt = ref("");
   const cloudError = ref("");
-  const isCalculatingCustomTdee = ref(false);
-  const customTdeeEstimateResult = ref<CustomTdeeEstimateResult | null>(null);
   // Avoid pulling Supabase SDK into initial bundle; cloud module loads lazily on demand.
   const supabaseConfigured = computed(() =>
     Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
@@ -132,28 +123,6 @@ export function useDashboard() {
       minute: "2-digit",
       hour12: false,
     }).format(new Date());
-  }
-
-  function filterTdeeAssumptions(assumptions: string[]) {
-    return assumptions.filter((line) => {
-      const normalized = line.trim().toLowerCase();
-      if (!normalized) return false;
-      return ![
-        "caloric deficit",
-        "calorie deficit",
-        "caloric surplus",
-        "calorie surplus",
-        "recommended calories",
-        "recommended calorie",
-        "targeting ",
-        "sustainable cut",
-        "slow cut",
-        "cut to ",
-        "bulk to ",
-        "lean bulk",
-        "fat loss",
-      ].some((token) => normalized.includes(token));
-    });
   }
 
   function dailyDraftStorageKey(date: string) {
@@ -462,71 +431,6 @@ export function useDashboard() {
         },
   );
 
-  async function calculateCustomTdeeWithGemini() {
-    if (!profile.value) return;
-    if (isCalculatingCustomTdee.value) return;
-
-    const effectiveProvider = isGeminiModelId(provider.value)
-      ? provider.value
-      : DEFAULT_GEMINI_MODEL;
-
-    const historyWindow = displayEntries.value
-      .filter((entry) => entry.date <= selectedDate.value)
-      .map((entry) => {
-        const calories = resolvedDailyCalories(entry);
-        const effectiveWeight = entry.weight ?? deducedWeightFromEntries(displayEntries.value, entry.date);
-        return {
-          date: entry.date,
-          weightKg: effectiveWeight,
-          caloriesKcal: calories,
-        };
-      })
-      .filter(
-        (row) =>
-          row.weightKg !== null &&
-          row.weightKg !== undefined &&
-          row.caloriesKcal !== null &&
-          row.caloriesKcal !== undefined,
-      )
-      .map((row) => ({
-        date: row.date,
-        weightKg: row.weightKg as number,
-        caloriesKcal: row.caloriesKcal as number,
-      }))
-      .toSorted((a, b) => a.date.localeCompare(b.date))
-      .slice(-30);
-
-    isCalculatingCustomTdee.value = true;
-    try {
-      const result = await estimateTdeeWithGemini({
-        providerId: effectiveProvider,
-        profile: profile.value,
-        tdeeSnapshot: tdee.value,
-        historyWindow,
-      });
-
-      const nextValue = Math.round(result.tdeeKcal);
-      const nextProfile = { ...profile.value, customTdee: nextValue };
-      await autoSave.runAutoSave(async () => {
-        profile.value = nextProfile;
-        await saveProfile(nextProfile);
-      }, "constants.profile.customTdee");
-      scheduleCloudPush("constants.profile.customTdee");
-      await saveTdeeEquation("custom");
-      customTdeeEstimateResult.value = {
-        tdeeKcal: nextValue,
-        activityMultiplier: result.activityMultiplier,
-        assumptions: filterTdeeAssumptions(result.assumptions),
-        recommendedCaloriesKcal: result.recommendedCaloriesKcal,
-      };
-    } finally {
-      isCalculatingCustomTdee.value = false;
-    }
-  }
-
-  function clearCustomTdeeEstimateResult() {
-    customTdeeEstimateResult.value = null;
-  }
   const weightPoints = computed(() =>
     displayEntries.value
       .map((entry) => {
@@ -815,10 +719,10 @@ export function useDashboard() {
     scheduleCloudPush("constants.profile");
   }
 
-  async function saveActivityPrompt(activityPrompt: string) {
+  async function saveActivitySettings(activityFactor: Profile["activityFactor"], activityPrompt: string) {
     if (!profile.value) return;
     await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, activityPrompt };
+      profile.value = { ...profile.value!, activityFactor, activityPrompt };
       await saveProfile(profile.value);
     }, "constants.profile.activityPrompt");
     scheduleCloudPush("constants.profile.activityPrompt");
@@ -1571,8 +1475,6 @@ export function useDashboard() {
     caloriePoints,
     savingHistoryCalories: autoSave.savingHistoryCalories,
     savingHistoryWeight: autoSave.savingHistoryWeight,
-    isCalculatingCustomTdee,
-    customTdeeEstimateResult,
     notice,
     cloudMode,
     cloudUsername,
@@ -1597,13 +1499,11 @@ export function useDashboard() {
     deleteDay,
     saveHistoryCalories,
     saveHistoryWeight,
-    calculateCustomTdeeWithGemini,
-    clearCustomTdeeEstimateResult,
     analyzeCurrentDay,
     acceptSuggestedModelSwitch: analysis.acceptSuggestedModelSwitch,
     dismissSuggestedModelSwitch: analysis.dismissSuggestedModelSwitch,
     saveProfileDraft,
-    saveActivityPrompt,
+    saveActivitySettings,
     saveTdeeEquation,
     saveFoodInstructions,
     saveAiKey,

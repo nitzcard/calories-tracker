@@ -33,17 +33,40 @@ const DEFAULT_PROFILE: Profile = {
   height: null,
   estimatedWeight: null,
   targetWeight: null,
-  customTdee: null,
   bodyFat: null,
   goalMode: "maingain",
   tdeeEquation: "mifflinStJeor",
-  activityPrompt: "",
+  activityFactor: "light",
+  activityPrompt: "Office work and walking daily",
   foodInstructions: "",
   aiModel: DEFAULT_GEMINI_MODEL,
   locale: "en",
   themeMode: "system",
   updatedAt: new Date().toISOString(),
 };
+
+function inferActivityFactorFromPrompt(prompt: string): Profile["activityFactor"] {
+  const text = prompt.toLowerCase();
+  if (
+    [
+      "very active",
+      "physical job",
+      "manual labor",
+      "hard training",
+      "intense training",
+      "active job",
+    ].some((signal) => text.includes(signal))
+  ) {
+    return "veryActive";
+  }
+  if (["moderate", "gym", "workout", "training", "exercise", "active", "workouts"].some((signal) => text.includes(signal))) {
+    return "moderate";
+  }
+  if (["light", "walk", "walking", "standing", "desk", "office"].some((signal) => text.includes(signal))) {
+    return "light";
+  }
+  return "sedentary";
+}
 
 export async function ensureDefaultProfile(
   locale: Profile["locale"],
@@ -57,7 +80,6 @@ export async function ensureDefaultProfile(
       legacyEquation === "mifflinStJeor" ||
       legacyEquation === "harrisBenedict" ||
       legacyEquation === "cunningham" ||
-      legacyEquation === "custom" ||
       legacyEquation === "observedTdee"
         ? legacyEquation
         : DEFAULT_PROFILE.tdeeEquation;
@@ -67,22 +89,13 @@ export async function ensureDefaultProfile(
       legacyGoalMode === "cut" || legacyGoalMode === "leanMass" || legacyGoalMode === "maingain"
         ? legacyGoalMode
         : DEFAULT_PROFILE.goalMode;
-    let migratedCustomTdee: number | null = null;
-    const existingCustomTdee = (existing as any).customTdee as number | null | undefined;
-    if (existingCustomTdee != null && Number.isFinite(existingCustomTdee) && existingCustomTdee > 0) {
-      migratedCustomTdee = existingCustomTdee;
-    } else {
-      // One-time compatibility: prior builds stored `customTdee` per-day on daily entries.
-      const latestPerDay = await db.dailyEntries
-        .orderBy("date")
-        .reverse()
-        .filter((entry) => (entry as any).customTdee != null)
-        .first();
-      const fromPerDay = (latestPerDay as any)?.customTdee as number | null | undefined;
-      if (fromPerDay != null && Number.isFinite(fromPerDay) && fromPerDay > 0) {
-        migratedCustomTdee = fromPerDay;
-      }
-    }
+    const normalizedActivityFactor =
+      (existing as Profile & { activityFactor?: unknown }).activityFactor === "sedentary" ||
+      (existing as Profile & { activityFactor?: unknown }).activityFactor === "light" ||
+      (existing as Profile & { activityFactor?: unknown }).activityFactor === "moderate" ||
+      (existing as Profile & { activityFactor?: unknown }).activityFactor === "veryActive"
+        ? ((existing as Profile & { activityFactor?: unknown }).activityFactor as Profile["activityFactor"])
+        : inferActivityFactorFromPrompt(existing.activityPrompt ?? DEFAULT_PROFILE.activityPrompt);
 
     const merged = {
       ...DEFAULT_PROFILE,
@@ -90,10 +103,13 @@ export async function ensureDefaultProfile(
       estimatedWeight:
         existing.estimatedWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.estimatedWeight,
       targetWeight: (existing as Profile).targetWeight ?? legacyExisting.targetWeight ?? DEFAULT_PROFILE.targetWeight,
-      customTdee: migratedCustomTdee ?? DEFAULT_PROFILE.customTdee,
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       goalMode: normalizedGoalMode,
       tdeeEquation: normalizedEquation,
+      activityFactor: normalizedActivityFactor,
+      activityPrompt: existing.activityPrompt?.trim()
+        ? existing.activityPrompt
+        : DEFAULT_PROFILE.activityPrompt,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
@@ -144,7 +160,6 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
     foodLogText: "",
     weight: null,
     manualCalories: null,
-    customTdee: null,
     analysisStale: false,
     nutritionSnapshot: null,
     aiStatus: "idle",
@@ -166,7 +181,6 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
       input.manualCalories !== undefined
         ? input.manualCalories
         : entry.manualCalories,
-    customTdee: input.customTdee === undefined ? entry.customTdee : input.customTdee,
     analysisStale: foodLogChanged ? true : entry.analysisStale ?? false,
     nutritionSnapshot: foodLogChanged ? entry.nutritionSnapshot : entry.nutritionSnapshot,
     aiStatus: foodLogChanged ? "idle" : entry.aiStatus,
@@ -215,7 +229,6 @@ function normalizeEntry(entry: DailyEntry): DailyEntry {
   return {
     ...entry,
     manualCalories: entry.manualCalories ?? null,
-    customTdee: (entry as any).customTdee ?? null,
     analysisStale: entry.analysisStale ?? false,
     nutritionSnapshot: entry.nutritionSnapshot ? normalizeNutritionSnapshot(entry.nutritionSnapshot) : null,
   };
@@ -407,7 +420,6 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
       const normalizedProfiles = data.profile.map((p) => ({
         ...DEFAULT_PROFILE,
         ...p,
-        customTdee: (p as any).customTdee ?? DEFAULT_PROFILE.customTdee,
         goalMode: (p as any).goalMode ?? DEFAULT_PROFILE.goalMode,
       })) as Profile[];
       await db.profile.bulkPut(toPlain(normalizedProfiles));
@@ -415,7 +427,6 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
     if (data.dailyEntries.length) {
       const normalizedEntries = data.dailyEntries.map((entry) => ({
         ...entry,
-        customTdee: (entry as any).customTdee ?? null,
       })) as DailyEntry[];
       await db.dailyEntries.bulkPut(toPlain(normalizedEntries));
     }

@@ -51,10 +51,10 @@ interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   targetWeight: number | null;
-  customTdee: number | null;
   bodyFat: number | null;
   goalMode: "cut" | "leanMass" | "maingain";
   tdeeEquation: "mifflinStJeor" | "harrisBenedict" | "cunningham" | "observedTdee";
+  activityFactor: "sedentary" | "light" | "moderate" | "veryActive";
   activityPrompt: string;
   foodInstructions: string;
   aiModel: string;

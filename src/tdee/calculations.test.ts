@@ -12,11 +12,8 @@ describe("calculateObservedTdee", () => {
     expect(calculateObservedTdee(makeInsufficientObservedEntries())).toBeNull();
   });
 
-  it("returns observed value when entry count and span are sufficient", () => {
-    const observed = calculateObservedTdee(makeObservedTdeeEntries());
-
-    expect(observed).not.toBeNull();
-    expect(observed).toBeGreaterThan(0);
+  it("uses average calories and start-to-end weight change", () => {
+    expect(calculateObservedTdee(makeObservedTdeeEntries())).toBe(3253);
   });
 });
 
@@ -35,16 +32,11 @@ describe("buildTdeeSnapshot", () => {
     expect(snapshot.observedReason).toBe("insufficient_span");
   });
 
-  it("uses custom tdee when selected and keeps formula breakdown", () => {
-    const snapshot = buildTdeeSnapshot(
-      makeObservedTdeeEntries(),
-      makeProfile({
-        tdeeEquation: "custom",
-        customTdee: 2550,
-      }),
-    );
+  it("defaults to mifflin-st jeor and keeps formula breakdown", () => {
+    const snapshot = buildTdeeSnapshot(makeObservedTdeeEntries(), makeProfile());
 
-    expect(snapshot.selectedValue).toBe(2550);
+    expect(snapshot.selectedEquation).toBe("mifflinStJeor");
+    expect(snapshot.selectedValue).toBe(snapshot.formulaBreakdown.mifflinStJeor);
     expect(snapshot.formulaBreakdown.mifflinStJeor).toBeTypeOf("number");
     expect(snapshot.formulaWeight).toBe(80);
   });

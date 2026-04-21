@@ -2,26 +2,21 @@
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
-	import type { AppLocale, Profile, TdeeEquation, TdeeSnapshot } from "../../types";
+import type { AppLocale, TdeeEquation, TdeeSnapshot } from "../../types";
 
-	const props = defineProps<{
-	  locale: AppLocale;
-    profile: Profile;
-	  tdee: TdeeSnapshot;
-	  selectedEquation: TdeeEquation;
-	  highlightToken?: number;
-	  isUpdating?: boolean;
-    isCalculatingCustomTdee?: boolean;
-	}>();
+const props = defineProps<{
+  locale: AppLocale;
+  tdee: TdeeSnapshot;
+  selectedEquation: TdeeEquation;
+  highlightToken?: number;
+  isUpdating?: boolean;
+}>();
 
 const isHighlighted = ref(false);
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null;
 const { t } = useI18n();
 const emit = defineEmits<{
   "select-equation": [value: TdeeEquation];
-  "calculate-custom-tdee": [];
-  "update:profile": [profile: Profile];
-  save: [profile: Profile];
 }>();
 
 watch(
@@ -70,17 +65,22 @@ const tdeeParts = [
 
 function formulaLabel(name: string) {
   const labels: Record<string, string> = {
-    mifflinStJeor: "Mifflin-St Jeor",
-    harrisBenedict: "Harris-Benedict",
-    cunningham: "Cunningham",
+    mifflinStJeor: "Mifflin = 10W + 6.25H - 5A + S",
+    harrisBenedict: "Harris = 13.8W + 5H - 6.8A + C",
+    cunningham: "Cunn = 500 + 22LM",
   };
 
   return labels[name] ?? name;
 }
 
 function formulaExplain(name: string) {
-  const key = `${name}Explain` as const;
-  return t(key);
+  const notes: Record<string, string> = {
+    mifflinStJeor: "W,H,A,S",
+    harrisBenedict: "W,H,A,C",
+    cunningham: "LM",
+  };
+
+  return notes[name] ?? "";
 }
 
 function formulaHref(name: string) {
@@ -105,68 +105,9 @@ function weightSourceText(source: "estimated" | "deduced" | "logged" | null) {
   return t("weightSourceLogged");
 }
 
-	function onPick(value: TdeeEquation) {
-	  emit("select-equation", value);
-	}
-
-  const customTdeeDraft = ref("");
-  let customTdeeSaveTimeout: ReturnType<typeof setTimeout> | null = null;
-  const CUSTOM_TDEE_DEBOUNCE_MS = 2000;
-
-  function parseCustomTdeeDraft(raw: string) {
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.round(parsed);
-  }
-
-  watch(
-    () => props.profile.customTdee,
-    (next) => {
-      customTdeeDraft.value = next != null ? String(next) : "";
-    },
-    { immediate: true },
-  );
-
-  function scheduleCustomTdeeSave(nextProfile: Profile) {
-    if (customTdeeSaveTimeout) {
-      clearTimeout(customTdeeSaveTimeout);
-    }
-    customTdeeSaveTimeout = setTimeout(() => {
-      emit("save", nextProfile);
-      customTdeeSaveTimeout = null;
-    }, CUSTOM_TDEE_DEBOUNCE_MS);
-  }
-
-  function onCustomTdeeInput(event: Event) {
-    const raw = (event.target as HTMLInputElement).value;
-    customTdeeDraft.value = raw;
-    const nextValue = parseCustomTdeeDraft(raw);
-    const nextProfile = { ...props.profile, customTdee: nextValue };
-    emit("update:profile", nextProfile);
-    scheduleCustomTdeeSave(nextProfile);
-  }
-
-  function onCustomTdeeBlur() {
-    const nextValue = parseCustomTdeeDraft(customTdeeDraft.value);
-    const nextProfile = { ...props.profile, customTdee: nextValue };
-    emit("update:profile", nextProfile);
-    if (customTdeeSaveTimeout) {
-      clearTimeout(customTdeeSaveTimeout);
-      customTdeeSaveTimeout = null;
-    }
-    emit("save", nextProfile);
-  }
-
-  function calculateCustomTdee() {
-    if (props.isCalculatingCustomTdee) return;
-    if (customTdeeSaveTimeout) {
-      clearTimeout(customTdeeSaveTimeout);
-      customTdeeSaveTimeout = null;
-    }
-    emit("calculate-custom-tdee");
-  }
+function onPick(value: TdeeEquation) {
+  emit("select-equation", value);
+}
 
 function observedEmptyText() {
   if (props.tdee.observedReason === "insufficient_span") {
@@ -231,51 +172,6 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
           </tr>
         </thead>
 	        <tbody>
-            <tr>
-              <td class="pick-col">
-                <input
-                  type="radio"
-                  name="tdeeEquation"
-                  :checked="selectedEquation === 'custom'"
-                  @change="onPick('custom')"
-                />
-              </td>
-              <td><strong>{{ t("customTdee") }}</strong></td>
-              <td class="calorie-cell calorie-cell--custom">
-                <div class="tdee-custom-cell">
-                  <input
-                    class="tdee-custom-input"
-                    type="number"
-                    step="1"
-                    min="0"
-                    :value="customTdeeDraft"
-                    placeholder="-"
-                    @input="onCustomTdeeInput"
-                    @blur="onCustomTdeeBlur"
-                    @keydown.enter.prevent="onCustomTdeeBlur"
-                  />
-                  <button
-                    class="tdee-custom-calc"
-                    :class="{ 'is-busy': Boolean(isCalculatingCustomTdee) }"
-                    :disabled="Boolean(isCalculatingCustomTdee)"
-                    type="button"
-                    :title="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
-                    :aria-label="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
-                    @click="calculateCustomTdee"
-                  >
-                    <span>{{ t("tdeeCalcShort") }}</span>
-                    <span v-if="isCalculatingCustomTdee" class="tdee-loading-dots" aria-hidden="true">
-                      <span>.</span>
-                      <span>.</span>
-                      <span>.</span>
-                    </span>
-                  </button>
-                </div>
-              </td>
-              <td>
-                {{ t("customTdeeRowHelper") }}
-              </td>
-            </tr>
 		          <tr>
 	            <td class="pick-col">
 	              <input
@@ -336,54 +232,6 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
     </div>
 
     <div class="tdee-cards">
-      <div class="tdee-card">
-        <div class="tdee-card__header">
-          <input
-            type="radio"
-            name="tdeeEquationMobile"
-            :checked="selectedEquation === 'custom'"
-            @change="onPick('custom')"
-            class="tdee-card__radio"
-          />
-          <strong class="tdee-card__title">{{ t("customTdee") }}</strong>
-        </div>
-        <div class="tdee-card__content">
-          <div class="tdee-card__row">
-            <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
-            <div class="tdee-custom-cell-mobile">
-              <input
-                class="tdee-custom-input"
-                type="number"
-                step="1"
-                min="0"
-                :value="customTdeeDraft"
-                placeholder="-"
-                @input="onCustomTdeeInput"
-                @blur="onCustomTdeeBlur"
-                @keydown.enter.prevent="onCustomTdeeBlur"
-              />
-              <button
-                class="tdee-custom-calc"
-                :class="{ 'is-busy': Boolean(isCalculatingCustomTdee) }"
-                :disabled="Boolean(isCalculatingCustomTdee)"
-                type="button"
-                :title="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
-                :aria-label="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
-                @click="calculateCustomTdee"
-              >
-                <span>{{ t("tdeeCalcShort") }}</span>
-                <span v-if="isCalculatingCustomTdee" class="tdee-loading-dots" aria-hidden="true">
-                  <span>.</span>
-                  <span>.</span>
-                  <span>.</span>
-                </span>
-              </button>
-            </div>
-          </div>
-          <div class="tdee-card__helper">{{ t("customTdeeRowHelper") }}</div>
-        </div>
-      </div>
-
       <div class="tdee-card">
         <div class="tdee-card__header">
           <input

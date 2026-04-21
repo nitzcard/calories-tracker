@@ -11,11 +11,11 @@ export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type GoalMode = "cut" | "leanMass" | "maingain";
+export type ActivityFactor = "sedentary" | "light" | "moderate" | "veryActive";
 export type TdeeEquation =
   | "mifflinStJeor"
   | "harrisBenedict"
   | "cunningham"
-  | "custom"
   | "observedTdee";
 
 export interface AiProviderOption {
@@ -34,10 +34,10 @@ export interface Profile {
   height: number | null;
   estimatedWeight: number | null;
   targetWeight: number | null;
-  customTdee: number | null;
   bodyFat: number | null;
   goalMode: GoalMode;
   tdeeEquation: TdeeEquation;
+  activityFactor: ActivityFactor;
   activityPrompt: string;
   foodInstructions: string;
   aiModel: string;
@@ -165,7 +165,6 @@ export interface DailyEntry {
   foodLogText: string;
   weight: number | null;
   manualCalories: number | null;
-  customTdee: number | null;
   analysisStale: boolean;
   nutritionSnapshot: NutritionSnapshot | null;
   aiStatus: AiStatus;
@@ -277,7 +276,6 @@ export interface DailyEntryInput {
   foodLogText?: string;
   weight?: number | null;
   manualCalories?: number | null;
-  customTdee?: number | null;
 }
 
 export interface AiAnalysisInput {

@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { AppLocale, BiologicalSex, Profile } from "../../types";
+import type { ActivityFactor, AppLocale, BiologicalSex, Profile } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -18,16 +18,33 @@ const { t } = useI18n();
 const emit = defineEmits<{
   "update:profile": [profile: Profile];
   save: [profile: Profile];
-  "save-activity": [value: string];
+  "save-activity": [activityFactor: ActivityFactor, activityPrompt: string];
 }>();
 
+const ACTIVITY_PROMPTS: Record<ActivityFactor, string> = {
+  sedentary: "Mostly sitting, little walking, and no regular training.",
+  light: "Desk work with some walking and a few light activities each week.",
+  moderate: "A fairly active routine with regular workouts or a moving job.",
+  veryActive: "Hard training, a physical job, or lots of daily movement.",
+};
+
 const activityDraft = ref(props.profile.activityPrompt);
+const activityFactorDraft = ref<ActivityFactor>(props.profile.activityFactor);
 const isProfileRequiredMissing = () =>
   props.profile.age == null || props.profile.height == null || !activityDraft.value.trim();
 
 let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let latestProfileToSave: Profile | null = null;
 const PROFILE_SAVE_DEBOUNCE_MS = 2000;
+let activitySaveTimeout: ReturnType<typeof setTimeout> | null = null;
+let latestActivityToSave: { factor: ActivityFactor; prompt: string } | null = null;
+
+watch(
+  () => props.profile.activityFactor,
+  (next) => {
+    activityFactorDraft.value = next;
+  },
+);
 
 watch(
   () => props.profile.activityPrompt,
@@ -56,6 +73,43 @@ function scheduleProfileSave(nextProfile: Profile) {
 function saveImmediateProfile(profile: Profile) {
   emit("update:profile", profile);
   scheduleProfileSave(profile);
+}
+
+function saveActivityProfile(nextFactor: ActivityFactor, nextPrompt: string) {
+  const nextProfile = { ...props.profile, activityFactor: nextFactor, activityPrompt: nextPrompt };
+  emit("update:profile", nextProfile);
+  latestActivityToSave = { factor: nextFactor, prompt: nextPrompt };
+  if (activitySaveTimeout) clearTimeout(activitySaveTimeout);
+  activitySaveTimeout = setTimeout(() => {
+    if (!latestActivityToSave) return;
+    emit("save-activity", latestActivityToSave.factor, latestActivityToSave.prompt);
+    activitySaveTimeout = null;
+  }, PROFILE_SAVE_DEBOUNCE_MS);
+}
+
+function flushActivityProfile(nextFactor: ActivityFactor, nextPrompt: string) {
+  const nextProfile = { ...props.profile, activityFactor: nextFactor, activityPrompt: nextPrompt };
+  emit("update:profile", nextProfile);
+  if (activitySaveTimeout) {
+    clearTimeout(activitySaveTimeout);
+    activitySaveTimeout = null;
+  }
+  latestActivityToSave = { factor: nextFactor, prompt: nextPrompt };
+  emit("save-activity", nextFactor, nextPrompt);
+}
+
+function onActivityFactorChange(event: Event) {
+  const nextFactor = (event.target as HTMLSelectElement).value as ActivityFactor;
+  activityFactorDraft.value = nextFactor;
+  const nextPrompt = ACTIVITY_PROMPTS[nextFactor];
+  activityDraft.value = nextPrompt;
+  saveActivityProfile(nextFactor, nextPrompt);
+}
+
+function onActivityPromptInput(event: Event) {
+  const nextPrompt = (event.target as HTMLTextAreaElement).value;
+  activityDraft.value = nextPrompt;
+  saveActivityProfile(activityFactorDraft.value, nextPrompt);
 }
 
 </script>
@@ -186,24 +240,38 @@ function saveImmediateProfile(profile: Profile) {
 
 	    <FormField
 	      :label="t('activityPrompt')"
-	      :helper="t('profileTdeeAutosave')"
+	      :helper="t('activityPromptHelper')"
 	      stacked
 	      class="stacked"
 	    >
+        <div class="activity-factor-block">
+          <div class="activity-factor-block__label">{{ t("activityFactor") }}</div>
+          <select
+            class="activity-factor-select"
+            :value="activityFactorDraft"
+            @change="onActivityFactorChange"
+          >
+            <option value="sedentary">{{ t("activityFactorSedentary") }} - {{ t("activityFactorSedentaryExplain") }}</option>
+            <option value="light">{{ t("activityFactorLight") }} - {{ t("activityFactorLightExplain") }}</option>
+            <option value="moderate">{{ t("activityFactorModerate") }} - {{ t("activityFactorModerateExplain") }}</option>
+            <option value="veryActive">{{ t("activityFactorVeryActive") }} - {{ t("activityFactorVeryActiveExplain") }}</option>
+          </select>
+          <small class="helper-text activity-factor-block__helper">{{ t("activityFactorHelper") }}</small>
+        </div>
 	      <FieldControl as="textarea" :is-saving="isSavingActivity">
 	        <textarea
 	          class="constant-textarea"
 	          :class="{ 'is-missing': !activityDraft.trim() }"
 	          :value="activityDraft"
-	          :placeholder="t('activityPlaceholder')"
-	          @input="activityDraft = ($event.target as HTMLTextAreaElement).value"
-	          @blur="emit('save-activity', activityDraft)"
+	          :placeholder="t('activityPromptPlaceholder')"
+	          @input="onActivityPromptInput"
+	          @blur="flushActivityProfile(activityFactorDraft, activityDraft)"
 	        ></textarea>
 	      </FieldControl>
 	    </FormField>
 	    <p class="status-line">{{ t("profileTdeeAutosave") }}</p>
-	  </BasePanel>
-	</template>
+  </BasePanel>
+</template>
 
 <style scoped>
 .helper-text,
@@ -254,6 +322,26 @@ function saveImmediateProfile(profile: Profile) {
 
 .stacked {
   /* no extra margin — BasePanel --panel-gap handles rhythm */
+}
+
+.activity-factor-block {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-end: 0.75rem;
+}
+
+.activity-factor-block__label {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.activity-factor-select {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+}
+
+.activity-factor-block__helper {
+  margin: 0;
 }
 
 .unit-field {

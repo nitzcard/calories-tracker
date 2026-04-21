@@ -18,6 +18,6 @@ test("@history last 7 days summary excludes older logged entries", async ({ page
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#historyPanel").scrollIntoViewIfNeeded();
 
+  await expect(page.getByTestId("history-all-time-delta")).toHaveText("2240");
   await expect(page.getByTestId("history-last7d-delta")).toHaveText("1920");
-  await expect(page.locator("#historyPanel .summary-row--recent .summary-meta")).toContainText("6");
 });

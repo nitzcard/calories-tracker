@@ -84,8 +84,6 @@ const {
   caloriePoints,
   savingHistoryCalories,
   savingHistoryWeight,
-  isCalculatingCustomTdee,
-  customTdeeEstimateResult,
   statusLabel,
   onLocaleChange,
   onThemeChange,
@@ -95,13 +93,11 @@ const {
   deleteDay,
   saveHistoryCalories,
   saveHistoryWeight,
-  calculateCustomTdeeWithGemini,
-  clearCustomTdeeEstimateResult,
   analyzeCurrentDay,
   acceptSuggestedModelSwitch,
   dismissSuggestedModelSwitch,
   saveProfileDraft,
-  saveActivityPrompt,
+  saveActivitySettings,
   saveTdeeEquation,
   saveFoodInstructions,
   saveAiKey,
@@ -148,7 +144,6 @@ const cloudToastVisibleUntil = ref(0);
 let localToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 let cloudToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 const deleteDayDialogRef = ref<HTMLDialogElement | null>(null);
-const customTdeeSuccessDialogRef = ref<HTMLDialogElement | null>(null);
 const deleteDayPendingDate = ref<string | null>(null);
 const isProfileReady = computed(
   () =>
@@ -652,8 +647,11 @@ async function retryAnalysisWithModel(providerId: string) {
   await analyzeCurrentDay();
 }
 
-async function saveActivityAndHighlight(activityPrompt: string) {
-  await saveActivityPrompt(activityPrompt);
+async function saveActivityAndHighlight(
+  activityFactor: "sedentary" | "light" | "moderate" | "veryActive",
+  activityPrompt: string,
+) {
+  await saveActivitySettings(activityFactor, activityPrompt);
   tdeeHighlightToken.value += 1;
 }
 
@@ -665,11 +663,6 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
 function closeDeleteDayDialog() {
   deleteDayDialogRef.value?.close();
   deleteDayPendingDate.value = null;
-}
-
-function closeCustomTdeeSuccessDialog() {
-  customTdeeSuccessDialogRef.value?.close();
-  clearCustomTdeeEstimateResult();
 }
 
 function openDeleteDayDialog(date: string) {
@@ -695,20 +688,6 @@ async function confirmDeleteDay() {
 
   await deleteDay(date);
 }
-
-watch(
-  customTdeeEstimateResult,
-  (next) => {
-    if (!next) return;
-    const dialog = customTdeeSuccessDialogRef.value;
-    if (!dialog) return;
-    if (dialog.open) {
-      dialog.close();
-    }
-    dialog.showModal();
-  },
-  { flush: "post" },
-);
 
 </script>
 
@@ -753,58 +732,6 @@ watch(
         </button>
         <button type="submit" class="confirm-delete-dialog__confirm" data-delete-dialog-confirm>
           {{ t("deleteDayModalConfirm") }}
-        </button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog
-    ref="customTdeeSuccessDialogRef"
-    class="confirm-delete-dialog custom-tdee-success-dialog"
-    @close="clearCustomTdeeEstimateResult"
-  >
-    <form method="dialog" class="confirm-delete-dialog__form custom-tdee-success-dialog__form">
-      <h2 class="confirm-delete-dialog__title">{{ t("customTdeeSuccessTitle") }}</h2>
-      <p v-if="customTdeeEstimateResult" class="confirm-delete-dialog__copy">
-        {{ t("customTdeeSuccessBody", { calories: customTdeeEstimateResult.tdeeKcal }) }}
-      </p>
-      <div v-if="customTdeeEstimateResult" class="custom-tdee-success-dialog__stats">
-        <p class="custom-tdee-success-dialog__stat">
-          <strong class="custom-tdee-success-dialog__stat-label">{{ t("tdeeSummary") }}:</strong>
-          <span class="custom-tdee-success-dialog__stat-value" dir="ltr">
-            {{ customTdeeEstimateResult.tdeeKcal }} {{ t("unitKcal") }}
-          </span>
-        </p>
-        <p v-if="customTdeeEstimateResult.activityMultiplier !== null" class="custom-tdee-success-dialog__stat">
-          <strong class="custom-tdee-success-dialog__stat-label">{{ t("activityMultiplierLabel") }}:</strong>
-          <span class="custom-tdee-success-dialog__stat-value" dir="ltr">
-            {{ customTdeeEstimateResult.activityMultiplier }}
-          </span>
-        </p>
-        <p
-          v-if="customTdeeEstimateResult.recommendedCaloriesKcal !== null"
-          class="custom-tdee-success-dialog__stat"
-        >
-          <strong class="custom-tdee-success-dialog__stat-label">{{ t("recommendedCalories") }}:</strong>
-          <span class="custom-tdee-success-dialog__stat-value" dir="ltr">
-            {{ customTdeeEstimateResult.recommendedCaloriesKcal }} {{ t("unitKcal") }}
-          </span>
-        </p>
-      </div>
-      <div
-        v-if="customTdeeEstimateResult?.assumptions?.length"
-        class="custom-tdee-success-dialog__reasons"
-      >
-        <strong>{{ t("customTdeeSuccessReasonsTitle") }}</strong>
-        <ul class="custom-tdee-success-dialog__reasons-list" dir="ltr">
-          <li v-for="reason in customTdeeEstimateResult.assumptions" :key="reason">
-            {{ reason }}
-          </li>
-        </ul>
-      </div>
-      <div class="confirm-delete-dialog__actions">
-        <button type="button" class="secondary-action" @click="closeCustomTdeeSuccessDialog">
-          {{ t("customTdeeSuccessClose") }}
         </button>
       </div>
     </form>
@@ -943,19 +870,14 @@ watch(
 
 	        <TdeeSummaryPanel
 	          :locale="locale"
-            :profile="profile"
 	          :tdee="tdee"
 	          :selected-equation="profile.tdeeEquation"
 	          :highlight-token="tdeeHighlightToken"
-	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation || isCalculatingCustomTdee"
-            :is-calculating-custom-tdee="isCalculatingCustomTdee"
-            @update:profile="profile = $event"
-            @save="saveProfileAndHighlight"
+	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
 	          @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;
           "
-            @calculate-custom-tdee="calculateCustomTdeeWithGemini"
         />
 
       </div>
