@@ -206,6 +206,33 @@ export function useDashboard() {
     }
   }
 
+  function clearPersistedDraftFields(
+    date: string,
+    fields: Array<keyof Omit<PersistedDailyDraft, "updatedAt">>,
+  ) {
+    try {
+      const existing = readPersistedDraft(date);
+      if (!existing) return;
+
+      const next: PersistedDailyDraft = { ...existing };
+      for (const field of fields) {
+        delete next[field];
+      }
+
+      if (next.foodLogText === undefined && next.weight === undefined) {
+        localStorage.removeItem(dailyDraftStorageKey(date));
+        return;
+      }
+
+      localStorage.setItem(
+        dailyDraftStorageKey(date),
+        JSON.stringify({ ...next, updatedAt: Date.now() }),
+      );
+    } catch {
+      // Ignore; draft caching is best effort.
+    }
+  }
+
   function isUsernameValid(value: string) {
     return normalizeUsername(value).length >= 3;
   }
@@ -648,10 +675,10 @@ export function useDashboard() {
       });
       await refreshState();
       if (selectedDate.value === date) {
-        currentWeight.value = rawWeight;
+        currentWeight.value = normalizedWeight !== null ? String(normalizedWeight) : "";
       }
     }, "today.weight");
-    clearPersistedDraftFieldsIfUnchanged(date, { weight: rawWeight });
+    clearPersistedDraftFields(date, ["weight"]);
     scheduleCloudPush("today.weight");
   }
 

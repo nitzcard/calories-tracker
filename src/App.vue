@@ -1358,7 +1358,16 @@ async function confirmDeleteDay() {
 
   .app-shell {
     padding: 10px;
-    padding-block-end: calc(6.1rem + env(safe-area-inset-bottom));
+    padding-block-end: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  :is(
+      #dailyDeskPanel,
+      #nutritionSummaryPanel,
+      #graphCaloriesPanel,
+      #historyPanel
+    ) {
+    scroll-margin-block-end: calc(4.5rem + env(safe-area-inset-bottom));
   }
 
   .content-grid,

@@ -1963,28 +1963,8 @@ const proteinPerLeanBodyWeight = computed(() => {
 
                 <div class="food-card__actions">
                   <div class="card-action-links">
-                    <button
-                      class="card-action-link"
-                      type="button"
-                      @click="
-                        emit(
-                          'save-correction-only',
-                          food.id,
-                          food.name,
-                          food.grams ?? null,
-                          food.calories ?? null,
-                          food.caloriesPer100g ?? null,
-                          food.protein ?? null,
-                          food.carbs ?? null,
-                          food.fat ?? null,
-                          food.fiber ?? null,
-                        )
-                      "
-                    >
-                      {{ t("saveFixOnly") }}
-                    </button>
-                    <button class="card-action-link" type="button" @click="emitSaveCorrection(food)">
-                      {{ t("saveFix") }}
+                    <button class="card-action-link" type="button" @click="openRowActionMenu(food)">
+                      {{ t("foodActions") }}
                     </button>
                   </div>
                 </div>
