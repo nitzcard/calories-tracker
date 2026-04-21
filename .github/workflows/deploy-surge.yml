@@ -16,27 +16,31 @@ permissions:
 
 jobs:
   deploy:
-    if: >
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     steps:
+      - name: PR check
+        if: github.event_name == 'pull_request'
+        run: echo "deploy to surge runs after testing on main only"
+
       - name: Checkout
+        if: github.event_name == 'workflow_run'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node
+        if: github.event_name == 'workflow_run'
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
       - name: Install
+        if: github.event_name == 'workflow_run'
         run: npm ci
 
       - name: Validate required secrets
+        if: github.event_name == 'workflow_run'
         run: |
           test -n "${VITE_SUPABASE_URL}" || (echo "Missing VITE_SUPABASE_URL GitHub secret" && exit 1)
           test -n "${VITE_SUPABASE_ANON_KEY}" || (echo "Missing VITE_SUPABASE_ANON_KEY GitHub secret" && exit 1)
@@ -49,12 +53,17 @@ jobs:
           SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
 
       - name: Build
+        if: github.event_name == 'workflow_run'
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Deploy
+        if: >
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main'
         run: npx --yes surge@latest ./dist "${SURGE_DOMAIN}" --token "${SURGE_TOKEN}"
         env:
           SURGE_DOMAIN: ${{ secrets.SURGE_DOMAIN }}
