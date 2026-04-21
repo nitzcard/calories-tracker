@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const baseURL = process.env.APP_URL || "http://127.0.0.1:7001";
+const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./tests",
@@ -9,7 +10,13 @@ export default defineConfig({
     timeout: 8_000,
   },
   fullyParallel: false,
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: isCI
+    ? [
+        ["list"],
+        ["html", { open: "never", outputFolder: "playwright-report" }],
+        ["junit", { outputFile: "test-results/playwright/junit.xml" }],
+      ]
+    : [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
   use: {
     baseURL,
     headless: true,

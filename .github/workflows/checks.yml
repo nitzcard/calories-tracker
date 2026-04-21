@@ -1,0 +1,76 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Typecheck
+        id: typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        id: unit_tests
+        run: npm run test:unit
+
+      - name: End-to-end tests
+        id: e2e_tests
+        run: npm run test:e2e
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          {
+            echo "## Test Summary"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Typecheck | ${{ steps.typecheck.outcome }} |"
+            echo "| Unit tests | ${{ steps.unit_tests.outcome }} |"
+            echo "| End-to-end tests | ${{ steps.e2e_tests.outcome }} |"
+            echo
+            echo "### Reports"
+            echo
+            echo "- Artifact: \`test-artifacts\`"
+            echo "- Vitest HTML: \`test-results/vitest/index.html\`"
+            echo "- Vitest JUnit: \`test-results/vitest/junit.xml\`"
+            echo "- Playwright HTML: \`playwright-report/index.html\`"
+            echo "- Playwright JUnit: \`test-results/playwright/junit.xml\`"
+            echo "- Playwright media/traces: \`test-results/\`"
+            echo "- Run artifacts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
