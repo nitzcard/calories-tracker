@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { ActivityFactor, AppLocale, BiologicalSex, Profile } from "../../types";
+import type { AppLocale, BiologicalSex, Profile } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
@@ -18,18 +18,10 @@ const { t } = useI18n();
 const emit = defineEmits<{
   "update:profile": [profile: Profile];
   save: [profile: Profile];
-  "save-activity": [activityFactor: ActivityFactor, activityPrompt: string];
+  "save-activity": [activityPrompt: string];
 }>();
 
-const ACTIVITY_PROMPTS: Record<ActivityFactor, string> = {
-  sedentary: "Mostly sitting, little walking, and no regular training.",
-  light: "Desk work with some walking and a few light activities each week.",
-  moderate: "A fairly active routine with regular workouts or a moving job.",
-  veryActive: "Hard training, a physical job, or lots of daily movement.",
-};
-
 const activityDraft = ref(props.profile.activityPrompt);
-const activityFactorDraft = ref<ActivityFactor>(props.profile.activityFactor);
 const isProfileRequiredMissing = () =>
   props.profile.age == null || props.profile.height == null || !activityDraft.value.trim();
 
@@ -37,14 +29,7 @@ let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let latestProfileToSave: Profile | null = null;
 const PROFILE_SAVE_DEBOUNCE_MS = 2000;
 let activitySaveTimeout: ReturnType<typeof setTimeout> | null = null;
-let latestActivityToSave: { factor: ActivityFactor; prompt: string } | null = null;
-
-watch(
-  () => props.profile.activityFactor,
-  (next) => {
-    activityFactorDraft.value = next;
-  },
-);
+let latestActivityToSave: string | null = null;
 
 watch(
   () => props.profile.activityPrompt,
@@ -63,55 +48,54 @@ function scheduleProfileSave(nextProfile: Profile) {
   }, PROFILE_SAVE_DEBOUNCE_MS);
 }
 
-	function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(key: K, event: Event) {
-	  const raw = (event.target as HTMLInputElement).value;
-	  const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
-	  emit("update:profile", nextProfile);
-    scheduleProfileSave(nextProfile);
-	}
+function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(
+  key: K,
+  event: Event,
+) {
+  const raw = (event.target as HTMLInputElement).value;
+  const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
+  emit("update:profile", nextProfile);
+  scheduleProfileSave(nextProfile);
+}
 
 function saveImmediateProfile(profile: Profile) {
   emit("update:profile", profile);
-  scheduleProfileSave(profile);
+  if (profileSaveTimeout) {
+    clearTimeout(profileSaveTimeout);
+    profileSaveTimeout = null;
+  }
+  latestProfileToSave = profile;
+  emit("save", profile);
 }
 
-function saveActivityProfile(nextFactor: ActivityFactor, nextPrompt: string) {
-  const nextProfile = { ...props.profile, activityFactor: nextFactor, activityPrompt: nextPrompt };
+function saveActivityProfile(nextPrompt: string) {
+  const nextProfile = { ...props.profile, activityFactor: "inferred" as const, activityPrompt: nextPrompt };
   emit("update:profile", nextProfile);
-  latestActivityToSave = { factor: nextFactor, prompt: nextPrompt };
+  latestActivityToSave = nextPrompt;
   if (activitySaveTimeout) clearTimeout(activitySaveTimeout);
   activitySaveTimeout = setTimeout(() => {
     if (!latestActivityToSave) return;
-    emit("save-activity", latestActivityToSave.factor, latestActivityToSave.prompt);
+    emit("save-activity", latestActivityToSave);
     activitySaveTimeout = null;
   }, PROFILE_SAVE_DEBOUNCE_MS);
 }
 
-function flushActivityProfile(nextFactor: ActivityFactor, nextPrompt: string) {
-  const nextProfile = { ...props.profile, activityFactor: nextFactor, activityPrompt: nextPrompt };
+function flushActivityProfile(nextPrompt: string) {
+  const nextProfile = { ...props.profile, activityFactor: "inferred" as const, activityPrompt: nextPrompt };
   emit("update:profile", nextProfile);
   if (activitySaveTimeout) {
     clearTimeout(activitySaveTimeout);
     activitySaveTimeout = null;
   }
-  latestActivityToSave = { factor: nextFactor, prompt: nextPrompt };
-  emit("save-activity", nextFactor, nextPrompt);
-}
-
-function onActivityFactorChange(event: Event) {
-  const nextFactor = (event.target as HTMLSelectElement).value as ActivityFactor;
-  activityFactorDraft.value = nextFactor;
-  const nextPrompt = ACTIVITY_PROMPTS[nextFactor];
-  activityDraft.value = nextPrompt;
-  saveActivityProfile(nextFactor, nextPrompt);
+  latestActivityToSave = nextPrompt;
+  emit("save-activity", nextPrompt);
 }
 
 function onActivityPromptInput(event: Event) {
   const nextPrompt = (event.target as HTMLTextAreaElement).value;
   activityDraft.value = nextPrompt;
-  saveActivityProfile(activityFactorDraft.value, nextPrompt);
+  saveActivityProfile(nextPrompt);
 }
-
 </script>
 
 <template>
@@ -165,17 +149,17 @@ function onActivityPromptInput(event: Event) {
           <span class="field-unit">{{ t("unitKg") }}</span>
         </div>
       </FormField>
-	      <FormField :label="t('targetWeight')" :helper="t('targetWeightHelper')">
-	        <div class="unit-field">
-	          <input
-	            :value="profile.targetWeight ?? ''"
-	            type="number"
-	            step="0.1"
-	            @input="saveNullableNumber('targetWeight', $event)"
-	          />
-	          <span class="field-unit">{{ t("unitKg") }}</span>
-	        </div>
-	      </FormField>
+      <FormField :label="t('targetWeight')" :helper="t('targetWeightHelper')">
+        <div class="unit-field">
+          <input
+            :value="profile.targetWeight ?? ''"
+            type="number"
+            step="0.1"
+            @input="saveNullableNumber('targetWeight', $event)"
+          />
+          <span class="field-unit">{{ t("unitKg") }}</span>
+        </div>
+      </FormField>
       <FormField>
         <template #label>
           <span class="bodyfat-label">
@@ -202,74 +186,43 @@ function onActivityPromptInput(event: Event) {
             </a>
           </small>
         </template>
-	      </FormField>
-        <FormField class="goal-mode-field" :label="t('goalMode')" :helper="t('goalModeHelper')">
-          <select
-            :value="profile.goalMode"
-            @change="
-              saveImmediateProfile({
-                ...profile,
-                goalMode: ($event.target as HTMLSelectElement).value as Profile['goalMode'],
-              })
-            "
-          >
-            <option value="cut">{{ t('goalModeCut') }}</option>
-            <option value="leanMass">{{ t('goalModeLeanMass') }}</option>
-            <option value="maingain">{{ t('goalModeMaingain') }}</option>
-          </select>
-        </FormField>
-	    </div>
+      </FormField>
+      <FormField class="goal-mode-field" :label="t('goalMode')" :helper="t('goalModeHelper')">
+        <select
+          :value="profile.goalMode"
+          @change="
+            saveImmediateProfile({
+              ...profile,
+              goalMode: ($event.target as HTMLSelectElement).value as Profile['goalMode'],
+            })
+          "
+        >
+          <option value="cut">{{ t('goalModeCut') }}</option>
+          <option value="leanMass">{{ t('goalModeLeanMass') }}</option>
+          <option value="maingain">{{ t('goalModeMaingain') }}</option>
+        </select>
+      </FormField>
+    </div>
 
-	    <div class="inferred-block">
-	      <div class="inferred-title">{{ t("inferredDataTitle") }}</div>
-	      <div class="inferred-row">
-	        <FormField :label="t('estimatedLeanWeight')" :helper="t('estimatedLeanWeightHelper')">
-	          <div class="unit-field">
-	            <input
-	              class="deduced-input"
-	              :value="props.estimatedLeanWeight ?? ''"
-	              type="number"
-	              disabled
-	              readonly
-	            />
-	            <span class="field-unit">{{ t("unitKg") }}</span>
-	          </div>
-	        </FormField>
-	      </div>
-	    </div>
-
-	    <FormField
-	      :label="t('activityPrompt')"
-	      :helper="t('activityPromptHelper')"
-	      stacked
-	      class="stacked"
-	    >
-        <div class="activity-factor-block">
-          <div class="activity-factor-block__label">{{ t("activityFactor") }}</div>
-          <select
-            class="activity-factor-select"
-            :value="activityFactorDraft"
-            @change="onActivityFactorChange"
-          >
-            <option value="sedentary">{{ t("activityFactorSedentary") }} - {{ t("activityFactorSedentaryExplain") }}</option>
-            <option value="light">{{ t("activityFactorLight") }} - {{ t("activityFactorLightExplain") }}</option>
-            <option value="moderate">{{ t("activityFactorModerate") }} - {{ t("activityFactorModerateExplain") }}</option>
-            <option value="veryActive">{{ t("activityFactorVeryActive") }} - {{ t("activityFactorVeryActiveExplain") }}</option>
-          </select>
-          <small class="helper-text activity-factor-block__helper">{{ t("activityFactorHelper") }}</small>
-        </div>
-	      <FieldControl as="textarea" :is-saving="isSavingActivity">
-	        <textarea
-	          class="constant-textarea"
-	          :class="{ 'is-missing': !activityDraft.trim() }"
-	          :value="activityDraft"
-	          :placeholder="t('activityPromptPlaceholder')"
-	          @input="onActivityPromptInput"
-	          @blur="flushActivityProfile(activityFactorDraft, activityDraft)"
-	        ></textarea>
-	      </FieldControl>
-	    </FormField>
-	    <p class="status-line">{{ t("profileTdeeAutosave") }}</p>
+    <FormField
+      :label="t('activityPrompt')"
+      stacked
+      class="stacked"
+    >
+      <div class="activity-pane">
+        <FieldControl as="textarea" :is-saving="isSavingActivity">
+          <textarea
+            class="constant-textarea"
+            :class="{ 'is-missing': !activityDraft.trim() }"
+            :value="activityDraft"
+            :placeholder="t('activityPromptPlaceholder')"
+            @input="onActivityPromptInput"
+            @blur="flushActivityProfile(activityDraft)"
+          ></textarea>
+        </FieldControl>
+      </div>
+    </FormField>
+    <p class="status-line">{{ t("profileTdeeAutosave") }}</p>
   </BasePanel>
 </template>
 
@@ -296,52 +249,18 @@ function onActivityPromptInput(event: Event) {
   inline-size: calc(var(--compact-control-inline-size) * 1.55);
 }
 
-.inferred-block {
-  display: grid;
-  gap: var(--field-gap);
-  margin-block-start: calc(var(--field-gap) + 0.25rem);
-  padding-block-start: 0.25rem;
-}
-
-.inferred-title {
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.inferred-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--controls-gap, var(--group-gap));
-  align-items: start;
-}
-
-.inferred-row :deep(.field) {
-  inline-size: var(--compact-control-inline-size);
-  max-inline-size: 100%;
-}
-
 .stacked {
   /* no extra margin — BasePanel --panel-gap handles rhythm */
 }
 
-.activity-factor-block {
+.activity-pane {
   display: grid;
-  gap: 0.35rem;
-  margin-block-end: 0.75rem;
-}
-
-.activity-factor-block__label {
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.activity-factor-select {
-  inline-size: fit-content;
-  max-inline-size: 100%;
-}
-
-.activity-factor-block__helper {
-  margin: 0;
+  gap: var(--field-gap);
+  padding: 0.8rem;
+  padding-block-end: 1rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 72%, var(--panel));
+  box-shadow: var(--bevel-raised);
 }
 
 .unit-field {
@@ -359,10 +278,6 @@ function onActivityPromptInput(event: Event) {
   box-shadow: var(--bevel-raised);
   color: var(--text-muted);
   white-space: nowrap;
-}
-
-.deduced-input {
-  color: var(--text-muted);
 }
 
 .bodyfat-label {
@@ -394,13 +309,5 @@ function onActivityPromptInput(event: Event) {
     inline-size: 100%;
   }
 
-  .inferred-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .inferred-row :deep(.field) {
-    inline-size: 100%;
-  }
 }
 </style>

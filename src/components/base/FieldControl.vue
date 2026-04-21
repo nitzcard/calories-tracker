@@ -35,8 +35,11 @@ withDefaults(
 .field-control :deep(input),
 .field-control :deep(select),
 .field-control :deep(textarea) {
-  inline-size: 100%;
   min-inline-size: 0;
+}
+
+.field-control :deep(textarea) {
+  inline-size: 100%;
 }
 
 .field-control--input .field-spinner,

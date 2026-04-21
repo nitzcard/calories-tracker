@@ -647,11 +647,8 @@ async function retryAnalysisWithModel(providerId: string) {
   await analyzeCurrentDay();
 }
 
-async function saveActivityAndHighlight(
-  activityFactor: "sedentary" | "light" | "moderate" | "veryActive",
-  activityPrompt: string,
-) {
-  await saveActivitySettings(activityFactor, activityPrompt);
+async function saveActivityAndHighlight(activityPrompt: string) {
+  await saveActivitySettings(activityPrompt);
   tdeeHighlightToken.value += 1;
 }
 

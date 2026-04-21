@@ -14,10 +14,124 @@ const OBSERVED_TDEE_MIN = 800;
 const OBSERVED_TDEE_MAX = 6000;
 
 export function activityMultiplier(activityFactor: ActivityFactor): number {
+  if (activityFactor === "inferred") {
+    return 1.2;
+  }
   if (activityFactor === "veryActive") return 1.725;
   if (activityFactor === "moderate") return 1.55;
   if (activityFactor === "light") return 1.375;
   return 1.2;
+}
+
+export function inferActivityFactorFromPrompt(prompt: string): Exclude<ActivityFactor, "inferred"> {
+  const text = prompt.toLowerCase();
+
+  if (!text.trim()) {
+    return "sedentary";
+  }
+
+  if (
+    [
+      "very active",
+      "hard training",
+      "intense training",
+      "physical job",
+      "manual labor",
+      "lots of daily movement",
+      "very active",
+      "מאוד פעיל",
+      "פעילות גבוהה",
+      "אימונים קשים",
+      "אימון קשה",
+      "עבודה פיזית",
+      "עבודה פיסית",
+      "הרבה תנועה",
+      "המון תנועה",
+      "כל יום מתאמן",
+      "אימוני כוח",
+      "אימוני כח",
+      "רץ הרבה",
+      "ריצה קבועה",
+      "קרוספיט",
+      "עבודה על הרגליים כל היום",
+    ].some((signal) => text.includes(signal))
+  ) {
+    return "veryActive";
+  }
+
+  if (
+    [
+      "moderate",
+      "regular workouts",
+      "workout",
+      "training",
+      "exercise",
+      "moving job",
+      "active routine",
+      "בינוני",
+      "פעיל",
+      "מתאמן",
+      "אימונים",
+      "אימון",
+      "מתאמן קבוע",
+      "אימון קבוע",
+      "שגרה פעילה",
+      "עבודה בתנועה",
+      "הולך הרבה",
+      "חדר כושר",
+      "כוח",
+      "ריצה",
+      "שוחה",
+      "רוכב",
+      "מתאמן כמה פעמים בשבוע",
+      "כמה פעמים בשבוע",
+      "פעילות",
+    ].some((signal) => text.includes(signal))
+  ) {
+    return "moderate";
+  }
+
+  if (
+    [
+      "light",
+      "desk work",
+      "walking",
+      "some walking",
+      "light activities",
+      "office work",
+      "little walking",
+      "קל",
+      "הליכה",
+      "קצת הליכה",
+      "יושב רוב היום",
+      "עבודה משרדית",
+      "משרד",
+      "מעט הליכה",
+      "פעילות קלה",
+      "הליכות",
+      "עומד הרבה",
+      "עבודה בעמידה",
+      "קם הרבה",
+    ].some((signal) => text.includes(signal))
+  ) {
+    return "light";
+  }
+
+  if (
+    [
+      "sedentary",
+      "יושבני",
+      "יושב רוב היום",
+      "כמעט לא זז",
+      "מעט מאוד תנועה",
+      "בלי פעילות",
+      "לא פעיל",
+    ].some((signal) => text.includes(signal))
+  ) {
+    return "sedentary";
+  }
+
+  return "sedentary";
 }
 
 export function calculateFormulaTdee(
@@ -30,7 +144,11 @@ export function calculateFormulaTdee(
 
   const kg = latestWeight;
   const cm = profile.height;
-  const activity = activityMultiplier(profile.activityFactor);
+  const resolvedActivityFactor =
+    profile.activityFactor === "inferred"
+      ? inferActivityFactorFromPrompt(profile.activityPrompt ?? "")
+      : profile.activityFactor;
+  const activity = activityMultiplier(resolvedActivityFactor);
   const sexOffset = profile.sex === "female" ? -161 : 5;
   const normalizedBodyFat =
     profile.bodyFat !== null &&

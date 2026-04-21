@@ -123,4 +123,27 @@ describe("mergeExportedAppData", () => {
     expect(merged.profile[0]?.activityPrompt).toContain("Gym");
     expect(merged.profile[0]?.themeMode).toBe("system");
   });
+
+  it("keeps a newer male sex choice instead of treating it like a weak default", () => {
+    const local = makeExportedData({
+      profile: [
+        makeProfile({
+          sex: "male",
+          updatedAt: "2026-04-21T11:00:00.000Z",
+        }),
+      ],
+    });
+    const remote = makeExportedData({
+      profile: [
+        makeProfile({
+          sex: "female",
+          updatedAt: "2026-04-21T10:00:00.000Z",
+        }),
+      ],
+    });
+
+    const merged = mergeExportedAppData(local, remote);
+
+    expect(merged.profile[0]?.sex).toBe("male");
+  });
 });

@@ -486,8 +486,8 @@ function setPer100MacroDraft(
 }
 
 function nutritionLookupUrl(food: FoodBreakdownItem) {
-  const query = `${food.name} nutrition per 100g`;
-  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  const query = `${food.name} nutrition per 100g calories protein carbs fat`;
+  return `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
 }
 
 function setSourceUrlDraft(foodId: string, value: string) {

@@ -10,6 +10,7 @@ import {
   statusLabel,
 } from "./dashboard-helpers";
 import { useAutoSaveState } from "./useAutoSaveState";
+import { createSerialTaskQueue } from "./serialTaskQueue";
 import { useAnalysisFlow } from "./useAnalysisFlow";
 import { useDataTransferState } from "./useDataTransferState";
 import { useFoodCorrectionState } from "./useFoodCorrectionState";
@@ -345,6 +346,7 @@ export function useDashboard() {
 
   let foodDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let weightDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  const profileSaveQueue = createSerialTaskQueue();
 
   function hasEffectiveGeminiKey() {
     return Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim());
@@ -589,10 +591,12 @@ export function useDashboard() {
     ensureProviderOption(provider.value, nextLocale);
     refreshVisibleProviderOptions(nextLocale);
     if (!profile.value) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, locale: locale.value };
-      await saveProfile(profile.value);
-    }, "settings.locale");
+    profile.value = { ...profile.value!, locale: locale.value };
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "settings.locale");
+    });
     scheduleCloudPush("settings.locale");
   }
 
@@ -600,10 +604,12 @@ export function useDashboard() {
     themeMode.value = nextTheme;
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, nextTheme);
     if (!profile.value) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, themeMode: themeMode.value };
-      await saveProfile(profile.value);
-    }, "settings.theme");
+    profile.value = { ...profile.value!, themeMode: themeMode.value };
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "settings.theme");
+    });
     scheduleCloudPush("settings.theme");
   }
 
@@ -613,10 +619,12 @@ export function useDashboard() {
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, nextProvider);
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet, "1");
     if (!profile.value) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, aiModel: nextProvider };
-      await saveProfile(profile.value);
-    }, "settings.provider");
+    profile.value = { ...profile.value!, aiModel: nextProvider };
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "settings.provider");
+    });
     refreshVisibleProviderOptions();
     scheduleCloudPush("settings.provider");
   }
@@ -712,37 +720,45 @@ export function useDashboard() {
   async function saveProfileDraft(nextProfile?: Profile) {
     const profileToSave = nextProfile ?? profile.value;
     if (!profileToSave) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = profileToSave;
-      await saveProfile(profileToSave);
-    }, "constants.profile");
+    profile.value = profileToSave;
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "constants.profile");
+    });
     scheduleCloudPush("constants.profile");
   }
 
-  async function saveActivitySettings(activityFactor: Profile["activityFactor"], activityPrompt: string) {
+  async function saveActivitySettings(activityPrompt: string) {
     if (!profile.value) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, activityFactor, activityPrompt };
-      await saveProfile(profile.value);
-    }, "constants.profile.activityPrompt");
+    profile.value = { ...profile.value!, activityFactor: "inferred", activityPrompt };
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "constants.profile.activityPrompt");
+    });
     scheduleCloudPush("constants.profile.activityPrompt");
   }
 
   async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
     if (!profile.value) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, tdeeEquation };
-      await saveProfile(profile.value);
-    }, "constants.profile.tdeeEquation");
+    profile.value = { ...profile.value!, tdeeEquation };
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "constants.profile.tdeeEquation");
+    });
     scheduleCloudPush("constants.profile.tdeeEquation");
   }
 
   async function saveFoodInstructions(foodInstructions: string) {
     if (!profile.value) return;
-    await autoSave.runAutoSave(async () => {
-      profile.value = { ...profile.value!, foodInstructions };
-      await saveProfile(profile.value);
-    }, "constants.foodInstructions");
+    profile.value = { ...profile.value!, foodInstructions };
+    await profileSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        await saveProfile(profile.value!);
+      }, "constants.foodInstructions");
+    });
     scheduleCloudPush("constants.foodInstructions");
   }
 

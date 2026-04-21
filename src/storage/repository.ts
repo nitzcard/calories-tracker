@@ -36,7 +36,7 @@ const DEFAULT_PROFILE: Profile = {
   bodyFat: null,
   goalMode: "maingain",
   tdeeEquation: "mifflinStJeor",
-  activityFactor: "light",
+  activityFactor: "inferred",
   activityPrompt: "Office work and walking daily",
   foodInstructions: "",
   aiModel: DEFAULT_GEMINI_MODEL,
@@ -44,29 +44,6 @@ const DEFAULT_PROFILE: Profile = {
   themeMode: "system",
   updatedAt: new Date().toISOString(),
 };
-
-function inferActivityFactorFromPrompt(prompt: string): Profile["activityFactor"] {
-  const text = prompt.toLowerCase();
-  if (
-    [
-      "very active",
-      "physical job",
-      "manual labor",
-      "hard training",
-      "intense training",
-      "active job",
-    ].some((signal) => text.includes(signal))
-  ) {
-    return "veryActive";
-  }
-  if (["moderate", "gym", "workout", "training", "exercise", "active", "workouts"].some((signal) => text.includes(signal))) {
-    return "moderate";
-  }
-  if (["light", "walk", "walking", "standing", "desk", "office"].some((signal) => text.includes(signal))) {
-    return "light";
-  }
-  return "sedentary";
-}
 
 export async function ensureDefaultProfile(
   locale: Profile["locale"],
@@ -89,14 +66,6 @@ export async function ensureDefaultProfile(
       legacyGoalMode === "cut" || legacyGoalMode === "leanMass" || legacyGoalMode === "maingain"
         ? legacyGoalMode
         : DEFAULT_PROFILE.goalMode;
-    const normalizedActivityFactor =
-      (existing as Profile & { activityFactor?: unknown }).activityFactor === "sedentary" ||
-      (existing as Profile & { activityFactor?: unknown }).activityFactor === "light" ||
-      (existing as Profile & { activityFactor?: unknown }).activityFactor === "moderate" ||
-      (existing as Profile & { activityFactor?: unknown }).activityFactor === "veryActive"
-        ? ((existing as Profile & { activityFactor?: unknown }).activityFactor as Profile["activityFactor"])
-        : inferActivityFactorFromPrompt(existing.activityPrompt ?? DEFAULT_PROFILE.activityPrompt);
-
     const merged = {
       ...DEFAULT_PROFILE,
       ...existing,
@@ -106,7 +75,7 @@ export async function ensureDefaultProfile(
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       goalMode: normalizedGoalMode,
       tdeeEquation: normalizedEquation,
-      activityFactor: normalizedActivityFactor,
+      activityFactor: "inferred" as const,
       activityPrompt: existing.activityPrompt?.trim()
         ? existing.activityPrompt
         : DEFAULT_PROFILE.activityPrompt,
@@ -127,6 +96,7 @@ export async function saveProfile(profile: Profile): Promise<void> {
   await db.profile.put(
     toPlain({
       ...profile,
+      activityFactor: "inferred" as const,
       updatedAt: new Date().toISOString(),
     }),
   );

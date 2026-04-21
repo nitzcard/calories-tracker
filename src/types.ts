@@ -11,7 +11,7 @@ export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type GoalMode = "cut" | "leanMass" | "maingain";
-export type ActivityFactor = "sedentary" | "light" | "moderate" | "veryActive";
+export type ActivityFactor = "inferred" | "sedentary" | "light" | "moderate" | "veryActive";
 export type TdeeEquation =
   | "mifflinStJeor"
   | "harrisBenedict"

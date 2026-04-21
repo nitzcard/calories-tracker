@@ -116,7 +116,7 @@ function onToggle(event: Event) {
   cursor: pointer;
   list-style: none;
   position: relative;
-  padding-inline-end: 1.5rem;
+  padding-inline-end: 2.45rem;
 }
 
 .base-panel-summary::-webkit-details-marker {
@@ -126,7 +126,7 @@ function onToggle(event: Event) {
 .base-panel-summary::before {
   content: "";
   position: absolute;
-  inset-inline-end: 0.2rem;
+  inset-inline-end: 0.95rem;
   inset-block-start: 0.35rem;
   inline-size: 0;
   block-size: 0;

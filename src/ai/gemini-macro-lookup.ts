@@ -72,20 +72,21 @@ function buildEndpoint(providerId: string, apiKey: string) {
 
 function pickMacroLookupModel(providerId: string) {
   const requested = providerId.trim();
-  const lowered = requested.toLowerCase();
 
-  // Macro lookup is a small search task, so prefer the lightest stable Flash model.
-  // If the user-selected model is a preview/experimental variant, avoid coupling lookup
-  // stability to that choice.
-  if (!requested || lowered.includes("preview") || lowered.includes("experimental")) {
-    return LIGHTWEIGHT_GEMINI_LATEST_MODEL || LIGHTWEIGHT_GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  }
+  // Macro lookup is search-heavy and should stay on the most reliable lightweight model,
+  // no matter which chat model user picked elsewhere.
+  return LIGHTWEIGHT_GEMINI_LATEST_MODEL || LIGHTWEIGHT_GEMINI_MODEL || requested || DEFAULT_GEMINI_MODEL;
+}
 
-  if (lowered.includes("pro")) {
-    return LIGHTWEIGHT_GEMINI_LATEST_MODEL || LIGHTWEIGHT_GEMINI_MODEL || requested;
-  }
-
-  return requested;
+function candidateMacroLookupModels(providerId: string) {
+  return Array.from(
+    new Set([
+      pickMacroLookupModel(providerId),
+      LIGHTWEIGHT_GEMINI_MODEL,
+      DEFAULT_GEMINI_MODEL,
+      providerId.trim() || null,
+    ].filter((value): value is string => Boolean(value))),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -181,6 +182,14 @@ async function readGeminiErrorMessage(response: Response) {
   }
 }
 
+function isMissingModelMessage(message: string | null) {
+  if (!message) {
+    return false;
+  }
+
+  return /not found|unknown model|unsupported model|does not exist|404/i.test(message);
+}
+
 export async function lookupFoodMacrosPer100WithGemini(input: {
   providerId: string;
   foodName: string;
@@ -192,8 +201,6 @@ export async function lookupFoodMacrosPer100WithGemini(input: {
     throw new Error("Missing Gemini API key.");
   }
 
-  const selectedModel = pickMacroLookupModel(input.providerId);
-  const endpoint = buildEndpoint(selectedModel, apiKey);
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
     tools: [{ googleSearch: {} }],
@@ -204,20 +211,33 @@ export async function lookupFoodMacrosPer100WithGemini(input: {
     },
   });
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-  });
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const errorMessage = await readGeminiErrorMessage(response);
-    throw new Error(
-      `[${selectedModel}] ${errorMessage ?? `Gemini request failed with status ${response.status}.`}`,
-    );
+  for (const selectedModel of candidateMacroLookupModels(input.providerId)) {
+    const endpoint = buildEndpoint(selectedModel, apiKey);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+
+    if (!response.ok) {
+      const errorMessage = await readGeminiErrorMessage(response);
+      lastError = new Error(
+        `[${selectedModel}] ${errorMessage ?? `Gemini request failed with status ${response.status}.`}`,
+      );
+
+      if (response.status === 404 || isMissingModelMessage(errorMessage)) {
+        continue;
+      }
+
+      throw lastError;
+    }
+
+    const payload = (await response.json()) as GeminiGenerateContentResponse;
+    const text = extractText(payload);
+    return parseResult(JSON.parse(text));
   }
 
-  const payload = (await response.json()) as GeminiGenerateContentResponse;
-  const text = extractText(payload);
-  return parseResult(JSON.parse(text));
+  throw lastError ?? new Error("AI macro lookup failed.");
 }

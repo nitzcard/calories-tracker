@@ -56,15 +56,15 @@ function mergeProfilePreservingData(
   options: { prefer: "local" | "remote" },
 ): Profile {
   // Defaults/baselines should be "weak", especially on a fresh device right after login.
-	  const DEFAULT = {
-	    sex: "male" as const,
-	    tdeeEquation: "mifflinStJeor" as const,
-      activityFactor: "light" as const,
-	    aiModel: DEFAULT_GEMINI_MODEL,
-	    locale: "en" as const,
-	    themeMode: "system" as const,
-      goalMode: "maingain" as const,
-	  };
+  const DEFAULT = {
+    sex: "male" as const,
+    tdeeEquation: "mifflinStJeor" as const,
+    activityFactor: "inferred" as const,
+    aiModel: DEFAULT_GEMINI_MODEL,
+    locale: "en" as const,
+    themeMode: "system" as const,
+    goalMode: "maingain" as const,
+  };
 
   const preferred = options.prefer === "remote" ? remote : local;
   const other = preferred === remote ? local : remote;
@@ -98,7 +98,6 @@ function mergeProfilePreservingData(
   };
 
   // For each field: prefer non-default/non-empty values first; if both are "strong", prefer the chosen side.
-  const mergedSex = pickEnumWithWeakDefault(preferred.sex, other.sex, DEFAULT.sex);
   const mergedEquation = pickEnumWithWeakDefault(
     preferred.tdeeEquation,
     other.tdeeEquation,
@@ -115,32 +114,30 @@ function mergeProfilePreservingData(
     other.goalMode ?? DEFAULT.goalMode,
     DEFAULT.goalMode,
   );
-  const mergedActivityFactor = pickEnumWithWeakDefault(
-    preferred.activityFactor ?? DEFAULT.activityFactor,
-    other.activityFactor ?? DEFAULT.activityFactor,
-    DEFAULT.activityFactor,
-  );
-	  return {
-	    ...other,
-	    ...preferred,
-	    id: "default",
-	    sex: mergedSex,
-	    tdeeEquation: mergedEquation,
-      activityFactor: mergedActivityFactor,
-	    locale: mergedLocale,
-	    themeMode: mergedTheme,
-	    aiModel: mergedModel,
-      goalMode: mergedGoalMode,
-	    age: pickNullableNumber(preferred.age, other.age),
-	    height: pickNullableNumber(preferred.height, other.height),
-	    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
-	    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
-	    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
-	    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
-	    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
-	    updatedAt: maxIso(local.updatedAt, remote.updatedAt) || preferred.updatedAt || other.updatedAt,
-	  };
-	}
+  // Sex is not a weak-default field. "male" is the baseline default, but it can also be a
+  // deliberate user choice and should not lose to "female" during merges.
+  const mergedSex = preferred.sex ?? other.sex ?? DEFAULT.sex;
+  return {
+    ...other,
+    ...preferred,
+    id: "default",
+    sex: mergedSex,
+    tdeeEquation: mergedEquation,
+    activityFactor: "inferred" as const,
+    locale: mergedLocale,
+    themeMode: mergedTheme,
+    aiModel: mergedModel,
+    goalMode: mergedGoalMode,
+    age: pickNullableNumber(preferred.age, other.age),
+    height: pickNullableNumber(preferred.height, other.height),
+    estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
+    targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
+    bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
+    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
+    foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
+    updatedAt: maxIso(local.updatedAt, remote.updatedAt) || preferred.updatedAt || other.updatedAt,
+  };
+}
 
 function mergeDailyEntries(
   local: DailyEntry[],

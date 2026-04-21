@@ -399,7 +399,7 @@ input[type="tel"],
 input[type="text"],
 input[type="url"],
 select {
-  inline-size: 100%;
+  inline-size: min(100%, var(--text-control-inline-size));
   min-inline-size: 0;
   max-inline-size: var(--text-control-inline-size);
   background: var(--input-bg);
@@ -500,6 +500,7 @@ button:disabled {
   input[type="number"],
   input[type="date"],
   select {
+    inline-size: min(100%, var(--compact-control-inline-size));
     max-inline-size: var(--compact-control-inline-size);
   }
 }
