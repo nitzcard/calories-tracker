@@ -132,7 +132,7 @@ function renderChart() {
         },
         y: {
           auto: false,
-          range: () => buildYRange(allYValues),
+          range: () => buildYRange(yValues, allYValues),
         },
       },
       axes: [
@@ -149,7 +149,7 @@ function renderChart() {
         },
       ],
       hooks: {
-        drawAxes: [
+        draw: [
           (u) => {
             if (!weekBoundarySplits.length) {
               return;
@@ -158,8 +158,9 @@ function renderChart() {
             const ctx = u.ctx;
             ctx.save();
             ctx.beginPath();
-            ctx.strokeStyle = "rgba(95, 90, 79, 0.34)";
-            ctx.lineWidth = 1.1;
+            ctx.strokeStyle = "rgba(95, 90, 79, 0.62)";
+            ctx.lineWidth = 1.35;
+            ctx.setLineDash([]);
 
             for (const split of weekBoundarySplits) {
               const x = Math.round(u.valToPos(split, "x", true)) + 0.5;
@@ -262,27 +263,30 @@ function buildWeekBoundarySplits(xValues: number[]) {
   }
 
   const splits: number[] = [];
-  let previousWeekKey = weekStartKeyFromUnix(xValues[0]);
+  const minX = xValues[0];
+  const maxX = xValues[xValues.length - 1];
+  const firstBoundary = nextWeekBoundaryFromUnix(minX);
+  let cursor = firstBoundary;
 
-  for (let index = 1; index < xValues.length; index += 1) {
-    const value = xValues[index];
-    const currentWeekKey = weekStartKeyFromUnix(value);
-    if (currentWeekKey !== previousWeekKey) {
-      splits.push(value);
-      previousWeekKey = currentWeekKey;
+  while (cursor < maxX) {
+    if (cursor > minX) {
+      splits.push(cursor);
     }
+
+    cursor += 7 * 24 * 60 * 60;
   }
 
   return splits;
 }
 
-function weekStartKeyFromUnix(value: number) {
+function nextWeekBoundaryFromUnix(value: number) {
   const date = new Date(value * 1000);
+  date.setHours(12, 0, 0, 0);
   const dayOfWeek = date.getDay(); // 0 = Sunday
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const weekStart = new Date(date);
-  weekStart.setDate(date.getDate() + mondayOffset);
-  return `${weekStart.getFullYear()}-${weekStart.getMonth() + 1}-${weekStart.getDate()}`;
+  const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+  const nextMonday = new Date(date);
+  nextMonday.setDate(date.getDate() + daysUntilNextMonday);
+  return Math.floor(nextMonday.getTime() / 1000);
 }
 
 function buildTrendlineValues(points: Array<{ x: number; y: number | null }>) {
@@ -316,23 +320,26 @@ function buildTrendlineValues(points: Array<{ x: number; y: number | null }>) {
   });
 }
 
-function buildYRange(values: Array<number | null>): [number, number] {
-  const numeric = values.filter((value): value is number => typeof value === "number");
+function buildYRange(primaryValues: Array<number | null>, fallbackValues: Array<number | null> = []): [number, number] {
+  const primaryNumeric = primaryValues.filter((value): value is number => typeof value === "number");
+  const fallbackNumeric = fallbackValues.filter((value): value is number => typeof value === "number");
+  const numeric = primaryNumeric.length ? primaryNumeric : fallbackNumeric;
   if (!numeric.length) {
     return [0, 1];
   }
 
-  const min = Math.min(...numeric);
-  const max = Math.max(...numeric);
+  const lower = Math.min(...numeric);
+  const upper = Math.max(...numeric);
 
-  if (min === max) {
-    const pad = Math.max(Math.abs(min) * 0.08, 10);
-    return [Math.max(0, min - pad), max + pad];
+  if (lower === upper) {
+    const pad = Math.max(Math.abs(lower) * 0.05, 0.5);
+    return [Math.max(0, lower - pad), upper + pad];
   }
 
-  const span = max - min;
-  const pad = Math.max(span * 0.12, 2);
-  return [Math.max(0, min - pad), max + pad];
+  const span = upper - lower;
+  const pad = Math.max(span * 0.08, 0.25);
+  const minBound = lower >= 0 ? 0 : Number.NEGATIVE_INFINITY;
+  return [Math.max(minBound, lower - pad), upper + pad];
 }
 
 function onVisibilityChange() {
