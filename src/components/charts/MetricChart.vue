@@ -27,14 +27,17 @@ const chartRef = ref<HTMLDivElement | null>(null);
 const hoverIndex = ref<number | null>(null);
 const hoverPosition = ref({ x: 0, y: 0 });
 const hoverPointPosition = ref({ x: 0, y: 0 });
-const axisUnitInsetStart = ref(8);
 const isPanning = ref(false);
+const isZooming = ref(false);
 const activePointerId = ref<number | null>(null);
 const isTouchInteraction = ref(false);
 const plottedXValues = ref<number[]>([]);
 const plottedYValues = ref<Array<number | null>>([]);
 const panStartX = ref(0);
 const panStartScale = ref<{ min: number; max: number } | null>(null);
+const zoomStartScale = ref<{ min: number; max: number } | null>(null);
+const zoomStartCenter = ref<number | null>(null);
+const zoomStartDistance = ref<number | null>(null);
 const currentXScale = ref<{ min: number; max: number } | null>(null);
 let chart: uPlot | undefined;
 let resizeObserver: ResizeObserver | undefined;
@@ -80,17 +83,28 @@ const trendlineValues = computed(() =>
 const hoveredPoint = computed(() =>
   hoverIndex.value === null ? null : normalizedPoints.value[hoverIndex.value] ?? null,
 );
+const weekBoundaryLegendLabel = computed(() => (props.locale === "he" ? "גבול שבוע" : "Week boundary"));
+const hasWeekBoundaries = computed(() =>
+  buildWeekBoundarySplits(uniqueSorted(normalizedPoints.value.map((point) => point.x))).length > 0,
+);
+const primarySeriesColor = "#0a88a3";
 
 function renderChart() {
   if (!chartRef.value || props.points.length === 0) {
     hoverIndex.value = null;
     chart?.destroy();
     chart = undefined;
+    currentXScale.value = null;
     return;
   }
 
   const xValues = normalizedPoints.value.map((point) => point.x);
   const yValues = normalizedPoints.value.map((point) => point.y ?? null);
+  const renderableXValues = uniqueSorted(
+    normalizedPoints.value
+      .filter((point): point is { x: number; y: number } => typeof point.y === "number")
+      .map((point) => point.x),
+  );
   plottedXValues.value = xValues;
   plottedYValues.value = yValues;
   const trendValues = trendlineValues.value;
@@ -105,10 +119,10 @@ function renderChart() {
   const domainMin = xSplits[0] ?? 0;
   const domainMax = xSplits[xSplits.length - 1] ?? domainMin;
   const initialWindow = buildInitialXWindow(xSplits, chartWidth);
-  currentXScale.value = initialWindow;
-  const maxXLabels = Math.max(3, Math.floor(chartWidth / 52));
-  const thinFactor = Math.max(1, Math.ceil(xSplits.length / maxXLabels));
-  const visibleXSplits = xSplits.filter((_, idx) => idx % thinFactor === 0);
+  const minimumXWindowSpan = getMinimumXWindowSpan(renderableXValues);
+  currentXScale.value = currentXScale.value
+    ? normalizeXWindow(currentXScale.value, renderableXValues, domainMin, domainMax, minimumXWindowSpan)
+    : normalizeXWindow(initialWindow, renderableXValues, domainMin, domainMax, minimumXWindowSpan);
 
   chart?.destroy();
   chart = new uPlot(
@@ -121,9 +135,9 @@ function renderChart() {
         },
         {
           label: props.label,
-          stroke: "#0a88a3",
+          stroke: primarySeriesColor,
           width: 2,
-          points: { size: 8, stroke: "#0a88a3", fill: "#0a88a3", width: 2 },
+          points: { size: 8, stroke: primarySeriesColor, fill: primarySeriesColor, width: 2 },
         },
         ...(activeTrendline.value
           ? [
@@ -158,7 +172,7 @@ function renderChart() {
         {
           stroke: "#5f5a4f",
           grid: { stroke: "rgba(95, 90, 79, 0.18)" },
-          splits: () => visibleXSplits,
+          splits: (u) => buildVisibleXAxisSplits(u, xSplits, chartWidth),
           values: (_u, splits) => splits.map((value) => formatAxisDay(value)),
         },
         {
@@ -170,27 +184,27 @@ function renderChart() {
       hooks: {
         draw: [
           (u) => {
-            axisUnitInsetStart.value = Math.max(8, Math.round(u.bbox.left + 6));
-
             if (!weekBoundarySplits.length) {
+              drawPointValueLabels(u, xValues, yValues);
               return;
             }
 
             const ctx = u.ctx;
             ctx.save();
-            ctx.beginPath();
-            ctx.strokeStyle = "rgba(196, 188, 172, 0.82)";
-            ctx.lineWidth = 2;
-            ctx.setLineDash([]);
 
             for (const split of weekBoundarySplits) {
               const x = Math.round(u.valToPos(split, "x", true)) + 0.5;
+              ctx.beginPath();
+              ctx.strokeStyle = "rgba(196, 188, 172, 0.82)";
+              ctx.lineWidth = 2;
+              ctx.setLineDash([]);
               ctx.moveTo(x, u.bbox.top);
               ctx.lineTo(x, u.bbox.top + u.bbox.height);
+              ctx.stroke();
             }
-
-            ctx.stroke();
             ctx.restore();
+
+            drawPointValueLabels(u, xValues, yValues);
           },
         ],
         setCursor: [
@@ -441,7 +455,12 @@ function onPanPointerDown(event: PointerEvent) {
       touchHideTimer = undefined;
     }
     isTouchInteraction.value = true;
-    updateHoverFromTouch(event);
+    trackTouchPointer(event);
+    if (activeTouchPointers.size >= 2) {
+      startTouchZoom();
+    } else {
+      updateHoverFromTouch(event);
+    }
     return;
   }
 
@@ -459,12 +478,23 @@ function onPanPointerDown(event: PointerEvent) {
   isPanning.value = true;
   chartRef.value.setPointerCapture(event.pointerId);
   chartRef.value.style.cursor = "grabbing";
-  currentXScale.value = clampXWindow(panStartScale.value, domain.min, domain.max);
+  currentXScale.value = normalizeXWindow(
+    panStartScale.value,
+    getRenderableXValues(),
+    domain.min,
+    domain.max,
+    getMinimumXWindowSpan(),
+  );
 }
 
 function onPanPointerMove(event: PointerEvent) {
   if (event.pointerType === "touch") {
-    updateHoverFromTouch(event);
+    trackTouchPointer(event);
+    if (zoomStartScale.value && activeTouchPointers.size >= 2) {
+      updateTouchZoom();
+    } else {
+      updateHoverFromTouch(event);
+    }
     return;
   }
 
@@ -481,13 +511,15 @@ function onPanPointerMove(event: PointerEvent) {
   const deltaX = event.clientX - panStartX.value;
   const secondsPerPx = visibleSpan / chart.bbox.width;
   const shift = deltaX * secondsPerPx;
-  const nextRange = clampXWindow(
+  const nextRange = normalizeXWindow(
     {
       min: panStartScale.value.min - shift,
       max: panStartScale.value.max - shift,
     },
+    getRenderableXValues(),
     domain.min,
     domain.max,
+    getMinimumXWindowSpan(),
   );
 
   currentXScale.value = nextRange;
@@ -496,7 +528,14 @@ function onPanPointerMove(event: PointerEvent) {
 
 function onPanPointerUp(event: PointerEvent) {
   if (event.pointerType === "touch") {
+    releaseTouchPointer(event);
     isTouchInteraction.value = false;
+    if (activeTouchPointers.size < 2) {
+      zoomStartScale.value = null;
+      zoomStartCenter.value = null;
+      zoomStartDistance.value = null;
+      isZooming.value = false;
+    }
     if (touchHideTimer) {
       window.clearTimeout(touchHideTimer);
     }
@@ -522,11 +561,272 @@ function onPanPointerUp(event: PointerEvent) {
   chartRef.value.style.cursor = "grab";
 }
 
+function onWheel(event: WheelEvent) {
+  if (!chartRef.value || !chart || props.points.length < 2) {
+    return;
+  }
+
+  event.preventDefault();
+  const plotX = event.clientX - chartRef.value.getBoundingClientRect().left - chart.bbox.left;
+  const center = chart.posToVal(Math.min(Math.max(plotX, 0), chart.bbox.width), "x");
+  const horizontalDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : 0;
+
+  if (horizontalDelta !== 0) {
+    panXWindow(horizontalDelta);
+    return;
+  }
+
+  const delta = Math.max(-120, Math.min(120, event.deltaY));
+  const factor = delta > 0 ? 1.15 : 0.87;
+  zoomXWindow(factor, center);
+}
+
+function panXWindow(deltaPx: number) {
+  if (!chartRef.value || !chart || props.points.length < 2) {
+    return;
+  }
+
+  const current = currentXScale.value ?? getXDomain();
+  const visibleSpan = Math.max(1, current.max - current.min);
+  if (chart.bbox.width <= 0) {
+    return;
+  }
+
+  const secondsPerPx = visibleSpan / chart.bbox.width;
+  const shift = deltaPx * secondsPerPx;
+  applyXWindow({
+    min: current.min - shift,
+    max: current.max - shift,
+  });
+}
+
+function zoomXWindow(factor: number, centerValue?: number) {
+  if (!chartRef.value || !chart || props.points.length < 2) {
+    return;
+  }
+
+  const domain = getXDomain();
+  const current = currentXScale.value ?? buildInitialXWindow(normalizedPoints.value.map((point) => point.x), chartRef.value.clientWidth || 320);
+  const center = centerValue ?? (current.min + current.max) / 2;
+  const currentSpan = Math.max(1, current.max - current.min);
+  const nextSpan = Math.max(getMinimumXWindowSpan(), currentSpan * factor);
+  const nextRange = clampXWindow(
+    {
+      min: center - nextSpan / 2,
+      max: center + nextSpan / 2,
+    },
+    domain.min,
+    domain.max,
+    getMinimumXWindowSpan(),
+  );
+
+  applyXWindow(nextRange);
+}
+
+function applyXWindow(range: { min: number; max: number }) {
+  if (!chart) {
+    return;
+  }
+
+  const domain = getXDomain();
+  const next = normalizeXWindow(
+    range,
+    getRenderableXValues(),
+    domain.min,
+    domain.max,
+    getMinimumXWindowSpan(),
+  );
+  currentXScale.value = next;
+  chart.setScale("x", next);
+}
+
+const activeTouchPointers = new Map<number, { x: number; y: number }>();
+
+function trackTouchPointer(event: PointerEvent) {
+  activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+}
+
+function releaseTouchPointer(event: PointerEvent) {
+  activeTouchPointers.delete(event.pointerId);
+}
+
+function startTouchZoom() {
+  if (!chartRef.value || !chart || activeTouchPointers.size < 2) {
+    return;
+  }
+
+  const [first, second] = Array.from(activeTouchPointers.values());
+  const current = currentXScale.value ?? getXDomain();
+  zoomStartScale.value = { min: current.min, max: current.max };
+  zoomStartDistance.value = Math.max(8, Math.abs(first.x - second.x));
+  zoomStartCenter.value = touchCenterValue(first.x, second.x);
+  isZooming.value = true;
+}
+
+function updateTouchZoom() {
+  if (
+    !chartRef.value ||
+    !chart ||
+    !zoomStartScale.value ||
+    zoomStartCenter.value == null ||
+    zoomStartDistance.value == null ||
+    activeTouchPointers.size < 2
+  ) {
+    return;
+  }
+
+  const [first, second] = Array.from(activeTouchPointers.values());
+  const distance = Math.max(8, Math.abs(first.x - second.x));
+  const domain = getXDomain();
+  const startSpan = Math.max(1, zoomStartScale.value.max - zoomStartScale.value.min);
+  const currentSpan = Math.max(getMinimumXWindowSpan(), startSpan * (zoomStartDistance.value / distance));
+  const nextRange = clampXWindow(
+    {
+      min: zoomStartCenter.value - currentSpan / 2,
+      max: zoomStartCenter.value + currentSpan / 2,
+    },
+    domain.min,
+    domain.max,
+    getMinimumXWindowSpan(),
+  );
+
+  applyXWindow(nextRange);
+}
+
+function touchCenterValue(clientX1: number, clientX2: number) {
+  if (!chartRef.value || !chart) {
+    return (getXDomain().min + getXDomain().max) / 2;
+  }
+
+  const rect = chartRef.value.getBoundingClientRect();
+  const midpoint = (clientX1 + clientX2) / 2 - rect.left - chart.bbox.left;
+  return chart.posToVal(midpoint, "x");
+}
+
+function drawPointValueLabels(u: uPlot, xValues: number[], yValues: Array<number | null>) {
+  const points = xValues
+    .map((x, index) => ({ x, y: yValues[index] }))
+    .filter((point): point is { x: number; y: number } => typeof point.y === "number");
+
+  if (!points.length) {
+    return;
+  }
+
+  const visiblePoints = points
+    .map((point) => ({
+      x: u.valToPos(point.x, "x", true),
+      y: u.valToPos(point.y, "y", true),
+      value: point.y,
+    }))
+    .filter((point) => point.x >= u.bbox.left && point.x <= u.bbox.left + u.bbox.width)
+    .sort((left, right) => left.x - right.x);
+
+  const zoomLevel = getZoomLevel(u);
+
+  if (!shouldShowPointLabels(visiblePoints, zoomLevel)) {
+    return;
+  }
+
+  const ctx = u.ctx;
+  const fontSize = getPointLabelFontSize(visiblePoints, zoomLevel);
+  ctx.save();
+  ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  for (let index = 0; index < visiblePoints.length; index += 1) {
+    const point = visiblePoints[index];
+    const label = formatYAxisValue(point.value);
+    const labelWidth = Math.max(40, ctx.measureText(label).width + 4);
+    const labelHeight = fontSize + 4;
+    const labelX = Math.min(
+      Math.max(point.x, u.bbox.left + labelWidth / 2 + 4),
+      u.bbox.left + u.bbox.width - labelWidth / 2 - 4,
+    );
+    const offsetY = Math.max(18, Math.round(fontSize * 0.95));
+    const aboveY = point.y - offsetY;
+    const belowY = point.y + offsetY;
+    const labelY =
+      aboveY - labelHeight / 2 >= u.bbox.top + 4
+        ? aboveY
+        : belowY + labelHeight / 2 <= u.bbox.top + u.bbox.height - 4
+          ? belowY
+          : point.y;
+
+    ctx.fillStyle = primarySeriesColor;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
+    ctx.shadowBlur = 1;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 1;
+    ctx.fillText(label, labelX, labelY + 0.5);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  ctx.restore();
+}
+
+function shouldShowPointLabels(points: Array<{ x: number; y: number }>, zoomLevel: number) {
+  if (points.length === 1) {
+    return true;
+  }
+
+  if (points.length < 2) {
+    return false;
+  }
+
+  const minimumGap = points.slice(1).reduce((smallest, point, index) => {
+    const previous = points[index];
+    return Math.min(smallest, Math.abs(point.x - previous.x));
+  }, Number.POSITIVE_INFINITY);
+
+  if (zoomLevel < 1.3) {
+    return minimumGap >= 28 && points.length <= 10;
+  }
+
+  if (zoomLevel < 2.1) {
+    return minimumGap >= 36 && points.length <= 8;
+  }
+
+  return minimumGap >= 42 && points.length <= 6;
+}
+
+function getPointLabelFontSize(points: Array<{ x: number; y: number }>, zoomLevel: number) {
+  if (points.length === 1) {
+    return clampNumber(Math.round(18 * Math.min(1.35, zoomLevel)), 16, 24);
+  }
+
+  const minimumGap = points.slice(1).reduce((smallest, point, index) => {
+    const previous = points[index];
+    return Math.min(smallest, Math.abs(point.x - previous.x));
+  }, Number.POSITIVE_INFINITY);
+
+  const zoomBoost = Math.max(0, zoomLevel - 1) * 3;
+  return clampNumber(Math.round(13 + minimumGap / 14 + zoomBoost), 13, 22);
+}
+
+function getZoomLevel(u: uPlot) {
+  const domain = getXDomain();
+  const domainSpan = Math.max(1, domain.max - domain.min);
+  const visibleSpan = Math.max(1, (u.scales.x.max ?? domain.max) - (u.scales.x.min ?? domain.min));
+  return clampNumber(domainSpan / visibleSpan, 1, 4);
+}
+
 function getXDomain() {
   const xValues = normalizedPoints.value.map((point) => point.x).sort((a, b) => a - b);
   const min = xValues[0] ?? 0;
   const max = xValues[xValues.length - 1] ?? min;
   return { min, max };
+}
+
+function getRenderableXValues() {
+  return uniqueSorted(
+    normalizedPoints.value
+      .filter((point): point is { x: number; y: number } => typeof point.y === "number")
+      .map((point) => point.x),
+  );
 }
 
 function buildInitialXWindow(xValues: number[], chartWidth: number) {
@@ -548,22 +848,143 @@ function buildInitialXWindow(xValues: number[], chartWidth: number) {
   return { min: max - visibleSpan, max };
 }
 
-function clampXWindow(range: { min: number; max: number }, domainMin: number, domainMax: number) {
-  const windowSpan = Math.max(1, range.max - range.min);
+function buildVisibleXAxisSplits(u: uPlot, xValues: number[], chartWidth: number) {
+  const scaleMin = u.scales.x.min ?? xValues[0] ?? 0;
+  const scaleMax = u.scales.x.max ?? xValues[xValues.length - 1] ?? scaleMin;
+  const visible = xValues.filter((value) => value >= scaleMin && value <= scaleMax);
+  if (visible.length <= 1) {
+    return visible;
+  }
+
+  const maxXLabels = Math.max(3, Math.floor(chartWidth / 52));
+  const thinFactor = Math.max(1, Math.ceil(visible.length / maxXLabels));
+  const splits = visible.filter((_, idx) => idx % thinFactor === 0);
+  const lastVisible = visible[visible.length - 1];
+  if (splits[splits.length - 1] !== lastVisible) {
+    splits.push(lastVisible);
+  }
+  return splits;
+}
+
+function clampXWindow(range: { min: number; max: number }, domainMin: number, domainMax: number, minSpan = 1) {
+  const requestedSpan = Math.max(1, range.max - range.min);
   const domainSpan = Math.max(1, domainMax - domainMin);
+  const windowSpan = Math.min(domainSpan, Math.max(minSpan, requestedSpan));
   if (windowSpan >= domainSpan) {
     return { min: domainMin, max: domainMax };
   }
 
-  if (range.min < domainMin) {
-    return { min: domainMin, max: domainMin + windowSpan };
+  const center = (range.min + range.max) / 2;
+  let min = center - windowSpan / 2;
+  let max = center + windowSpan / 2;
+
+  if (min < domainMin) {
+    min = domainMin;
+    max = domainMin + windowSpan;
   }
 
-  if (range.max > domainMax) {
-    return { min: domainMax - windowSpan, max: domainMax };
+  if (max > domainMax) {
+    max = domainMax;
+    min = domainMax - windowSpan;
   }
 
-  return range;
+  return { min, max };
+}
+
+function normalizeXWindow(
+  range: { min: number; max: number },
+  xValues: number[],
+  domainMin: number,
+  domainMax: number,
+  minSpan = 1,
+) {
+  const clamped = clampXWindow(range, domainMin, domainMax, minSpan);
+  return ensureRenderableXWindow(clamped, xValues, domainMin, domainMax, minSpan);
+}
+
+function ensureRenderableXWindow(
+  range: { min: number; max: number },
+  xValues: number[],
+  domainMin: number,
+  domainMax: number,
+  minSpan = 1,
+) {
+  const sorted = uniqueSorted(xValues);
+  if (sorted.length < 2) {
+    return range;
+  }
+
+  if (sorted.length === 2) {
+    const left = sorted[0];
+    const right = sorted[1];
+    const pad = Math.max(Math.round((right - left) * 0.2), 12 * 60 * 60);
+
+    return clampXWindow(
+      {
+        min: left - pad,
+        max: right + pad,
+      },
+      domainMin,
+      domainMax,
+      Math.max(minSpan, right - left),
+    );
+  }
+
+  const visible = sorted.filter((value) => value >= range.min && value <= range.max);
+  if (visible.length >= Math.min(3, sorted.length)) {
+    return range;
+  }
+
+  const center = (range.min + range.max) / 2;
+  let anchorIndex = 0;
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (Math.abs(sorted[index] - center) < Math.abs(sorted[anchorIndex] - center)) {
+      anchorIndex = index;
+    }
+  }
+
+  const startIndex = Math.max(0, Math.min(anchorIndex - 1, sorted.length - 3));
+  const endIndex = Math.min(sorted.length - 1, startIndex + 2);
+  const left = sorted[startIndex];
+  const right = sorted[endIndex];
+  const pad = Math.max(Math.round((right - left) * 0.2), 12 * 60 * 60);
+
+  return clampXWindow(
+    {
+      min: left - pad,
+      max: right + pad,
+    },
+    domainMin,
+    domainMax,
+    Math.max(minSpan, right - left),
+  );
+}
+
+function getMinimumXWindowSpan(xValues = getRenderableXValues()) {
+  const sorted = uniqueSorted(xValues);
+  if (sorted.length < 2) {
+    return 24 * 60 * 60;
+  }
+
+  let smallestGap = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < sorted.length; index += 1) {
+    const gap = sorted[index] - sorted[index - 1];
+    if (gap > 0 && gap < smallestGap) {
+      smallestGap = gap;
+    }
+  }
+
+  if (!Number.isFinite(smallestGap)) {
+    return 24 * 60 * 60;
+  }
+
+  // Keep enough horizontal room for at least neighboring points so the series
+  // still renders as a line instead of collapsing to a single visible point.
+  return Math.max(24 * 60 * 60, Math.round(smallestGap * 2.1));
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 onMounted(renderChart);
@@ -585,6 +1006,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(touchHideTimer);
     touchHideTimer = undefined;
   }
+  activeTouchPointers.clear();
   resizeObserver?.disconnect();
   chart?.destroy();
   document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -597,16 +1019,16 @@ onBeforeUnmount(() => {
       <span
         v-if="yUnit"
         class="axis-unit"
-        :style="{ insetInlineStart: `${axisUnitInsetStart}px` }"
       >{{ yUnit }}</span>
       <div
         ref="chartRef"
         class="chart"
-        :class="{ 'is-panning': isPanning }"
+        :class="{ 'is-panning': isPanning, 'is-zooming': isZooming }"
         @pointerdown="onPanPointerDown"
         @pointermove="onPanPointerMove"
         @pointerup="onPanPointerUp"
         @pointercancel="onPanPointerUp"
+        @wheel.prevent="onWheel"
       ></div>
       <div
         v-if="hoveredPoint"
@@ -660,6 +1082,10 @@ onBeforeUnmount(() => {
         ></span>
         <span class="legend-label">{{ line.label }}</span>
       </div>
+      <div v-if="hasWeekBoundaries" class="legend-row">
+        <span class="legend-swatch legend-swatch--week" aria-hidden="true"></span>
+        <span class="legend-label">{{ weekBoundaryLegendLabel }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -677,6 +1103,7 @@ onBeforeUnmount(() => {
 .axis-unit {
   position: absolute;
   inset-block-start: 10px;
+  inset-inline-start: 10px;
   color: var(--text-muted);
   white-space: nowrap;
   font-size: 0.82rem;
@@ -780,6 +1207,13 @@ onBeforeUnmount(() => {
 .legend-swatch--dash {
   color: var(--swatch-color);
   border-top-style: dashed;
+}
+
+.legend-swatch--week {
+  inline-size: 18px;
+  block-size: 0;
+  border-top: 2px solid currentColor;
+  color: rgba(196, 188, 172, 0.95);
 }
 
 .legend-label {

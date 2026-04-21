@@ -55,6 +55,8 @@ const {
   selectedDate,
   currentFoodLog,
   currentWeight,
+  updateCurrentFoodLog,
+  updateCurrentWeight,
   provider,
   providerOptions,
   aiKeys,
@@ -83,6 +85,7 @@ const {
   savingHistoryCalories,
   savingHistoryWeight,
   isCalculatingCustomTdee,
+  customTdeeEstimateResult,
   statusLabel,
   onLocaleChange,
   onThemeChange,
@@ -93,6 +96,7 @@ const {
   saveHistoryCalories,
   saveHistoryWeight,
   calculateCustomTdeeWithGemini,
+  clearCustomTdeeEstimateResult,
   analyzeCurrentDay,
   acceptSuggestedModelSwitch,
   dismissSuggestedModelSwitch,
@@ -144,6 +148,7 @@ const cloudToastVisibleUntil = ref(0);
 let localToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 let cloudToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 const deleteDayDialogRef = ref<HTMLDialogElement | null>(null);
+const customTdeeSuccessDialogRef = ref<HTMLDialogElement | null>(null);
 const deleteDayPendingDate = ref<string | null>(null);
 const isProfileReady = computed(
   () =>
@@ -662,6 +667,11 @@ function closeDeleteDayDialog() {
   deleteDayPendingDate.value = null;
 }
 
+function closeCustomTdeeSuccessDialog() {
+  customTdeeSuccessDialogRef.value?.close();
+  clearCustomTdeeEstimateResult();
+}
+
 function openDeleteDayDialog(date: string) {
   deleteDayPendingDate.value = date;
   const dialog = deleteDayDialogRef.value;
@@ -685,6 +695,20 @@ async function confirmDeleteDay() {
 
   await deleteDay(date);
 }
+
+watch(
+  customTdeeEstimateResult,
+  (next) => {
+    if (!next) return;
+    const dialog = customTdeeSuccessDialogRef.value;
+    if (!dialog) return;
+    if (dialog.open) {
+      dialog.close();
+    }
+    dialog.showModal();
+  },
+  { flush: "post" },
+);
 
 </script>
 
@@ -729,6 +753,58 @@ async function confirmDeleteDay() {
         </button>
         <button type="submit" class="confirm-delete-dialog__confirm" data-delete-dialog-confirm>
           {{ t("deleteDayModalConfirm") }}
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog
+    ref="customTdeeSuccessDialogRef"
+    class="confirm-delete-dialog custom-tdee-success-dialog"
+    @close="clearCustomTdeeEstimateResult"
+  >
+    <form method="dialog" class="confirm-delete-dialog__form custom-tdee-success-dialog__form">
+      <h2 class="confirm-delete-dialog__title">{{ t("customTdeeSuccessTitle") }}</h2>
+      <p v-if="customTdeeEstimateResult" class="confirm-delete-dialog__copy">
+        {{ t("customTdeeSuccessBody", { calories: customTdeeEstimateResult.tdeeKcal }) }}
+      </p>
+      <div v-if="customTdeeEstimateResult" class="custom-tdee-success-dialog__stats">
+        <p class="custom-tdee-success-dialog__stat">
+          <strong class="custom-tdee-success-dialog__stat-label">{{ t("tdeeSummary") }}:</strong>
+          <span class="custom-tdee-success-dialog__stat-value" dir="ltr">
+            {{ customTdeeEstimateResult.tdeeKcal }} {{ t("unitKcal") }}
+          </span>
+        </p>
+        <p v-if="customTdeeEstimateResult.activityMultiplier !== null" class="custom-tdee-success-dialog__stat">
+          <strong class="custom-tdee-success-dialog__stat-label">{{ t("activityMultiplierLabel") }}:</strong>
+          <span class="custom-tdee-success-dialog__stat-value" dir="ltr">
+            {{ customTdeeEstimateResult.activityMultiplier }}
+          </span>
+        </p>
+        <p
+          v-if="customTdeeEstimateResult.recommendedCaloriesKcal !== null"
+          class="custom-tdee-success-dialog__stat"
+        >
+          <strong class="custom-tdee-success-dialog__stat-label">{{ t("recommendedCalories") }}:</strong>
+          <span class="custom-tdee-success-dialog__stat-value" dir="ltr">
+            {{ customTdeeEstimateResult.recommendedCaloriesKcal }} {{ t("unitKcal") }}
+          </span>
+        </p>
+      </div>
+      <div
+        v-if="customTdeeEstimateResult?.assumptions?.length"
+        class="custom-tdee-success-dialog__reasons"
+      >
+        <strong>{{ t("customTdeeSuccessReasonsTitle") }}</strong>
+        <ul class="custom-tdee-success-dialog__reasons-list" dir="ltr">
+          <li v-for="reason in customTdeeEstimateResult.assumptions" :key="reason">
+            {{ reason }}
+          </li>
+        </ul>
+      </div>
+      <div class="confirm-delete-dialog__actions">
+        <button type="button" class="secondary-action" @click="closeCustomTdeeSuccessDialog">
+          {{ t("customTdeeSuccessClose") }}
         </button>
       </div>
     </form>
@@ -910,8 +986,8 @@ async function confirmDeleteDay() {
           :food-instructions="profile.foodInstructions"
           :is-saving-food-instructions="isSavingFoodInstructions"
           @update:selected-date="selectedDate = $event"
-          @update:current-weight="currentWeight = $event"
-          @update:food-log="currentFoodLog = $event"
+          @update:current-weight="updateCurrentWeight"
+          @update:food-log="updateCurrentFoodLog"
           @save-weight="saveWeightDraft"
           @save-draft="saveFoodDraft"
           @analyze="analyzeCurrentDay"
@@ -1323,6 +1399,55 @@ async function confirmDeleteDay() {
 
 .confirm-delete-dialog__confirm:hover {
   filter: brightness(1.05);
+}
+
+.custom-tdee-success-dialog__form {
+  gap: 1rem;
+}
+
+.custom-tdee-success-dialog__stats {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.custom-tdee-success-dialog__stat {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.45;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.custom-tdee-success-dialog__stat-label {
+  flex: 0 0 auto;
+}
+
+.custom-tdee-success-dialog__stat-value {
+  min-inline-size: 0;
+  unicode-bidi: isolate;
+}
+
+.custom-tdee-success-dialog__reasons {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.custom-tdee-success-dialog__reasons-list {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.custom-tdee-success-dialog__reasons-list li {
+  overflow-wrap: anywhere;
+}
+
+.custom-tdee-success-dialog .confirm-delete-dialog__actions {
+  justify-content: center;
 }
 
 .constant-data-grid > :deep(.panel) {

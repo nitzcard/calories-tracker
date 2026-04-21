@@ -263,7 +263,12 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
                     :aria-label="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
                     @click="calculateCustomTdee"
                   >
-                    {{ isCalculatingCustomTdee ? t("tdeeCalcShortBusy") : t("tdeeCalcShort") }}
+                    <span>{{ t("tdeeCalcShort") }}</span>
+                    <span v-if="isCalculatingCustomTdee" class="tdee-loading-dots" aria-hidden="true">
+                      <span>.</span>
+                      <span>.</span>
+                      <span>.</span>
+                    </span>
                   </button>
                 </div>
               </td>
@@ -366,7 +371,12 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
                 :aria-label="isCalculatingCustomTdee ? t('tdeePromptCalculating') : t('tdeePromptCalculate')"
                 @click="calculateCustomTdee"
               >
-                {{ isCalculatingCustomTdee ? t("tdeeCalcShortBusy") : t("tdeeCalcShort") }}
+                <span>{{ t("tdeeCalcShort") }}</span>
+                <span v-if="isCalculatingCustomTdee" class="tdee-loading-dots" aria-hidden="true">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
               </button>
             </div>
           </div>
@@ -612,6 +622,7 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.12rem;
   font-size: 0.92rem;
   line-height: 1;
   background: var(--surface-1);
@@ -623,11 +634,30 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
 
 .tdee-custom-calc.is-busy {
   opacity: 0.85;
-  animation: status-toast-spin 0.85s linear infinite;
 }
 
 .tdee-custom-calc:disabled {
   opacity: 0.65;
+}
+
+.tdee-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 1.05rem;
+}
+
+.tdee-loading-dots > span {
+  display: inline-block;
+  opacity: 0.28;
+  animation: tdee-loading-dot 1.1s steps(1, end) infinite;
+}
+
+.tdee-loading-dots > span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.tdee-loading-dots > span:nth-child(3) {
+  animation-delay: 0.36s;
 }
 
 .tdee-table td {
@@ -668,6 +698,17 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
     box-shadow:
       var(--bevel-raised),
       0 0 0 3px rgba(191, 162, 70, 0.88);
+  }
+}
+
+@keyframes tdee-loading-dot {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+
+  50% {
+    opacity: 1;
   }
 }
 

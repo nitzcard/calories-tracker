@@ -1214,6 +1214,11 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
   // Compute tick label transforms to prevent overflow at bar edges
   const minTickTransform = minPct <= 5 ? "translateX(0)" : "translateX(-50%)";
   const maxTickTransform = maxPct >= 95 ? "translateX(-100%)" : "translateX(-50%)";
+  const endTickTransform = "translateX(-100%)";
+  const label =
+    macro === "protein"
+      ? `${Math.round(range.min)}-${Math.round(range.max)}-∞`
+      : formatRecommendedRange(range.min, range.max);
 
   return {
     actual,
@@ -1223,11 +1228,11 @@ function macroGauge(macro: "protein" | "carbs" | "fat" | "fiber") {
     maxPct,
     infiniteStartPct,
     state,
-    // All macros now use a consistent min–max label; protein adds "+" to signal more is also fine
-    label: formatRecommendedRange(range.min, range.max),
-    maxLabel: macro === "protein" ? `${Math.round(range.max)}+` : undefined,
+    label,
+    maxLabel: macro === "protein" ? "∞" : undefined,
     minTickTransform,
     maxTickTransform,
+    endTickTransform,
   };
 }
 
@@ -1480,12 +1485,33 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <span>{{ Math.round(proteinGauge.min) }}</span>
               </div>
               <div class="macro-bar__tick" :style="{ left: `${proteinGauge.maxPct}%`, transform: proteinGauge.maxTickTransform }">
-                <span>{{ proteinGauge.maxLabel ?? Math.round(proteinGauge.max) }}</span>
+                <span>{{ Math.round(proteinGauge.max) }}</span>
+              </div>
+              <div class="macro-bar__tick macro-bar__tick--infinite" :style="{ left: '100%', transform: proteinGauge.endTickTransform }">
+                <span>{{ proteinGauge.maxLabel ?? "∞" }}</span>
               </div>
             </div>
-            <div class="stat-stack">
-              <small class="stat-meta">{{ formatActual(proteinGauge.actual, proteinGauge.unit) }}</small>
-              <small class="stat-meta">{{ t("recommendedRange") }}: {{ formatRecommendedValue(proteinGauge) }}</small>
+            <div class="stat-stack stat-stack--protein" :dir="locale === 'he' ? 'rtl' : 'ltr'">
+              <small class="stat-meta macro-range-row">
+                <span class="macro-range-label">{{ t("amount") }}:</span>
+                <span class="macro-range-text">
+                  <span class="macro-range-value" dir="ltr">{{ Math.round(proteinGauge.actual) }}</span>
+                  <span class="macro-range-unit">{{ proteinGauge.unit }}</span>
+                </span>
+              </small>
+              <small class="stat-meta macro-range-row">
+                <span class="macro-range-label">{{ t("recommendedRange") }}:</span>
+                <span class="macro-range-text">
+                  <span class="macro-range-value" dir="ltr">{{ proteinGauge.label }}</span>
+                  <span class="macro-range-unit">{{ proteinGauge.unit }}</span>
+                </span>
+              </small>
+              <small class="stat-meta macro-range-row">
+                <span class="macro-range-label">{{ t("proteinPerBodyWeight") }}:</span>
+                <span class="macro-range-text">
+                  <span class="macro-range-value" dir="ltr">{{ t("proteinRecommendedRatioRange") }}</span>
+                </span>
+              </small>
               <small class="stat-meta">{{ t("proteinNoUpperLimit") }}</small>
               <small
                 v-if="proteinPerEstimatedWeight !== null || proteinPerLeanBodyWeight !== null"
@@ -2290,6 +2316,8 @@ const proteinPerLeanBodyWeight = computed(() => {
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: baseline;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .inline-action-link {
@@ -2404,6 +2432,12 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .compact-stat--protein {
   --macro-accent: #19b6c9;
+  --protein-bar-gradient: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--macro-accent) 28%, transparent) 0%,
+    color-mix(in srgb, var(--macro-accent) 48%, transparent) 55%,
+    color-mix(in srgb, var(--macro-accent) 68%, white 20%) 100%
+  );
 }
 
 .compact-stat--carbs {
@@ -2499,6 +2533,76 @@ const proteinPerLeanBodyWeight = computed(() => {
 .stat-stack {
   display: grid;
   gap: 2px;
+  min-inline-size: 0;
+}
+
+.stat-stack--protein {
+  /* Keep all protein value lines aligned while leaving enough width to avoid overflow in Hebrew. */
+  --protein-range-label-width: 8.5rem;
+}
+
+.stat-stack--protein[dir="rtl"] {
+  text-align: start;
+}
+
+.macro-range-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+
+.macro-range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.5rem;
+  align-items: end;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.macro-range-label {
+  display: inline-block;
+  text-align: end;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.macro-range-text {
+  display: inline-flex;
+  justify-self: end;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-inline-size: 0;
+  text-align: end;
+}
+
+.macro-range-unit {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+.stat-stack--protein .macro-range-row {
+  grid-template-columns: var(--protein-range-label-width) minmax(0, 1fr);
+}
+
+.stat-stack--protein[dir="rtl"] .macro-range-row {
+  grid-template-columns: var(--protein-range-label-width) minmax(0, 1fr);
+}
+
+.stat-stack--protein[dir="rtl"] .macro-range-label {
+  text-align: start;
+}
+
+.stat-stack--protein[dir="rtl"] .macro-range-text {
+  justify-self: start;
+  justify-content: flex-start;
+  text-align: start;
+}
+
+.stat-stack--protein .macro-range-text {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .macro-gauge {
@@ -2513,6 +2617,18 @@ const proteinPerLeanBodyWeight = computed(() => {
   border: 1px solid var(--border);
   background: var(--surface-3);
   box-shadow: var(--bevel-sunken);
+}
+
+.compact-stat--protein .macro-bar {
+  background:
+    linear-gradient(
+      90deg,
+      var(--surface-3) 0%,
+      var(--surface-3) 48%,
+      color-mix(in srgb, var(--macro-accent) 28%, transparent) 60%,
+      color-mix(in srgb, var(--macro-accent) 48%, transparent) 78%,
+      color-mix(in srgb, var(--macro-accent) 68%, white 20%) 100%
+    );
 }
 
 .macro-bar__range {
@@ -2530,7 +2646,6 @@ const proteinPerLeanBodyWeight = computed(() => {
     color-mix(in srgb, var(--protein-infinite-accent) 56%, transparent),
     color-mix(in srgb, var(--protein-infinite-accent) 44%, transparent)
   );
-  border-inline-start: 1px solid color-mix(in srgb, var(--protein-infinite-accent) 70%, var(--border));
   z-index: 0;
 }
 
@@ -2539,6 +2654,14 @@ const proteinPerLeanBodyWeight = computed(() => {
 .compact-stat--fat .macro-bar__range,
 .compact-stat--fiber .macro-bar__range {
   background: color-mix(in srgb, var(--macro-accent) 44%, transparent);
+}
+
+.compact-stat--protein .macro-bar__range {
+  background: transparent;
+}
+
+.compact-stat--protein .macro-bar__protein-infinite {
+  background: transparent;
 }
 
 .compact-stat--protein .macro-bar__marker,
@@ -2617,6 +2740,11 @@ const proteinPerLeanBodyWeight = computed(() => {
   user-select: none;
 }
 
+.macro-bar__tick--infinite {
+  font-size: 0.92rem;
+  line-height: 0.9;
+}
+
 .macro-pie-inline {
   display: grid;
   gap: 6px;
@@ -2657,6 +2785,19 @@ const proteinPerLeanBodyWeight = computed(() => {
   display: grid;
   gap: 8px;
   margin-block-start: 10px;
+}
+
+.notes {
+  min-inline-size: 0;
+}
+
+.notes ul {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+.notes li {
+  overflow-wrap: anywhere;
 }
 
 .notes-panel {
@@ -2836,12 +2977,14 @@ const proteinPerLeanBodyWeight = computed(() => {
 .food-name {
   font-weight: 600;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .food-alt-name {
   color: var(--text-muted);
   margin-block-start: 0.2rem;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .amount-cell {
@@ -2959,6 +3102,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   color: var(--text-muted);
   font-size: 0.86rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .macro-assistant__mode-switch {
@@ -3020,6 +3164,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   text-decoration: underline;
   text-underline-offset: 0.12em;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .per100-macro-editor {
@@ -3142,6 +3287,17 @@ const proteinPerLeanBodyWeight = computed(() => {
 @media (max-width: 640px) {
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .macro-range-row {
+    grid-template-columns: 1fr;
+    row-gap: 0.15rem;
+    justify-items: end;
+  }
+
+  .macro-range-text {
+    inline-size: 100%;
+    justify-content: flex-end;
   }
 
   .meal-table {

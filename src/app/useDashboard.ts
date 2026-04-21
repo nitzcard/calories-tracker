@@ -59,6 +59,12 @@ export function useDashboard() {
     weight?: string;
     updatedAt: number;
   };
+  type CustomTdeeEstimateResult = {
+    tdeeKcal: number;
+    activityMultiplier: number | null;
+    assumptions: string[];
+    recommendedCaloriesKcal: number | null;
+  };
 
   const today = localIsoDate();
   const locale = ref<AppLocale>(readStoredLocale() ?? detectLocale());
@@ -68,6 +74,8 @@ export function useDashboard() {
   const selectedDate = ref(today);
   const currentFoodLog = ref("");
   const currentWeight = ref("");
+  const hasUserEditedCurrentFoodLog = ref(false);
+  const hasUserEditedCurrentWeight = ref(false);
   const provider = ref(normalizeProvider(readStoredProvider()));
   const providerOptions = ref<AiProviderOption[]>([]);
   const aiKeys = ref<StoredAiKeys>(getStoredAiKeys());
@@ -89,6 +97,7 @@ export function useDashboard() {
   const cloudLastSyncedAt = ref("");
   const cloudError = ref("");
   const isCalculatingCustomTdee = ref(false);
+  const customTdeeEstimateResult = ref<CustomTdeeEstimateResult | null>(null);
   // Avoid pulling Supabase SDK into initial bundle; cloud module loads lazily on demand.
   const supabaseConfigured = computed(() =>
     Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
@@ -123,6 +132,28 @@ export function useDashboard() {
       minute: "2-digit",
       hour12: false,
     }).format(new Date());
+  }
+
+  function filterTdeeAssumptions(assumptions: string[]) {
+    return assumptions.filter((line) => {
+      const normalized = line.trim().toLowerCase();
+      if (!normalized) return false;
+      return ![
+        "caloric deficit",
+        "calorie deficit",
+        "caloric surplus",
+        "calorie surplus",
+        "recommended calories",
+        "recommended calorie",
+        "targeting ",
+        "sustainable cut",
+        "slow cut",
+        "cut to ",
+        "bulk to ",
+        "lean bulk",
+        "fat loss",
+      ].some((token) => normalized.includes(token));
+    });
   }
 
   function dailyDraftStorageKey(date: string) {
@@ -231,6 +262,16 @@ export function useDashboard() {
     } catch {
       // Ignore; draft caching is best effort.
     }
+  }
+
+  function updateCurrentFoodLog(value: string) {
+    hasUserEditedCurrentFoodLog.value = true;
+    currentFoodLog.value = value;
+  }
+
+  function updateCurrentWeight(value: string) {
+    hasUserEditedCurrentWeight.value = true;
+    currentWeight.value = value;
   }
 
   function isUsernameValid(value: string) {
@@ -345,6 +386,10 @@ export function useDashboard() {
   }
 
   watch(currentFoodLog, () => {
+    if (!hasUserEditedCurrentFoodLog.value) {
+      return;
+    }
+
     if (!isCurrentFoodLogDirty.value) {
       clearPersistedDraftFieldsIfUnchanged(selectedDate.value, { foodLogText: currentFoodLog.value });
       if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
@@ -361,6 +406,10 @@ export function useDashboard() {
   });
 
   watch(currentWeight, () => {
+    if (!hasUserEditedCurrentWeight.value) {
+      return;
+    }
+
     if (!isCurrentWeightDirty.value) {
       clearPersistedDraftFieldsIfUnchanged(selectedDate.value, { weight: currentWeight.value });
       if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
@@ -425,28 +474,27 @@ export function useDashboard() {
       .filter((entry) => entry.date <= selectedDate.value)
       .map((entry) => {
         const calories = resolvedDailyCalories(entry);
+        const effectiveWeight = entry.weight ?? deducedWeightFromEntries(displayEntries.value, entry.date);
         return {
           date: entry.date,
-          weightKg: entry.weight,
+          weightKg: effectiveWeight,
           caloriesKcal: calories,
         };
       })
       .filter(
         (row) =>
-          row.weightKg != null &&
-          row.caloriesKcal != null &&
-          Number.isFinite(row.weightKg) &&
-          Number.isFinite(row.caloriesKcal) &&
-          row.weightKg > 0 &&
-          row.caloriesKcal > 0,
+          row.weightKg !== null &&
+          row.weightKg !== undefined &&
+          row.caloriesKcal !== null &&
+          row.caloriesKcal !== undefined,
       )
       .map((row) => ({
         date: row.date,
         weightKg: row.weightKg as number,
         caloriesKcal: row.caloriesKcal as number,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-21);
+      .toSorted((a, b) => a.date.localeCompare(b.date))
+      .slice(-30);
 
     isCalculatingCustomTdee.value = true;
     try {
@@ -465,9 +513,19 @@ export function useDashboard() {
       }, "constants.profile.customTdee");
       scheduleCloudPush("constants.profile.customTdee");
       await saveTdeeEquation("custom");
+      customTdeeEstimateResult.value = {
+        tdeeKcal: nextValue,
+        activityMultiplier: result.activityMultiplier,
+        assumptions: filterTdeeAssumptions(result.assumptions),
+        recommendedCaloriesKcal: result.recommendedCaloriesKcal,
+      };
     } finally {
       isCalculatingCustomTdee.value = false;
     }
+  }
+
+  function clearCustomTdeeEstimateResult() {
+    customTdeeEstimateResult.value = null;
   }
   const weightPoints = computed(() =>
     displayEntries.value
@@ -613,9 +671,11 @@ export function useDashboard() {
 
     if (!shouldKeepFoodLog) {
       currentFoodLog.value = nextFoodLog;
+      hasUserEditedCurrentFoodLog.value = false;
     }
     if (!shouldKeepWeight) {
       currentWeight.value = nextWeight;
+      hasUserEditedCurrentWeight.value = false;
     }
   }
 
@@ -676,6 +736,7 @@ export function useDashboard() {
       await refreshState();
       if (selectedDate.value === date) {
         currentWeight.value = normalizedWeight !== null ? String(normalizedWeight) : "";
+        hasUserEditedCurrentWeight.value = false;
       }
     }, "today.weight");
     clearPersistedDraftFields(date, ["weight"]);
@@ -697,6 +758,7 @@ export function useDashboard() {
       });
       await refreshState({ skipReloadFoodLog: true });
     }, "today.foodLog");
+    hasUserEditedCurrentFoodLog.value = false;
     clearPersistedDraftFieldsIfUnchanged(date, { foodLogText });
     scheduleCloudPush("today.foodLog");
   }
@@ -845,6 +907,10 @@ export function useDashboard() {
 
   function normalizeCloudEmail(value: string | undefined | null) {
     return value?.trim() ? value.trim() : "";
+  }
+
+  function exportedAppDataEquals(left: ExportedAppData, right: ExportedAppData) {
+    return JSON.stringify(left) === JSON.stringify(right);
   }
 
   function stripEmailFromPayload(payload: ExportedAppData): ExportedAppData {
@@ -1124,21 +1190,22 @@ export function useDashboard() {
         });
       }
 
-      await importAppData(merged);
-      await refreshState();
+      if (!exportedAppDataEquals(localBefore, merged)) {
+        await importAppData(merged);
+        await refreshState();
 
-      // After importing cloud data, ensure UI settings reflect the imported profile.
-      if (profile.value) {
-        // Keep local storage aligned so reloads preserve the cloud state.
-        locale.value = profile.value.locale;
-        localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
-        themeMode.value = profile.value.themeMode;
-        localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, themeMode.value);
-        provider.value = normalizeProvider(profile.value.aiModel);
-        localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
-        ensureProviderOption(provider.value, locale.value);
-        refreshVisibleProviderOptions(locale.value);
-        syncChrome();
+        // Keep local storage aligned so reloads preserve cloud state after a real merge change.
+        if (profile.value) {
+          locale.value = profile.value.locale;
+          localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
+          themeMode.value = profile.value.themeMode;
+          localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, themeMode.value);
+          provider.value = normalizeProvider(profile.value.aiModel);
+          localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
+          ensureProviderOption(provider.value, locale.value);
+          refreshVisibleProviderOptions(locale.value);
+          syncChrome();
+        }
       }
 
       const encoded = await encodeCloudBlob(merged, secret);
@@ -1477,6 +1544,8 @@ export function useDashboard() {
     selectedDate,
     currentFoodLog,
     currentWeight,
+    updateCurrentFoodLog,
+    updateCurrentWeight,
     provider,
     providerOptions,
     aiKeys,
@@ -1503,6 +1572,7 @@ export function useDashboard() {
     savingHistoryCalories: autoSave.savingHistoryCalories,
     savingHistoryWeight: autoSave.savingHistoryWeight,
     isCalculatingCustomTdee,
+    customTdeeEstimateResult,
     notice,
     cloudMode,
     cloudUsername,
@@ -1528,6 +1598,7 @@ export function useDashboard() {
     saveHistoryCalories,
     saveHistoryWeight,
     calculateCustomTdeeWithGemini,
+    clearCustomTdeeEstimateResult,
     analyzeCurrentDay,
     acceptSuggestedModelSwitch: analysis.acceptSuggestedModelSwitch,
     dismissSuggestedModelSwitch: analysis.dismissSuggestedModelSwitch,
