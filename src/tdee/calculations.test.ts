@@ -18,6 +18,20 @@ describe("calculateObservedTdee", () => {
 });
 
 describe("buildTdeeSnapshot", () => {
+  it("keeps formula rows present when required profile values are missing", () => {
+    const snapshot = buildTdeeSnapshot(
+      makeObservedTdeeEntries(),
+      makeProfile({ age: null, height: null, estimatedWeight: null }),
+    );
+
+    expect(snapshot.formulaBreakdown).toMatchObject({
+      mifflinStJeor: null,
+      harrisBenedict: null,
+      cunningham: null,
+    });
+    expect(snapshot.formulaTdeeAverage).toBeNull();
+  });
+
   it("reports insufficient span when count is enough but range is too short", () => {
     const entries = [
       makeEntry({ date: "2026-04-01", weight: 82, manualCalories: 2400 }),

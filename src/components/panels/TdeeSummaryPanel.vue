@@ -237,7 +237,7 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
                 {{ formulaLabel(name) }}
               </a>
             </td>
-            <td class="calorie-cell">{{ value }}</td>
+            <td class="calorie-cell">{{ value ?? "-" }}</td>
             <td>
               {{ formulaExplain(name) }}
               <span
@@ -314,7 +314,7 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
         <div class="tdee-card__content">
           <div class="tdee-card__row">
             <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
-            <div class="tdee-card__value">{{ value }}</div>
+            <div class="tdee-card__value">{{ value ?? "-" }}</div>
           </div>
           <div class="tdee-card__helper">
             {{ formulaExplain(name) }}

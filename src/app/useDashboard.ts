@@ -882,7 +882,7 @@ export function useDashboard() {
     const obj = (raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null) ?? {};
 
     // Some buggy/legacy exports omitted these keys.
-    const schemaVersion: "1" = "1";
+    const schemaVersion = "1" as const;
     const exportedAt =
       typeof obj.exportedAt === "string" && obj.exportedAt ? obj.exportedAt : new Date().toISOString();
 

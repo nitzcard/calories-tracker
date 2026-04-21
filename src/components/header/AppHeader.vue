@@ -31,9 +31,9 @@ const syncIndicator = computed(() => {
   return t("syncIndicatorLocal");
 });
 
-const showCloudIndicator = computed(() => props.cloudMode === "cloud" && Boolean(props.cloudConfirmedUsername.trim()));
+const showCloudIndicator = computed(() => props.cloudMode === "cloud" && props.cloudConfirmedUsername.trim());
 const showCloudPending = computed(
-  () => props.cloudMode === "cloud" && !Boolean(props.cloudConfirmedUsername.trim()),
+  () => props.cloudMode === "cloud" && !props.cloudConfirmedUsername.trim(),
 );
 const confirmedUserTag = computed(() => {
   const user = props.cloudConfirmedUsername.trim();

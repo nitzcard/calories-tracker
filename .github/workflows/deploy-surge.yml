@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ["testing"]
     types: [completed]
+    branches: [main]
 
 concurrency:
   group: surge-${{ github.event.workflow_run.head_branch }}

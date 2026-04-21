@@ -146,7 +146,7 @@ watch(
           ...meal,
           foods: meal.foods.map((food) => ({
             ...food,
-            ...(pendingFoodDrafts.value[food.id] ?? {}),
+            ...pendingFoodDrafts.value[food.id],
           })),
         }))
       : [];
@@ -154,7 +154,7 @@ watch(
     for (const meal of editableMeals.value) {
       totalsInit[meal.id] = {
         ...meal.totals,
-        ...(pendingMealTotalDrafts.value[meal.id] ?? {}),
+        ...pendingMealTotalDrafts.value[meal.id],
       };
 
       for (const food of meal.foods) {
@@ -271,7 +271,7 @@ function updateFood(
     pendingFoodDrafts.value = {
       ...pendingFoodDrafts.value,
       [foodId]: {
-        ...(pendingFoodDrafts.value[foodId] ?? {}),
+        ...pendingFoodDrafts.value[foodId],
         [key]: nextValue,
       },
     };
@@ -734,7 +734,7 @@ function applyPer100MacroData(food: FoodBreakdownItem) {
   pendingFoodDrafts.value = {
     ...pendingFoodDrafts.value,
     [food.id]: {
-      ...(pendingFoodDrafts.value[food.id] ?? {}),
+      ...pendingFoodDrafts.value[food.id],
       calories,
       caloriesPer100g,
       protein,
@@ -784,7 +784,7 @@ function updateMealTotal(mealId: string, key: keyof NutritionTotals, rawValue: s
   pendingMealTotalDrafts.value = {
     ...pendingMealTotalDrafts.value,
     [mealId]: {
-      ...(pendingMealTotalDrafts.value[mealId] ?? {}),
+      ...pendingMealTotalDrafts.value[mealId],
       [key]: nextValue,
     },
   };

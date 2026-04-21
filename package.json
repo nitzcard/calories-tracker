@@ -13,7 +13,7 @@
     "test:e2e:meals": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @meals",
     "test:e2e:weight": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @weight",
     "test:e2e:history": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @history",
-    "lint": "oxlint -c oxlint.json --vue-plugin src vite.config.ts capacitor.config.ts",
+    "lint": "oxlint -c .oxlintrc.json --vue-plugin src vite.config.ts capacitor.config.ts",
     "format": "oxfmt -c oxfmt.json --write src vite.config.ts capacitor.config.ts",
     "format:check": "oxfmt -c oxfmt.json --check src vite.config.ts capacitor.config.ts",
     "cap:sync": "npx cap sync",
