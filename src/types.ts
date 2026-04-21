@@ -198,7 +198,7 @@ export interface TdeeSnapshot {
   observedMinEntries: number;
   observedMinDays: number;
   formulaTdeeAverage: number | null;
-  formulaBreakdown: Record<string, number>;
+  formulaBreakdown: Record<string, number | null>;
   formulaWeight: number | null;
   formulaWeightSource: "estimated" | "deduced" | "logged" | null;
   activityMultiplier: number | null;
@@ -211,7 +211,7 @@ export interface TdeeSnapshot {
 
 export interface FormulaTdeeResult {
   average: number | null;
-  breakdown: Record<string, number>;
+  breakdown: Record<string, number | null>;
   activityMultiplier: number | null;
 }
 
