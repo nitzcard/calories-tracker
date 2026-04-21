@@ -232,7 +232,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     correctionHelper:
       "Apply updates this day locally. Save + reanalyze updates food instructions for future use and marks this result for re-analysis.",
     unmatchedItems: "Unmatched items",
-    tdeeSummary: "TDEE summary",
+    tdeeSummary: "TDEE",
     tdeeHelper:
       "Observed TDEE comes from intake and weight trend. Formula average is a separate reference.",
     tdeePartsTitle: "What TDEE is built from",
@@ -638,7 +638,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     correctionHelper:
       "החל מעדכן מקומית את היום הזה. שמור + נתח מחדש מעדכן את הוראות המזון לעתיד ומסמן שהיום הזה צריך ניתוח מחדש.",
     unmatchedItems: "פריטים שלא הותאמו",
-    tdeeSummary: "סיכום TDEE",
+    tdeeSummary: "TDEE",
     tdeeHelper: "TDEE נצפה מחושב לפי צריכה ומגמת משקל. ממוצע נוסחאות הוא נקודת ייחוס נפרדת.",
     tdeePartsTitle: "ממה TDEE מורכב",
     tdeePartRestingLabel: "שריפה במנוחה",

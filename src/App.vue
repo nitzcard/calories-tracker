@@ -160,14 +160,6 @@ const hasEffectiveGeminiKey = computed(() =>
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 const isJasmineThemeActive = computed(() => themeMode.value === "jasmine");
-const averageCalories = computed(() => {
-  const ys = (caloriePoints.value ?? [])
-    .map((point) => point.y)
-    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  if (!ys.length) return null;
-  const sum = ys.reduce((acc, value) => acc + value, 0);
-  return Math.round(sum / ys.length);
-});
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
   if (slope === null || !Number.isFinite(slope)) {
@@ -185,6 +177,33 @@ const weightTrendlineLabel = computed(() => {
   const signedSlope = `${normalized > 0 ? "+" : ""}${formatter.format(normalized)}`;
   const unitPerDay = locale.value === "he" ? `${t("unitG")}/יום` : `${t("unitG")}/day`;
   return `${t("averageWeightChangePerDay")} (${signedSlope} ${unitPerDay})`;
+});
+const calorieTrendlineLabel = computed(() => {
+  const base = t("trendLine");
+  const tdeeValue = tdee.value.selectedValue;
+  if (typeof tdeeValue !== "number" || !Number.isFinite(tdeeValue)) {
+    return base;
+  }
+
+  const ys = (caloriePoints.value ?? [])
+    .map((point) => point.y)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!ys.length) {
+    return base;
+  }
+
+  const averageCalories = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+  const roundedDelta = Math.round(averageCalories - tdeeValue);
+  const normalizedDelta = Object.is(roundedDelta, -0) ? 0 : roundedDelta;
+  const formatter = new Intl.NumberFormat(locale.value === "he" ? "he-IL" : "en-US", {
+    maximumFractionDigits: 0,
+  });
+  const signedDelta = `${normalizedDelta > 0 ? "+" : ""}${formatter.format(normalizedDelta)}`;
+  const suffix = locale.value === "he"
+    ? `${signedDelta} ${t("unitKcal")} מול TDEE`
+    : `${signedDelta} ${t("unitKcal")} vs TDEE`;
+
+  return `${base} (${suffix})`;
 });
 const analysisErrorPresentation = computed(() =>
   buildAnalysisErrorPresentation(currentEntry.value?.aiError, locale.value, provider.value, providerOptions.value),
@@ -923,10 +942,9 @@ async function confirmDeleteDay() {
           :points="caloriePoints"
           :label="t('graphCalories')"
           :y-unit="t('unitKcal')"
+          :trendline="{ label: calorieTrendlineLabel, color: '#7a5ec8' }"
           :reference-lines="[
             { label: t('tdeeSummary'), value: tdee.selectedValue, color: '#9a7b24' },
-            { label: t('targetCaloriesLine'), value: tdee.targetTdee, color: '#8f3333' },
-            { label: t('avgCaloriesLine'), value: averageCalories, color: '#6a6a6a' },
           ]"
         />
       </BasePanel>

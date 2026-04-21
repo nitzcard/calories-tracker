@@ -26,6 +26,12 @@ const props = defineProps<{
 const chartRef = ref<HTMLDivElement | null>(null);
 const hoverIndex = ref<number | null>(null);
 const hoverPosition = ref({ x: 0, y: 0 });
+const axisUnitInsetStart = ref(8);
+const isPanning = ref(false);
+const activePointerId = ref<number | null>(null);
+const panStartX = ref(0);
+const panStartScale = ref<{ min: number; max: number } | null>(null);
+const currentXScale = ref<{ min: number; max: number } | null>(null);
 let chart: uPlot | undefined;
 let resizeObserver: ResizeObserver | undefined;
 
@@ -89,6 +95,10 @@ function renderChart() {
     : [...yValues, ...trendValues];
 
   const chartWidth = chartRef.value?.clientWidth || 320;
+  const domainMin = xSplits[0] ?? 0;
+  const domainMax = xSplits[xSplits.length - 1] ?? domainMin;
+  const initialWindow = buildInitialXWindow(xSplits, chartWidth);
+  currentXScale.value = initialWindow;
   const maxXLabels = Math.max(3, Math.floor(chartWidth / 52));
   const thinFactor = Math.max(1, Math.ceil(xSplits.length / maxXLabels));
   const visibleXSplits = xSplits.filter((_, idx) => idx % thinFactor === 0);
@@ -129,6 +139,8 @@ function renderChart() {
       scales: {
         x: {
           time: true,
+          auto: false,
+          range: () => [currentXScale.value?.min ?? domainMin, currentXScale.value?.max ?? domainMax],
         },
         y: {
           auto: false,
@@ -151,6 +163,8 @@ function renderChart() {
       hooks: {
         draw: [
           (u) => {
+            axisUnitInsetStart.value = Math.max(8, Math.round(u.bbox.left + 6));
+
             if (!weekBoundarySplits.length) {
               return;
             }
@@ -158,8 +172,8 @@ function renderChart() {
             const ctx = u.ctx;
             ctx.save();
             ctx.beginPath();
-            ctx.strokeStyle = "rgba(95, 90, 79, 0.62)";
-            ctx.lineWidth = 1.35;
+            ctx.strokeStyle = "rgba(196, 188, 172, 0.82)";
+            ctx.lineWidth = 2;
             ctx.setLineDash([]);
 
             for (const split of weekBoundarySplits) {
@@ -348,9 +362,112 @@ function onVisibilityChange() {
   }
 }
 
+function onPanPointerDown(event: PointerEvent) {
+  if (!chartRef.value || !chart || event.button !== 0) {
+    return;
+  }
+
+  const domain = getXDomain();
+  const min = chart.scales.x.min;
+  const max = chart.scales.x.max;
+  if (min == null || max == null) {
+    return;
+  }
+
+  activePointerId.value = event.pointerId;
+  panStartX.value = event.clientX;
+  panStartScale.value = { min, max };
+  isPanning.value = true;
+  chartRef.value.setPointerCapture(event.pointerId);
+  chartRef.value.style.cursor = "grabbing";
+  currentXScale.value = clampXWindow(panStartScale.value, domain.min, domain.max);
+}
+
+function onPanPointerMove(event: PointerEvent) {
+  if (!chartRef.value || !chart || !isPanning.value || activePointerId.value !== event.pointerId || !panStartScale.value) {
+    return;
+  }
+
+  const domain = getXDomain();
+  const visibleSpan = panStartScale.value.max - panStartScale.value.min;
+  if (visibleSpan <= 0 || chart.bbox.width <= 0) {
+    return;
+  }
+
+  const deltaX = event.clientX - panStartX.value;
+  const secondsPerPx = visibleSpan / chart.bbox.width;
+  const shift = deltaX * secondsPerPx;
+  const nextRange = clampXWindow(
+    {
+      min: panStartScale.value.min - shift,
+      max: panStartScale.value.max - shift,
+    },
+    domain.min,
+    domain.max,
+  );
+
+  currentXScale.value = nextRange;
+  chart.setScale("x", nextRange);
+}
+
+function onPanPointerUp(event: PointerEvent) {
+  if (!chartRef.value || activePointerId.value !== event.pointerId) {
+    return;
+  }
+
+  if (chartRef.value.hasPointerCapture(event.pointerId)) {
+    chartRef.value.releasePointerCapture(event.pointerId);
+  }
+
+  activePointerId.value = null;
+  panStartScale.value = null;
+  isPanning.value = false;
+  chartRef.value.style.cursor = "grab";
+}
+
+function getXDomain() {
+  const xValues = normalizedPoints.value.map((point) => point.x).sort((a, b) => a - b);
+  const min = xValues[0] ?? 0;
+  const max = xValues[xValues.length - 1] ?? min;
+  return { min, max };
+}
+
+function buildInitialXWindow(xValues: number[], chartWidth: number) {
+  const min = xValues[0] ?? 0;
+  const max = xValues[xValues.length - 1] ?? min;
+  const domainSpan = Math.max(1, max - min);
+  const desiredWidth = Math.max(chartWidth, xValues.length * 46);
+  const visibleSpan = Math.max(domainSpan * (chartWidth / desiredWidth), 24 * 60 * 60);
+
+  if (domainSpan <= visibleSpan) {
+    return { min, max };
+  }
+
+  return { min: max - visibleSpan, max };
+}
+
+function clampXWindow(range: { min: number; max: number }, domainMin: number, domainMax: number) {
+  const windowSpan = Math.max(1, range.max - range.min);
+  const domainSpan = Math.max(1, domainMax - domainMin);
+  if (windowSpan >= domainSpan) {
+    return { min: domainMin, max: domainMax };
+  }
+
+  if (range.min < domainMin) {
+    return { min: domainMin, max: domainMin + windowSpan };
+  }
+
+  if (range.max > domainMax) {
+    return { min: domainMax - windowSpan, max: domainMax };
+  }
+
+  return range;
+}
+
 onMounted(renderChart);
 onMounted(() => {
   if (!chartRef.value) return;
+  chartRef.value.style.cursor = "grab";
   resizeObserver = new ResizeObserver(() => renderChart());
   resizeObserver.observe(chartRef.value);
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -371,8 +488,20 @@ onBeforeUnmount(() => {
 <template>
   <div class="chart-shell">
     <div class="chart-stage" dir="ltr">
-      <span v-if="yUnit" class="axis-unit">{{ yUnit }}</span>
-      <div ref="chartRef" class="chart"></div>
+      <span
+        v-if="yUnit"
+        class="axis-unit"
+        :style="{ insetInlineStart: `${axisUnitInsetStart}px` }"
+      >{{ yUnit }}</span>
+      <div
+        ref="chartRef"
+        class="chart"
+        :class="{ 'is-panning': isPanning }"
+        @pointerdown="onPanPointerDown"
+        @pointermove="onPanPointerMove"
+        @pointerup="onPanPointerUp"
+        @pointercancel="onPanPointerUp"
+      ></div>
       <div
         v-if="hoveredPoint"
         class="hover-readout"
@@ -431,19 +560,28 @@ onBeforeUnmount(() => {
 
 .axis-unit {
   position: absolute;
-  inset-inline-start: 4px;
-  inset-block-start: 34px;
+  inset-block-start: 10px;
   color: var(--text-muted);
   white-space: nowrap;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
   z-index: 2;
   pointer-events: none;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  padding: 0 2px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  opacity: 0.92;
 }
 
 .chart {
   inline-size: 100%;
   min-block-size: 210px;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.chart.is-panning {
+  cursor: grabbing;
 }
 
 .hover-readout {
