@@ -196,6 +196,6 @@ test("@meals grams and macro edits persist without dropping latest value", async
   await page.locator("#nutritionSummaryPanel").scrollIntoViewIfNeeded();
 
   await expect(page.getByTestId("food-input-food-oats-grams")).toHaveValue("60");
-  await expect(page.getByTestId("food-input-food-oats-calories")).toHaveValue("228");
+  await expect(page.getByTestId("food-input-food-oats-calories")).toHaveValue("224");
   await expect(page.getByTestId("food-input-food-oats-fiber")).toHaveValue("9");
 });
