@@ -1077,7 +1077,7 @@ export function useDashboard() {
 
     if (!supabaseConfigured.value) {
       cloudStatus.value = "failed";
-      cloudError.value = "";
+      cloudError.value = "Supabase is not available in this build.";
       return;
     }
 

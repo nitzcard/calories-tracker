@@ -5,15 +5,11 @@
 
 ## Deploy (Cloudflare Pages)
 
-This repo deploys through GitHub Actions to Cloudflare Pages. The workflow runs after the `testing` workflow succeeds on `main`.
+This repo is connected to Cloudflare Pages as a GitHub app integration, so Cloudflare builds and deploys automatically from `main`.
 
 ### Required GitHub Secrets
 
-- `CLOUDFLARE_ACCOUNT_ID`: your Cloudflare account ID
-- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with Pages deployment access
 - `VITE_SUPABASE_URL`: Supabase project URL
 - `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
 
-The workflow deploys to the Cloudflare Pages project named `calorie-tracker`. If you use a different project name, update `.github/workflows/deploy-cloudflare-pages.yml`.
-
-Add these at: GitHub repo → Settings → Secrets and variables → Actions → “New repository secret”.
+Set the build command to `npm run build` and the output directory to `dist` in the Cloudflare Pages project settings.

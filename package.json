@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test:unit": "vitest run",
     "test:e2e": "playwright test -c testing/automation/playwright/playwright.config.ts",
+    "test:e2e:cloud-unconfigured": "playwright test -c testing/automation/playwright/playwright.no-supabase.config.ts testing/automation/playwright/tests/cloud-unconfigured.spec.ts",
     "test:e2e:meals": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @meals",
     "test:e2e:weight": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @weight",
     "test:e2e:history": "playwright test -c testing/automation/playwright/playwright.config.ts --grep @history",

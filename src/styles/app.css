@@ -420,6 +420,22 @@ input[type="url"] {
   box-shadow: var(--bevel-sunken);
 }
 
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  box-shadow:
+    inset 0 0 0 1000px var(--input-bg),
+    var(--bevel-sunken);
+  transition: background-color 9999s ease-out 0s;
+}
+
 select {
   display: block;
   inline-size: min(100%, var(--select-control-inline-size, clamp(8.5rem, 50%, var(--compact-control-inline-size))));
@@ -470,20 +486,10 @@ textarea:focus {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background: var(--input-disabled-bg);
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 6px,
-    color-mix(in srgb, var(--text-primary) 12%, transparent) 6px,
-    color-mix(in srgb, var(--text-primary) 12%, transparent) 9px
-  );
-  color: color-mix(in srgb, var(--text-primary) 35%, var(--text-muted));
-  border-color: var(--input-disabled-border);
-  border-style: dashed;
+  color: color-mix(in srgb, var(--text-primary) 45%, var(--text-muted));
+  border-color: color-mix(in srgb, var(--input-border) 82%, transparent);
   cursor: not-allowed;
-  opacity: 1;
-  filter: saturate(0.55);
+  opacity: 0.6;
 }
 
 input.is-missing,

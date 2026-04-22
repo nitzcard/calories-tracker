@@ -158,6 +158,10 @@ const hasEffectiveGeminiKey = computed(() =>
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 const isJasmineThemeActive = computed(() => themeMode.value === "jasmine");
+const showCloudLoginGate = computed(
+  () => cloudMode.value === "cloud" && !cloudConfirmedUsername.value && !supabaseConfigured.value,
+);
+const cloudLoginGateMessage = computed(() => cloudError.value || t("cloudSupabaseMissing"));
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
   if (slope === null || !Number.isFinite(slope)) {
@@ -727,7 +731,30 @@ async function confirmDeleteDay() {
     </form>
   </dialog>
 
-  <main class="app-shell">
+  <main v-if="showCloudLoginGate" class="app-shell app-shell--blocked">
+    <AppHeader
+      :locale="locale"
+      :theme-mode="themeMode"
+      :is-saving-locale="isSavingLocale"
+      :is-saving-theme="isSavingTheme"
+      :cloud-mode="cloudMode"
+      :cloud-confirmed-username="cloudConfirmedUsername"
+      :is-cloud-busy="isCloudSyncing"
+      @locale-change="onLocaleChange"
+      @theme-change="onThemeChange"
+    />
+
+    <BasePanel :title="t('cloudLogin')" :helper="t('cloudSyncHelper')">
+      <p class="login-gate-error" dir="ltr">{{ cloudLoginGateMessage }}</p>
+      <div class="login-gate-actions">
+        <button type="button" class="secondary-action" @click="setCloudMode('offline')">
+          {{ t("cloudModeOffline") }}
+        </button>
+      </div>
+    </BasePanel>
+  </main>
+
+  <main v-else class="app-shell">
     <PaneScrubber :panes="mobilePanes" :aria-label="t('paneNavigation')" />
 
     <AppHeader
@@ -1038,6 +1065,29 @@ async function confirmDeleteDay() {
   padding: var(--space-4);
   max-inline-size: 1400px;
   margin: 0 auto;
+}
+
+.app-shell--blocked {
+  min-block-size: 100vh;
+  display: grid;
+  align-content: center;
+  gap: var(--space-4);
+}
+
+.login-gate-error {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #7c2d2d;
+  background: #f0c6c3;
+  color: #651c1c;
+  font-weight: 700;
+  box-shadow: var(--bevel-sunken);
+}
+
+.login-gate-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
 }
 
 .constant-data-panel {

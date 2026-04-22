@@ -35,7 +35,7 @@ const draftUsername = ref(props.cloudUsername);
 const draftPassword = ref("");
 const cloudModeSelectWidth = computed(() => {
   const offlineLabel = t("cloudModeOffline");
-  const cloudLabel = hasConfirmedUser.value ? t("cloudModeCloud") : t("cloudModeCloudPending");
+  const cloudLabel = t("cloudModeCloud");
   const longest = Math.max(offlineLabel.trim().length, cloudLabel.trim().length);
   const widthCh = Math.min(24, Math.max(16, longest + 4));
   return `${widthCh}ch`;
@@ -90,9 +90,6 @@ const usernameTooShort = computed(
 );
 const confirmedNormalized = computed(() => (props.cloudConfirmedUsername ?? "").trim().toLowerCase());
 const hasConfirmedUser = computed(() => Boolean(confirmedNormalized.value));
-const cloudModeLabel = computed(() =>
-  hasConfirmedUser.value ? t("cloudModeCloud") : t("cloudModeCloudPending"),
-);
 const draftDiffersFromConfirmed = computed(
   () =>
     hasConfirmedUser.value &&
@@ -171,7 +168,6 @@ function onSubmit() {
       <FormField
         class="cloud-mode-field"
         :label="t('cloudMode')"
-        :helper="t('cloudModeHelper')"
         :style="{ '--cloud-mode-select-width': cloudModeSelectWidth }"
       >
         <FieldControl as="select">
@@ -180,7 +176,7 @@ function onSubmit() {
             @change="emit('update:cloudMode', ($event.target as HTMLSelectElement).value as 'offline' | 'cloud')"
           >
             <option value="offline">{{ t("cloudModeOffline") }}</option>
-            <option value="cloud">{{ cloudModeLabel }}</option>
+            <option value="cloud">{{ t("cloudModeCloud") }}</option>
           </select>
         </FieldControl>
       </FormField>
@@ -189,7 +185,8 @@ function onSubmit() {
         <FormField :label="t('cloudUsername')" reserve-helper-space>
           <FieldControl>
             <input
-              :disabled="cloudMode !== 'cloud' || isLoggedIn"
+              type="text"
+              :disabled="cloudMode !== 'cloud' || isCloudBusy"
               :value="draftUsername"
               autocomplete="username"
               @input="draftUsername = ($event.target as HTMLInputElement).value"
@@ -303,8 +300,10 @@ function onSubmit() {
   max-inline-size: 100%;
 }
 
-.cloud-mode-field :deep(.helper-slot) {
-  white-space: pre-line;
+.auth-block :deep(.helper-slot) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cloud-actions {
