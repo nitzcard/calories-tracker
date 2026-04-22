@@ -94,11 +94,16 @@ onMounted(() => {
       observer.observe(element);
     }
   }
+
+  // Register touchmove with { passive: false } so event.preventDefault() works
+  // in modern browsers that otherwise default touchmove to passive.
+  railRef.value?.addEventListener("touchmove", onTouchMove, { passive: false });
 });
 
 onUnmounted(() => {
   observer?.disconnect();
   observer = null;
+  railRef.value?.removeEventListener("touchmove", onTouchMove);
 });
 
 function iconPath(icon: "diary" | "summary" | "graphs" | "history" | undefined) {
@@ -124,7 +129,6 @@ function iconPath(icon: "diary" | "summary" | "graphs" | "history" | undefined) 
     class="pane-scrubber"
     :aria-label="ariaLabel || 'Pane navigation'"
     @touchstart.passive="onTouchStart"
-    @touchmove="onTouchMove"
   >
     <div class="pane-scrubber__caption" aria-hidden="true">
       <span>{{ captionText }}</span>

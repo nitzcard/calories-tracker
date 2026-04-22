@@ -1382,7 +1382,8 @@ async function confirmDeleteDay() {
 @media (max-width: 960px) {
   .status-toast-stack {
     inset-inline: 0.75rem;
-    inset-block-end: 0.75rem;
+    /* Position toast above the pane scrubber (~5rem tall) plus safe area. */
+    inset-block-end: calc(5.5rem + env(safe-area-inset-bottom));
     justify-items: stretch;
   }
 
@@ -1393,7 +1394,11 @@ async function confirmDeleteDay() {
 
   .app-shell {
     padding: 10px;
-    padding-block-end: calc(4rem + env(safe-area-inset-bottom));
+    /* Respect device safe areas (notch, home indicator, rounded corners). */
+    padding-block-start: max(10px, env(safe-area-inset-top));
+    padding-block-end: calc(5rem + env(safe-area-inset-bottom));
+    padding-inline-start: max(10px, env(safe-area-inset-left));
+    padding-inline-end: max(10px, env(safe-area-inset-right));
   }
 
   :is(
@@ -1402,7 +1407,7 @@ async function confirmDeleteDay() {
       #graphCaloriesPanel,
       #historyPanel
     ) {
-    scroll-margin-block-end: calc(4.5rem + env(safe-area-inset-bottom));
+    scroll-margin-block-end: calc(5.5rem + env(safe-area-inset-bottom));
   }
 
   .content-grid,

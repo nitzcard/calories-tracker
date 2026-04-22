@@ -310,8 +310,14 @@ p {
 html {
   scroll-behavior: smooth;
   /* Prevent accidental horizontal viewport scroll caused by any overflowing child.
+     overflow-x: hidden propagates to the viewport (unlike clip, which does not).
      Individual overflow-x: auto containers (tables, etc.) still scroll independently. */
-  overflow-x: clip;
+  overflow-x: hidden;
+}
+
+body {
+  /* Belt-and-suspenders: also clip at the body level so no child can widen the scroll area. */
+  overflow-x: hidden;
 }
 
 html,
