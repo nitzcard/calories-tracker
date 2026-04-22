@@ -77,7 +77,6 @@ const statusText = computed(() => {
 });
 
 const usernameNormalized = computed(() => draftUsername.value.trim().toLowerCase());
-const usernameTooShort = computed(() => usernameNormalized.value.length > 0 && usernameNormalized.value.length < 3);
 const confirmedNormalized = computed(() => (props.cloudConfirmedUsername ?? "").trim().toLowerCase());
 const hasConfirmedUser = computed(() => Boolean(confirmedNormalized.value));
 const draftDiffersFromConfirmed = computed(
