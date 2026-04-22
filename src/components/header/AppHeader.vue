@@ -286,6 +286,8 @@ const confirmedUserTag = computed(() => {
 
   .copy {
     max-inline-size: none;
+    inline-size: 100%;
+    min-inline-size: 0;
   }
 
   .controls-grid :deep(select) {
