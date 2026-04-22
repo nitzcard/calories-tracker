@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FieldControl from "../base/FieldControl.vue";
@@ -66,11 +66,6 @@ const activeProvider = computed(() =>
 );
 
 const selectValue = computed(() => (props.canSelectProvider ? props.provider : ""));
-const providerFieldRef = ref<HTMLElement | null>(null);
-const providerSelectRef = ref<HTMLSelectElement | null>(null);
-const providerSelectWidth = ref("100%");
-let providerResizeObserver: ResizeObserver | null = null;
-let providerMutationObserver: MutationObserver | null = null;
 
 const showAnalyzingNotice = computed(() => props.isAnalyzing);
 const showModelSwitchAction = computed(
@@ -87,79 +82,6 @@ const localizedSelectedDate = computed(() =>
     day: "numeric",
   }),
 );
-
-function updateProviderSelectWidth() {
-  const select = providerSelectRef.value;
-  const field = providerFieldRef.value;
-  if (!select || !field) {
-    return;
-  }
-
-  const optionTexts = Array.from(select.options)
-    .map((option) => option.textContent?.trim() ?? "")
-    .filter(Boolean);
-
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return;
-  }
-
-  const computedStyle = window.getComputedStyle(select);
-  context.font = computedStyle.font;
-  const widestOption = optionTexts.reduce(
-    (max, optionText) => Math.max(max, context.measureText(optionText).width),
-    0,
-  );
-  const rootFontSize = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-  const minimumWidth = Math.round(rootFontSize * 18);
-  const safePadding = 84;
-  const desiredWidth = Math.ceil(widestOption + safePadding);
-  const fieldWidth = Math.floor(field.clientWidth);
-  const width = Math.max(0, Math.min(Math.max(desiredWidth, minimumWidth), fieldWidth || desiredWidth));
-  providerSelectWidth.value = width > 0 ? `${width}px` : "100%";
-}
-
-watch(
-  () => [props.providerOptions, props.locale, props.canSelectProvider] as const,
-  async () => {
-    await nextTick();
-    updateProviderSelectWidth();
-  },
-  { deep: true },
-);
-
-onMounted(() => {
-  updateProviderSelectWidth();
-
-  providerResizeObserver = new ResizeObserver(() => {
-    updateProviderSelectWidth();
-  });
-  if (providerFieldRef.value) {
-    providerResizeObserver.observe(providerFieldRef.value);
-  }
-
-  if (providerSelectRef.value) {
-    providerMutationObserver = new MutationObserver(() => {
-      updateProviderSelectWidth();
-    });
-    providerMutationObserver.observe(providerSelectRef.value, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-  }
-
-  window.addEventListener("resize", updateProviderSelectWidth);
-});
-
-onBeforeUnmount(() => {
-  providerResizeObserver?.disconnect();
-  providerResizeObserver = null;
-  providerMutationObserver?.disconnect();
-  providerMutationObserver = null;
-  window.removeEventListener("resize", updateProviderSelectWidth);
-});
 </script>
 
 <template>
@@ -218,19 +140,14 @@ onBeforeUnmount(() => {
       </FormField>
 
       <div class="actions">
-        <div
-          ref="providerFieldRef"
-          class="provider-field"
-          :style="{ '--provider-select-width': providerSelectWidth }"
-        >
+        <div class="provider-field">
           <FormField
             :label="t('analysisModelLabel')"
             :helper="canSelectProvider ? activeProvider?.helper : t('analysisModelNeedsGeminiKey')"
           >
             <FieldControl as="select" :is-saving="isSavingProvider">
               <select
-                ref="providerSelectRef"
-                :style="{ inlineSize: providerSelectWidth }"
+                class="provider-select"
                 :value="selectValue"
                 :disabled="!canSelectProvider"
                 @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
@@ -339,19 +256,14 @@ onBeforeUnmount(() => {
     </FormField>
 
     <div class="actions">
-      <div
-        ref="providerFieldRef"
-        class="provider-field"
-        :style="{ '--provider-select-width': providerSelectWidth }"
-      >
+      <div class="provider-field">
         <FormField
           :label="t('analysisModelLabel')"
           :helper="canSelectProvider ? activeProvider?.helper : t('analysisModelNeedsGeminiKey')"
         >
           <FieldControl as="select" :is-saving="isSavingProvider">
             <select
-              ref="providerSelectRef"
-              :style="{ inlineSize: providerSelectWidth }"
+              class="provider-select"
               :value="selectValue"
               :disabled="!canSelectProvider"
               @change="emit('provider-change', ($event.target as HTMLSelectElement).value)"
@@ -458,13 +370,18 @@ onBeforeUnmount(() => {
 }
 
 .provider-field {
-  inline-size: min(100%, var(--provider-select-width, 34rem));
+  inline-size: 100%;
   max-inline-size: 100%;
-  justify-self: start;
 }
 
 .provider-field :deep(.field-control) {
-  inline-size: min(100%, var(--provider-select-width, 34rem));
+  inline-size: 100%;
+}
+
+.provider-select {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: none;
 }
 
 .unit-field {

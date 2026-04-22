@@ -187,6 +187,14 @@ export interface SyncQueueItem {
   provider: string;
 }
 
+export interface CloudSyncState {
+  revision: number;
+  lastSyncedRevision: number;
+  pendingScopes: string[];
+  lastRemoteFingerprint: string;
+  updatedAt: string;
+}
+
 export interface TdeeSnapshot {
   observedTdee: number | null;
   observedFromDate: string | null;

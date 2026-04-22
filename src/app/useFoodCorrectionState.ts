@@ -45,7 +45,7 @@ export function useFoodCorrectionState(args: {
     _solubleFiber?: number | null,
     _insolubleFiber?: number | null,
   ) {
-    await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, true);
+    return saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, true);
   }
 
   async function saveFoodCorrectionInstructionOnly(
@@ -61,7 +61,7 @@ export function useFoodCorrectionState(args: {
     _solubleFiber?: number | null,
     _insolubleFiber?: number | null,
   ) {
-    await saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, false);
+    return saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, false);
   }
 
   async function saveFoodCorrectionInstructionInternal(
@@ -72,7 +72,7 @@ export function useFoodCorrectionState(args: {
     caloriesPer100g: number | null,
     markStale: boolean,
   ) {
-    if (!args.profile.value || !args.currentEntry.value?.nutritionSnapshot) return;
+    if (!args.profile.value || !args.currentEntry.value?.nutritionSnapshot) return false;
 
     const snapshot = args.currentEntry.value.nutritionSnapshot;
     const previousFood = snapshot.foods.find((food) => food.id === foodId);
@@ -98,25 +98,28 @@ export function useFoodCorrectionState(args: {
     const caloriesPerGram =
       ratioFromPer100 ?? ratioFromInputs ?? ratioFromResolved ?? ratioFromPrevPer100 ?? ratioFromPrev;
     if (caloriesPerGram == null || !Number.isFinite(caloriesPerGram) || caloriesPerGram <= 0) {
-      return;
+      return false;
     }
 
     const line = buildInstructionLine(foodName, caloriesPerGram * 100);
     const nextInstructions = mergeAutomaticInstructions(args.profile.value.foodInstructions, line);
     args.profile.value = { ...args.profile.value, foodInstructions: nextInstructions };
-    await saveProfile(args.profile.value);
+    const profileResult = await saveProfile(args.profile.value);
 
     const noticeValue = markStale ? "instruction-pending" : "instruction-saved";
     args.setNotice(noticeValue);
 
+    let entryChanged = false;
     if (markStale) {
-      await saveEntry({
+      const entryResult = await saveEntry({
         ...args.currentEntry.value,
         analysisStale: true,
       });
+      entryChanged = entryResult.changed;
     }
 
     await args.refreshState();
+    return profileResult.changed || entryChanged;
   }
 
   function scaleMacro(value: number | null | undefined, ratio: number) {
@@ -245,7 +248,7 @@ export function useFoodCorrectionState(args: {
     solubleFiber?: number | null,
     insolubleFiber?: number | null,
   ) {
-    if (!args.currentEntry.value?.nutritionSnapshot) return;
+    if (!args.currentEntry.value?.nutritionSnapshot) return false;
 
     const snapshot = args.currentEntry.value.nutritionSnapshot;
     const previousFood = snapshot.foods.find((food) => food.id === foodId);
@@ -301,7 +304,7 @@ export function useFoodCorrectionState(args: {
     const nextFoods = nextMeals.flatMap((meal) => meal.foods);
     const nextDailyTotals = sumNutritionTotals(nextFoods);
 
-    await saveEntry({
+    const result = await saveEntry({
       ...args.currentEntry.value,
       analysisStale: false,
       aiError: null,
@@ -319,13 +322,14 @@ export function useFoodCorrectionState(args: {
     });
 
     await args.refreshState();
+    return result.changed;
   }
 
   async function applyMealTotalCorrectionToCurrentEntry(
     mealId: string,
     totals: NutritionTotals,
   ) {
-    if (!args.currentEntry.value?.nutritionSnapshot) return;
+    if (!args.currentEntry.value?.nutritionSnapshot) return false;
 
     const snapshot = args.currentEntry.value.nutritionSnapshot;
     const snapshotUpdatedAt = new Date().toISOString();
@@ -346,7 +350,7 @@ export function useFoodCorrectionState(args: {
 
     const nextDailyTotals = sumMealTotals(nextMeals);
 
-    await saveEntry({
+    const result = await saveEntry({
       ...args.currentEntry.value,
       analysisStale: false,
       aiError: null,
@@ -363,6 +367,7 @@ export function useFoodCorrectionState(args: {
     });
 
     await args.refreshState();
+    return result.changed;
   }
 
   return {

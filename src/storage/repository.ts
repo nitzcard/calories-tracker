@@ -2,6 +2,7 @@ import { db } from "./db";
 import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
 import { normalizeStoredActivityFactor } from "../domain/activity-factor";
 import type {
+  CloudSyncState,
   DailyEntry,
   DailyEntryInput,
   DeletedDailyEntryTombstone,
@@ -26,6 +27,15 @@ export interface ExportedAppData {
   };
 }
 
+export interface PersistResult<T> {
+  changed: boolean;
+  value: T;
+}
+
+export interface DeleteResult {
+  changed: boolean;
+}
+
 const DEFAULT_PROFILE: Profile = {
   id: "default",
   sex: "male",
@@ -44,6 +54,24 @@ const DEFAULT_PROFILE: Profile = {
   themeMode: "system",
   updatedAt: new Date().toISOString(),
 };
+
+const SETTINGS_ID = {
+  aiKeys: "aiKeys",
+  deletedDailyEntryTombstones: "deletedDailyEntryTombstones",
+  cloudSyncState: "cloudSyncState",
+} as const;
+
+const DEFAULT_CLOUD_SYNC_STATE: CloudSyncState = {
+  revision: 0,
+  lastSyncedRevision: 0,
+  pendingScopes: [],
+  lastRemoteFingerprint: "",
+  updatedAt: "",
+};
+
+function serializeForCompare(value: unknown): string {
+  return JSON.stringify(toPlain(value));
+}
 
 export async function ensureDefaultProfile(
   locale: Profile["locale"],
@@ -93,14 +121,26 @@ export async function ensureDefaultProfile(
   return profile;
 }
 
-export async function saveProfile(profile: Profile): Promise<void> {
-  await db.profile.put(
-    toPlain({
-      ...profile,
-      activityFactor: normalizeStoredActivityFactor(profile.activityFactor),
-      updatedAt: new Date().toISOString(),
-    }),
-  );
+export async function saveProfile(profile: Profile): Promise<PersistResult<Profile>> {
+  const current = await getProfile();
+  const normalized: Profile = {
+    ...profile,
+    activityFactor: normalizeStoredActivityFactor(profile.activityFactor),
+  };
+
+  if (current) {
+    const nextWithoutTimestamp = { ...normalized, updatedAt: current.updatedAt };
+    if (serializeForCompare(nextWithoutTimestamp) === serializeForCompare(current)) {
+      return { changed: false, value: current };
+    }
+  }
+
+  const next = {
+    ...normalized,
+    updatedAt: new Date().toISOString(),
+  };
+  await db.profile.put(toPlain(next));
+  return { changed: true, value: next };
 }
 
 export async function getProfile(): Promise<Profile | undefined> {
@@ -117,13 +157,21 @@ export async function getEntry(date: string): Promise<DailyEntry | undefined> {
   return entry ? normalizeEntry(entry) : undefined;
 }
 
-export async function deleteDailyEntry(date: string): Promise<void> {
+export async function deleteDailyEntry(date: string): Promise<DeleteResult> {
+  const existing = await getEntry(date);
+  const tombstones = await getDeletedDailyEntryTombstones();
+  const existingTombstone = tombstones.find((item) => item.date === date);
+  if (!existing && existingTombstone) {
+    return { changed: false };
+  }
+
   await db.dailyEntries.delete(date);
   await db.syncQueue.where("date").equals(date).delete();
   await upsertDeletedDailyEntryTombstone(date);
+  return { changed: Boolean(existing) || !existingTombstone };
 }
 
-export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEntry> {
+export async function upsertDailyEntry(input: DailyEntryInput): Promise<PersistResult<DailyEntry>> {
   const now = new Date().toISOString();
   const existing = await getEntry(input.date);
   const entry: DailyEntry = existing ?? {
@@ -159,41 +207,65 @@ export async function upsertDailyEntry(input: DailyEntryInput): Promise<DailyEnt
     updatedAt: now,
   };
 
+  if (existing) {
+    const nextWithoutTimestamp = { ...next, updatedAt: existing.updatedAt };
+    if (serializeForCompare(nextWithoutTimestamp) === serializeForCompare(existing)) {
+      return { changed: false, value: existing };
+    }
+  }
+
   await db.dailyEntries.put(toPlain(next));
   await clearDeletedDailyEntryTombstone(input.date);
-  return next;
+  return { changed: true, value: next };
 }
 
 export async function saveNutritionResult(
   date: string,
   patch: Pick<DailyEntry, "nutritionSnapshot" | "aiStatus" | "aiError">,
-): Promise<void> {
+): Promise<PersistResult<DailyEntry> | null> {
   const existing = await getEntry(date);
   if (!existing) {
-    return;
+    return null;
   }
 
-  await db.dailyEntries.put(
-    toPlain({
-      ...existing,
-      ...patch,
-      // Re-analysis should not erase manual calories. Users can clear it explicitly.
-      manualCalories: existing.manualCalories,
-      analysisStale: patch.aiStatus === "done" ? false : existing.analysisStale ?? false,
-      updatedAt: new Date().toISOString(),
-    }),
-  );
+  const nextBase: DailyEntry = {
+    ...existing,
+    ...patch,
+    // Re-analysis should not erase manual calories. Users can clear it explicitly.
+    manualCalories: existing.manualCalories,
+    analysisStale: patch.aiStatus === "done" ? false : existing.analysisStale ?? false,
+  };
+  const nextWithoutTimestamp = { ...nextBase, updatedAt: existing.updatedAt };
+  if (serializeForCompare(nextWithoutTimestamp) === serializeForCompare(existing)) {
+    return { changed: false, value: existing };
+  }
+
+  const next = {
+    ...nextBase,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await db.dailyEntries.put(toPlain(next));
   await clearDeletedDailyEntryTombstone(date);
+  return { changed: true, value: next };
 }
 
-export async function saveEntry(entry: DailyEntry): Promise<void> {
-  await db.dailyEntries.put(
-    toPlain({
-      ...entry,
-      updatedAt: new Date().toISOString(),
-    }),
-  );
+export async function saveEntry(entry: DailyEntry): Promise<PersistResult<DailyEntry>> {
+  const existing = await getEntry(entry.date);
+  if (existing) {
+    const nextWithoutTimestamp = { ...entry, updatedAt: existing.updatedAt };
+    if (serializeForCompare(nextWithoutTimestamp) === serializeForCompare(existing)) {
+      return { changed: false, value: existing };
+    }
+  }
+
+  const next = {
+    ...entry,
+    updatedAt: new Date().toISOString(),
+  };
+  await db.dailyEntries.put(toPlain(next));
   await clearDeletedDailyEntryTombstone(entry.date);
+  return { changed: true, value: next };
 }
 
 function normalizeEntry(entry: DailyEntry): DailyEntry {
@@ -265,6 +337,14 @@ export async function listFoodRules(): Promise<FoodRule[]> {
 }
 
 export async function saveFoodRule(rule: FoodRule): Promise<void> {
+  const existing = await db.foodRules.get(rule.id);
+  if (existing) {
+    const nextWithoutTimestamp = { ...rule, updatedAt: existing.updatedAt };
+    if (serializeForCompare(nextWithoutTimestamp) === serializeForCompare(existing)) {
+      return;
+    }
+  }
+
   await db.foodRules.put(
     toPlain({
       ...rule,
@@ -300,11 +380,6 @@ export async function updateQueueStatus(
 export async function getPendingQueue(): Promise<SyncQueueItem[]> {
   return db.syncQueue.where("status").anyOf("pending", "failed").sortBy("enqueuedAt");
 }
-
-const SETTINGS_ID = {
-  aiKeys: "aiKeys",
-  deletedDailyEntryTombstones: "deletedDailyEntryTombstones",
-} as const;
 
 export async function getDeletedDailyEntryTombstones(): Promise<DeletedDailyEntryTombstone[]> {
   const row = await db.settings.get(SETTINGS_ID.deletedDailyEntryTombstones);
@@ -416,8 +491,37 @@ export async function getStoredAiKeysFromDb(): Promise<StoredAiKeys | null> {
   return (row?.aiKeys as StoredAiKeys | undefined) ?? null;
 }
 
-export async function saveStoredAiKeysToDb(nextKeys: StoredAiKeys): Promise<void> {
+export async function saveStoredAiKeysToDb(nextKeys: StoredAiKeys): Promise<PersistResult<StoredAiKeys>> {
+  const current = await getStoredAiKeysFromDb();
+  if (current && serializeForCompare(current) === serializeForCompare(nextKeys)) {
+    return { changed: false, value: current };
+  }
+
   await db.settings.put({ id: SETTINGS_ID.aiKeys, aiKeys: toPlain(nextKeys) });
+  return { changed: true, value: nextKeys };
+}
+
+export async function getCloudSyncState(): Promise<CloudSyncState> {
+  const row = await db.settings.get(SETTINGS_ID.cloudSyncState);
+  const raw = (row as { cloudSyncState?: Partial<CloudSyncState> } | undefined)?.cloudSyncState;
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_CLOUD_SYNC_STATE };
+  }
+
+  return {
+    revision: typeof raw.revision === "number" ? raw.revision : 0,
+    lastSyncedRevision: typeof raw.lastSyncedRevision === "number" ? raw.lastSyncedRevision : 0,
+    pendingScopes: Array.isArray(raw.pendingScopes) ? raw.pendingScopes.filter((item): item is string => typeof item === "string") : [],
+    lastRemoteFingerprint: typeof raw.lastRemoteFingerprint === "string" ? raw.lastRemoteFingerprint : "",
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
+  };
+}
+
+export async function saveCloudSyncState(nextState: CloudSyncState): Promise<void> {
+  await db.settings.put({
+    id: SETTINGS_ID.cloudSyncState,
+    cloudSyncState: toPlain(nextState),
+  } as any);
 }
 
 function toPlain<T>(value: T): T {

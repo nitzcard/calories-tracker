@@ -191,3 +191,67 @@ export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
     db.close();
   }, { entries });
 }
+
+export async function readPersistedAppState(page: Page) {
+  return page.evaluate(async () => {
+    function openDb(name: string) {
+      return new Promise<IDBDatabase>((resolve, reject) => {
+        let upgradeTx: IDBTransaction | null = null;
+        const request = indexedDB.open(name);
+        request.onerror = () => reject(request.error);
+        request.onupgradeneeded = () => {
+          upgradeTx = request.transaction;
+        };
+        request.onsuccess = () => {
+          if (upgradeTx) {
+            upgradeTx.oncomplete = () => resolve(request.result);
+            upgradeTx.onerror = () => reject(upgradeTx.error || request.error);
+            return;
+          }
+          resolve(request.result);
+        };
+      });
+    }
+
+    const db = await openDb("calorie-tracker");
+    const tx = db.transaction(["profile", "dailyEntries", "settings"], "readonly");
+
+    const readOne = <T>(storeName: string, key: IDBValidKey) =>
+      new Promise<T | undefined>((resolve, reject) => {
+        const request = tx.objectStore(storeName).get(key);
+        request.onsuccess = () => resolve(request.result as T | undefined);
+        request.onerror = () => reject(request.error);
+      });
+
+    const readAll = <T>(storeName: string) =>
+      new Promise<T[]>((resolve, reject) => {
+        const request = tx.objectStore(storeName).getAll();
+        request.onsuccess = () => resolve((request.result as T[]) ?? []);
+        request.onerror = () => reject(request.error);
+      });
+
+    const [profile, dailyEntries, aiKeysRow] = await Promise.all([
+      readOne<any>("profile", "default"),
+      readAll<any>("dailyEntries"),
+      readOne<any>("settings", "aiKeys"),
+    ]);
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    return {
+      profile,
+      dailyEntries,
+      aiKeys: aiKeysRow?.aiKeys ?? null,
+      localStorage: {
+        locale: localStorage.getItem("calorie-tracker.locale"),
+        themeMode: localStorage.getItem("calorie-tracker.theme-mode"),
+        cloudMode: localStorage.getItem("calorie-tracker.cloud-mode"),
+        aiModel: localStorage.getItem("calorie-tracker.ai-model"),
+      },
+    };
+  });
+}

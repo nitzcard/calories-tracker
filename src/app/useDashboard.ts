@@ -16,10 +16,12 @@ import { useDataTransferState } from "./useDataTransferState";
 import { useFoodCorrectionState } from "./useFoodCorrectionState";
 import {
   ensureDefaultProfile,
+  getCloudSyncState,
   getProfile,
   listEntries,
   exportAppData,
   importAppData,
+  saveCloudSyncState,
   saveProfile,
   upsertDailyEntry,
   deleteDailyEntry,
@@ -51,6 +53,7 @@ import {
 import { isGeminiModelId } from "../ai/gemini-config";
 import { fetchGeminiModelOptions } from "../ai/gemini-models";
 import { mergeExportedAppData } from "../cloud/merge";
+import { canonicalCloudFingerprint } from "../cloud/canonical";
 import { localIsoDate } from "../domain/dates";
 
 export function useDashboard() {
@@ -97,6 +100,7 @@ export function useDashboard() {
   const cloudIsSyncing = ref(false);
   let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
   let cloudPushPending = false;
+  let cloudPushInFlight = false;
 
   let cachedCloudBlobModule:
     | Promise<{
@@ -531,8 +535,13 @@ export function useDashboard() {
       update.weight = normalizedWeight;
     }
 
+    let changed = false;
     await autoSave.runAutoSave(async () => {
-      await upsertDailyEntry(update);
+      const result = await upsertDailyEntry(update);
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
       entries.value = await listEntries();
     }, "today.persistDrafts");
 
@@ -546,8 +555,17 @@ export function useDashboard() {
           : undefined,
     });
 
-    if (foodLogDirty) scheduleCloudPush("today.foodLog");
-    if (weightDirty) scheduleCloudPush("today.weight");
+    if (!changed) {
+      return;
+    }
+
+    if (foodLogDirty) {
+      await markCloudChange("today.foodLog");
+    }
+    if (weightDirty) {
+      await markCloudChange("today.weight");
+    }
+    scheduleCloudPush(foodLogDirty ? "today.foodLog" : "today.weight");
   }
 
   function loadSelectedEntry(options?: { skipFoodLog?: boolean; preserveDirtyFields?: boolean }) {
@@ -594,10 +612,13 @@ export function useDashboard() {
     profile.value = { ...profile.value!, locale: locale.value };
     await profileSaveQueue.enqueue(async () => {
       await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
+        const result = await saveProfile(profile.value!);
+        if (result.changed) {
+          await markCloudChange("settings.locale");
+          scheduleCloudPush("settings.locale");
+        }
       }, "settings.locale");
     });
-    scheduleCloudPush("settings.locale");
   }
 
   async function onThemeChange(nextTheme: ThemeMode) {
@@ -607,10 +628,13 @@ export function useDashboard() {
     profile.value = { ...profile.value!, themeMode: themeMode.value };
     await profileSaveQueue.enqueue(async () => {
       await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
+        const result = await saveProfile(profile.value!);
+        if (result.changed) {
+          await markCloudChange("settings.theme");
+          scheduleCloudPush("settings.theme");
+        }
       }, "settings.theme");
     });
-    scheduleCloudPush("settings.theme");
   }
 
   async function onProviderChange(nextProvider: string) {
@@ -622,11 +646,14 @@ export function useDashboard() {
     profile.value = { ...profile.value!, aiModel: nextProvider };
     await profileSaveQueue.enqueue(async () => {
       await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
+        const result = await saveProfile(profile.value!);
+        if (result.changed) {
+          await markCloudChange("settings.provider");
+          scheduleCloudPush("settings.provider");
+        }
       }, "settings.provider");
     });
     refreshVisibleProviderOptions();
-    scheduleCloudPush("settings.provider");
   }
 
   async function saveWeightDraft() {
@@ -637,14 +664,19 @@ export function useDashboard() {
 
     const rawWeight = currentWeight.value;
     const date = selectedDate.value;
+    let changed = false;
     await autoSave.runAutoSave(async () => {
       const parsed = rawWeight.trim() ? Number(rawWeight) : null;
       const normalizedWeight =
         parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-      await upsertDailyEntry({
+      const result = await upsertDailyEntry({
         date,
         weight: normalizedWeight,
       });
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
       await refreshState();
       if (selectedDate.value === date) {
         currentWeight.value = normalizedWeight !== null ? String(normalizedWeight) : "";
@@ -652,7 +684,10 @@ export function useDashboard() {
       }
     }, "today.weight");
     clearPersistedDraftFields(date, ["weight"]);
-    scheduleCloudPush("today.weight");
+    if (changed) {
+      await markCloudChange("today.weight");
+      scheduleCloudPush("today.weight");
+    }
   }
 
   async function saveFoodDraft() {
@@ -663,16 +698,24 @@ export function useDashboard() {
 
     const foodLogText = currentFoodLog.value;
     const date = selectedDate.value;
+    let changed = false;
     await autoSave.runAutoSave(async () => {
-      await upsertDailyEntry({
+      const result = await upsertDailyEntry({
         date,
         foodLogText,
       });
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
       await refreshState({ skipReloadFoodLog: true });
     }, "today.foodLog");
     hasUserEditedCurrentFoodLog.value = false;
     clearPersistedDraftFieldsIfUnchanged(date, { foodLogText });
-    scheduleCloudPush("today.foodLog");
+    if (changed) {
+      await markCloudChange("today.foodLog");
+      scheduleCloudPush("today.foodLog");
+    }
   }
 
   async function deleteDay(date: string) {
@@ -685,36 +728,60 @@ export function useDashboard() {
       weightDraftSaveTimer = null;
     }
 
+    let changed = false;
     await autoSave.runAutoSave(async () => {
-      await deleteDailyEntry(date);
+      const result = await deleteDailyEntry(date);
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
       localStorage.removeItem(dailyDraftStorageKey(date));
       await refreshState({ preserveDirtyFields: false });
     }, `day.delete.${date}`);
 
-    notice.value = "day-deleted";
-    scheduleCloudPush(`day.delete.${date}`);
+    if (changed) {
+      notice.value = "day-deleted";
+      await markCloudChange(`day.delete.${date}`);
+      scheduleCloudPush(`day.delete.${date}`);
+    }
   }
 
   async function saveHistoryCalories(date: string, calories: number | null) {
+    let changed = false;
     await autoSave.runAutoSave(async () => {
-      await upsertDailyEntry({
+      const result = await upsertDailyEntry({
         date,
         manualCalories: calories,
       });
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
       await refreshState();
     }, `history.calories.${date}`);
-    scheduleCloudPush(`history.calories.${date}`);
+    if (changed) {
+      await markCloudChange(`history.calories.${date}`);
+      scheduleCloudPush(`history.calories.${date}`);
+    }
   }
 
   async function saveHistoryWeight(date: string, weight: number | null) {
+    let changed = false;
     await autoSave.runAutoSave(async () => {
-      await upsertDailyEntry({
+      const result = await upsertDailyEntry({
         date,
         weight,
       });
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
       await refreshState();
     }, `history.weight.${date}`);
-    scheduleCloudPush(`history.weight.${date}`);
+    if (changed) {
+      await markCloudChange(`history.weight.${date}`);
+      scheduleCloudPush(`history.weight.${date}`);
+    }
   }
 
   async function saveProfileDraft(nextProfile?: Profile) {
@@ -723,10 +790,13 @@ export function useDashboard() {
     profile.value = profileToSave;
     await profileSaveQueue.enqueue(async () => {
       await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
+        const result = await saveProfile(profile.value!);
+        if (result.changed) {
+          await markCloudChange("constants.profile");
+          scheduleCloudPush("constants.profile");
+        }
       }, "constants.profile");
     });
-    scheduleCloudPush("constants.profile");
   }
 
   async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
@@ -734,10 +804,13 @@ export function useDashboard() {
     profile.value = { ...profile.value!, tdeeEquation };
     await profileSaveQueue.enqueue(async () => {
       await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
+        const result = await saveProfile(profile.value!);
+        if (result.changed) {
+          await markCloudChange("constants.profile.tdeeEquation");
+          scheduleCloudPush("constants.profile.tdeeEquation");
+        }
       }, "constants.profile.tdeeEquation");
     });
-    scheduleCloudPush("constants.profile.tdeeEquation");
   }
 
   async function saveFoodInstructions(foodInstructions: string) {
@@ -745,21 +818,29 @@ export function useDashboard() {
     profile.value = { ...profile.value!, foodInstructions };
     await profileSaveQueue.enqueue(async () => {
       await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
+        const result = await saveProfile(profile.value!);
+        if (result.changed) {
+          await markCloudChange("constants.foodInstructions");
+          scheduleCloudPush("constants.foodInstructions");
+        }
       }, "constants.foodInstructions");
     });
-    scheduleCloudPush("constants.foodInstructions");
   }
 
   async function saveAiKey(providerKey: keyof StoredAiKeys, value: string) {
+    let changed = false;
     await autoSave.runAutoSave(async () => {
       aiKeys.value = { ...aiKeys.value, [providerKey]: value };
       saveStoredAiKeys(aiKeys.value);
-      await saveStoredAiKeysToDb(aiKeys.value);
+      const result = await saveStoredAiKeysToDb(aiKeys.value);
+      changed = result.changed;
     }, `credentials.${providerKey}`);
     // Keys are stored separately from the IndexedDB backup; cloud sync can encrypt them
     // only when a passphrase is provided.
-    scheduleCloudPush(`credentials.${providerKey}`);
+    if (changed) {
+      await markCloudChange(`credentials.${providerKey}`);
+      scheduleCloudPush(`credentials.${providerKey}`);
+    }
   }
 
   function clearNotice() {
@@ -818,8 +899,33 @@ export function useDashboard() {
     return value?.trim() ? value.trim() : "";
   }
 
-  function exportedAppDataEquals(left: ExportedAppData, right: ExportedAppData) {
-    return JSON.stringify(left) === JSON.stringify(right);
+  function canonicalPayloadEquals(left: ExportedAppData, right: ExportedAppData) {
+    return canonicalCloudFingerprint(left) === canonicalCloudFingerprint(right);
+  }
+
+  async function markCloudChange(scope: string) {
+    const state = await getCloudSyncState();
+    await saveCloudSyncState({
+      ...state,
+      revision: state.revision + 1,
+      pendingScopes: state.pendingScopes.includes(scope) ? state.pendingScopes : [...state.pendingScopes, scope],
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async function markCloudSynced(
+    revision: number,
+    remoteFingerprint: string,
+    options?: { keepPending?: boolean },
+  ) {
+    const state = await getCloudSyncState();
+    await saveCloudSyncState({
+      ...state,
+      lastSyncedRevision: Math.max(state.lastSyncedRevision, revision),
+      pendingScopes: options?.keepPending ? state.pendingScopes : [],
+      lastRemoteFingerprint: remoteFingerprint,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   function stripEmailFromPayload(payload: ExportedAppData): ExportedAppData {
@@ -1046,10 +1152,12 @@ export function useDashboard() {
       }
 
       let remotePayload: ExportedAppData | null = null;
+      let remoteFingerprint = "";
       if (remote.data?.raw) {
         try {
           const decoded = await decodeCloudBlob(remote.data.raw, secret);
           remotePayload = decoded.payload;
+          remoteFingerprint = canonicalCloudFingerprint(decoded.payload);
           aiKeys.value = mergeStoredAiKeys(aiKeys.value, decoded.aiKeys);
           saveStoredAiKeys(aiKeys.value);
           await saveStoredAiKeysToDb(aiKeys.value);
@@ -1099,7 +1207,9 @@ export function useDashboard() {
         });
       }
 
-      if (!exportedAppDataEquals(localBefore, merged)) {
+      const mergedFingerprint = canonicalCloudFingerprint(merged);
+
+      if (!canonicalPayloadEquals(localBefore, merged)) {
         await importAppData(merged);
         await refreshState();
 
@@ -1117,20 +1227,24 @@ export function useDashboard() {
         }
       }
 
-      const encoded = await encodeCloudBlob(merged, secret);
-      const pushed = remote.data?.raw
-        ? await upsertUserBlob(username, encoded)
-        : await createUserBlob(username, encoded);
-      if (!pushed.ok) {
-        throw new Error(
-          remote.data?.raw
-            ? pushed.error
-            : "This username already exists. Use the correct password to log in instead of creating it again.",
-        );
+      if (mergedFingerprint !== remoteFingerprint) {
+        const encoded = await encodeCloudBlob(merged, secret);
+        const pushed = remote.data?.raw
+          ? await upsertUserBlob(username, encoded)
+          : await createUserBlob(username, encoded);
+        if (!pushed.ok) {
+          throw new Error(
+            remote.data?.raw
+              ? pushed.error
+              : "This username already exists. Use the correct password to log in instead of creating it again.",
+          );
+        }
       }
 
       cloudStatus.value = "synced";
       cloudLastSyncedAt.value = formatCloudSyncTimestamp();
+      const syncState = await getCloudSyncState();
+      await markCloudSynced(syncState.revision, mergedFingerprint);
       cloudConfirmedUsername.value = username;
       localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername, username);
       cloudUsername.value = username;
@@ -1171,7 +1285,7 @@ export function useDashboard() {
     if (cloudPushTimer) clearTimeout(cloudPushTimer);
     cloudPushTimer = setTimeout(() => {
       void runCloudPush();
-    }, 2000);
+    }, 0);
   }
 
   async function runCloudPush() {
@@ -1180,7 +1294,7 @@ export function useDashboard() {
       return;
     }
     if (!cloudPushPending) return;
-    if (isCloudBusy.value) {
+    if (cloudPushInFlight || isCloudBusy.value) {
       // Try again after the current sync finishes.
       cloudPushTimer = setTimeout(() => void runCloudPush(), 1000);
       return;
@@ -1200,33 +1314,53 @@ export function useDashboard() {
       const normalized = normalizeUsername(cloudUsername.value);
       const secret = getCloudSecret(normalized);
       if (!secret) return;
+      cloudPushInFlight = true;
       isCloudBusy.value = true;
       cloudIsSyncing.value = true;
       cloudError.value = "";
 
       const local = await exportAppData();
+      const syncState = await getCloudSyncState();
+      const startedRevision = syncState.revision;
       const remote = await fetchUserBlob(normalized);
+      if (!remote.ok) {
+        throw new Error(remote.error);
+      }
       let remotePayload: ExportedAppData | null = null;
+      let remoteFingerprint = "";
       if (remote.ok && remote.data?.raw) {
         // If this fails (wrong password), don't overwrite cloud with garbage.
         const decoded = await decodeCloudBlob(remote.data.raw, secret);
         remotePayload = decoded.payload;
+        remoteFingerprint = canonicalCloudFingerprint(decoded.payload);
         aiKeys.value = mergeStoredAiKeys(aiKeys.value, decoded.aiKeys);
         saveStoredAiKeys(aiKeys.value);
         await saveStoredAiKeysToDb(aiKeys.value);
       }
       const merged = applyUsernameThemeDefault(normalized, mergeExportedAppData(local, remotePayload));
+      const mergedFingerprint = canonicalCloudFingerprint(merged);
 
-      const pushed = await upsertUserBlob(normalized, await encodeCloudBlob(merged, secret));
-      if (!pushed.ok) throw new Error(pushed.error);
+      if (mergedFingerprint !== remoteFingerprint) {
+        const pushed = await upsertUserBlob(normalized, await encodeCloudBlob(merged, secret));
+        if (!pushed.ok) throw new Error(pushed.error);
+      }
+      const latestSyncState = await getCloudSyncState();
+      const keepPending = latestSyncState.revision > startedRevision;
+      await markCloudSynced(startedRevision, mergedFingerprint, { keepPending });
       cloudStatus.value = "synced";
       cloudLastSyncedAt.value = formatCloudSyncTimestamp();
     } catch (err) {
       cloudStatus.value = "failed";
       cloudError.value = err instanceof Error ? err.message : String(err);
     } finally {
+      cloudPushInFlight = false;
       isCloudBusy.value = false;
       cloudIsSyncing.value = false;
+      const syncState = await getCloudSyncState();
+      if (cloudStatus.value === "synced" && canAutoCloudSync() && syncState.pendingScopes.length > 0) {
+        cloudPushPending = true;
+        cloudPushTimer = setTimeout(() => void runCloudPush(), 0);
+      }
     }
   }
 
@@ -1289,6 +1423,7 @@ export function useDashboard() {
         // Best-effort: some browsers may block non-user-gesture downloads.
         await dataTransfer.exportData({ filename: autoExportFilename(selectedDate.value) });
       }
+      await markCloudChange("analysis.done");
       scheduleCloudPush("analysis.done");
     }
   }
@@ -1351,7 +1486,11 @@ export function useDashboard() {
           }
           if (profile.value) {
             profile.value = { ...profile.value, aiModel: suggested };
-            await saveProfile(profile.value);
+            const result = await saveProfile(profile.value);
+            if (result.changed) {
+              await markCloudChange("settings.provider");
+              scheduleCloudPush("settings.provider");
+            }
           }
         }
 
@@ -1523,7 +1662,7 @@ export function useDashboard() {
       solubleFiber?: number | null,
       insolubleFiber?: number | null,
     ) => {
-      await corrections.saveFoodCorrectionInstruction(
+      const changed = await corrections.saveFoodCorrectionInstruction(
         foodId,
         foodName,
         grams,
@@ -1536,7 +1675,10 @@ export function useDashboard() {
         solubleFiber,
         insolubleFiber,
       );
-      scheduleCloudPush("nutrition.correction");
+      if (changed) {
+        await markCloudChange("nutrition.correction");
+        scheduleCloudPush("nutrition.correction");
+      }
     },
     saveFoodCorrectionInstructionOnly: async (
       foodId: string,
@@ -1551,7 +1693,7 @@ export function useDashboard() {
       solubleFiber?: number | null,
       insolubleFiber?: number | null,
     ) => {
-      await corrections.saveFoodCorrectionInstructionOnly(
+      const changed = await corrections.saveFoodCorrectionInstructionOnly(
         foodId,
         foodName,
         grams,
@@ -1564,7 +1706,10 @@ export function useDashboard() {
         solubleFiber,
         insolubleFiber,
       );
-      scheduleCloudPush("nutrition.correction");
+      if (changed) {
+        await markCloudChange("nutrition.correction");
+        scheduleCloudPush("nutrition.correction");
+      }
     },
     applyFoodCorrectionToCurrentEntry: async (
       foodId: string,
@@ -1579,7 +1724,7 @@ export function useDashboard() {
       solubleFiber?: number | null,
       insolubleFiber?: number | null,
     ) => {
-      await corrections.applyFoodCorrectionToCurrentEntry(
+      const changed = await corrections.applyFoodCorrectionToCurrentEntry(
         foodId,
         foodName,
         grams,
@@ -1592,14 +1737,20 @@ export function useDashboard() {
         solubleFiber,
         insolubleFiber,
       );
-      scheduleCloudPush("nutrition.correction");
+      if (changed) {
+        await markCloudChange("nutrition.correction");
+        scheduleCloudPush("nutrition.correction");
+      }
     },
     applyMealTotalCorrectionToCurrentEntry: async (
       mealId: string,
       totals: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null },
     ) => {
-      await corrections.applyMealTotalCorrectionToCurrentEntry(mealId, totals);
-      scheduleCloudPush("nutrition.correction");
+      const changed = await corrections.applyMealTotalCorrectionToCurrentEntry(mealId, totals);
+      if (changed) {
+        await markCloudChange("nutrition.correction");
+        scheduleCloudPush("nutrition.correction");
+      }
     },
     exportData: dataTransfer.exportData,
     importData: dataTransfer.importData,
