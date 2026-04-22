@@ -64,6 +64,7 @@ function mergeProfilePreservingData(
     aiModel: DEFAULT_GEMINI_MODEL,
     locale: "en" as const,
     themeMode: "system" as const,
+    designMode: "win95" as const,
     goalMode: "maingain" as const,
   };
 
@@ -110,10 +111,16 @@ function mergeProfilePreservingData(
     DEFAULT.tdeeEquation,
   );
   const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
-  // Theme should respect user's explicit choice, including "system".
-  // Use preferred theme (most recent by updatedAt), falling back to other, then default.
-  // This ensures "system" theme is preserved when explicitly chosen by the user.
-  const mergedTheme = preferred.themeMode ?? other.themeMode ?? DEFAULT.themeMode;
+  const mergedTheme = pickEnumWithWeakDefault(
+    preferred.themeMode ?? DEFAULT.themeMode,
+    other.themeMode ?? DEFAULT.themeMode,
+    DEFAULT.themeMode,
+  );
+  const mergedDesign = pickEnumWithWeakDefault(
+    preferred.designMode ?? DEFAULT.designMode,
+    other.designMode ?? DEFAULT.designMode,
+    DEFAULT.designMode,
+  );
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
   const mergedGoalMode = pickEnumWithWeakDefault(
     preferred.goalMode ?? DEFAULT.goalMode,
@@ -135,6 +142,7 @@ function mergeProfilePreservingData(
     ),
     locale: mergedLocale,
     themeMode: mergedTheme,
+    designMode: mergedDesign,
     aiModel: mergedModel,
     goalMode: mergedGoalMode,
     age: pickNullableNumber(preferred.age, other.age),

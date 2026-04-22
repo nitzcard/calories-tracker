@@ -36,7 +36,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: `VITE_SUPABASE_URL='${fakeSupabaseUrl}' VITE_SUPABASE_ANON_KEY='${fakeSupabaseAnonKey}' npm run dev`,
+    command: `VITE_SUPABASE_URL='${fakeSupabaseUrl}' VITE_SUPABASE_ANON_KEY='${fakeSupabaseAnonKey}' npm run dev:fixed`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

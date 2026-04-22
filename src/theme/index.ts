@@ -1,22 +1,22 @@
-import type { ThemeMode } from "../types";
+import type { DesignMode, ThemeMode } from "../types";
 
 export function detectThemeMode(): ThemeMode {
   return "system";
 }
 
-export function resolveTheme(
-  mode: ThemeMode,
-): "light" | "dark" | "purple-dark" | "jasmine" | "cs16" | "steam" | "cyberpunk-2077" {
-  if (mode !== "system") {
-    return mode;
+export function resolveTheme(themeMode: ThemeMode): "light" | "dark" {
+  if (themeMode !== "system") {
+    return themeMode;
   }
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function applyTheme(mode: ThemeMode): void {
-  const resolved = resolveTheme(mode);
-  document.documentElement.dataset.theme = resolved;
-  document.documentElement.style.colorScheme = resolved === "light" ? "light" : "dark";
-  document.body.dataset.theme = resolved;
+export function applyTheme(themeMode: ThemeMode, designMode: DesignMode) {
+  const resolvedTheme = resolveTheme(themeMode);
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.design = designMode;
+  document.documentElement.style.colorScheme = resolvedTheme;
+  document.body.dataset.theme = resolvedTheme;
+  document.body.dataset.design = designMode;
 }

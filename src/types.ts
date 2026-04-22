@@ -1,13 +1,6 @@
-export type ThemeMode =
-  | "system"
-  | "light"
-  | "dark"
-  | "purple-dark"
-  | "jasmine"
-  | "cs16"
-  | "steam"
-  | "cyberpunk-2077";
 export type AppLocale = "en" | "he";
+export type ThemeMode = "system" | "light" | "dark";
+export type DesignMode = "win95" | "mac90s" | "win7";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type GoalMode = "cut" | "leanMass" | "maingain";
@@ -42,6 +35,7 @@ export interface Profile {
   aiModel: string;
   locale: AppLocale;
   themeMode: ThemeMode;
+  designMode: DesignMode;
   updatedAt?: string;
 }
 

@@ -52,6 +52,7 @@ const DEFAULT_PROFILE: Profile = {
   aiModel: DEFAULT_GEMINI_MODEL,
   locale: "en",
   themeMode: "system",
+  designMode: "win95",
   updatedAt: new Date().toISOString(),
 };
 
@@ -75,7 +76,8 @@ function serializeForCompare(value: unknown): string {
 
 export async function ensureDefaultProfile(
   locale: Profile["locale"],
-  themeMode: Profile["themeMode"],
+  themeMode: Profile["themeMode"] = DEFAULT_PROFILE.themeMode,
+  designMode: Profile["designMode"] = DEFAULT_PROFILE.designMode,
 ): Promise<Profile> {
   const existing = await db.profile.get("default");
   if (existing) {
@@ -108,6 +110,8 @@ export async function ensureDefaultProfile(
       goalMode: normalizedGoalMode,
       tdeeEquation: normalizedEquation,
       activityFactor: normalizeStoredActivityFactor(existing.activityFactor, legacyExisting.activityPrompt),
+      themeMode: existing.themeMode ?? DEFAULT_PROFILE.themeMode,
+      designMode: existing.designMode ?? DEFAULT_PROFILE.designMode,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
@@ -116,7 +120,7 @@ export async function ensureDefaultProfile(
     return merged as Profile;
   }
 
-  const profile = { ...DEFAULT_PROFILE, locale, themeMode, updatedAt: new Date().toISOString() };
+  const profile = { ...DEFAULT_PROFILE, locale, themeMode, designMode, updatedAt: new Date().toISOString() };
   await db.profile.put(profile);
   return profile;
 }
@@ -467,6 +471,7 @@ export async function importAppData(data: ExportedAppData): Promise<void> {
         ...DEFAULT_PROFILE,
         ...p,
         goalMode: (p as any).goalMode ?? DEFAULT_PROFILE.goalMode,
+        themeMode: p.themeMode ?? DEFAULT_PROFILE.themeMode,
       })) as Profile[];
       await db.profile.bulkPut(toPlain(normalizedProfiles));
     }

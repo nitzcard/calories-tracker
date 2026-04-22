@@ -1,9 +1,15 @@
 import type { Page } from "@playwright/test";
 
 export function isoDate(offsetDays: number) {
-  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+  const now = new Date();
+  if (now.getHours() < 6) {
+    now.setDate(now.getDate() - 1);
+  }
   now.setDate(now.getDate() + offsetDays);
-  return now.toISOString().slice(0, 10);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function todayIso() {
@@ -308,6 +314,7 @@ export async function initializeCloudSyncState(page: Page, state?: {
 }
 
 export async function clearAppStorage(page: Page) {
+  await page.goto("/test-empty.html", { waitUntil: "networkidle" });
   await page.evaluate(async () => {
     localStorage.clear();
 
@@ -316,7 +323,7 @@ export async function clearAppStorage(page: Page) {
         const request = indexedDB.deleteDatabase(name);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
-        request.onblocked = () => resolve();
+        request.onblocked = () => reject(new Error(`deleteDatabase blocked for ${name}`));
       });
 
     await deleteDb("calorie-tracker");

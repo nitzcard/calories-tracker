@@ -31,9 +31,9 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  "update:selectedDate": [value: string];
-  "update:currentWeight": [value: string];
-  "update:foodLog": [value: string];
+  "update:selected-date": [value: string];
+  "update:current-weight": [value: string];
+  "update:food-log": [value: string];
   "save-weight": [value?: string];
   "save-draft": [value?: string];
   analyze: [];
@@ -73,9 +73,9 @@ const { t } = useI18n();
           :analysis-retry-model-id="analysisRetryModelId"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
-          @update:selectedDate="emit('update:selectedDate', $event)"
-          @update:currentWeight="emit('update:currentWeight', $event)"
-          @update:foodLog="emit('update:foodLog', $event)"
+          @update:selected-date="emit('update:selected-date', $event)"
+          @update:current-weight="emit('update:current-weight', $event)"
+          @update:food-log="emit('update:food-log', $event)"
           @save-weight="emit('save-weight', $event)"
           @save-draft="emit('save-draft', $event)"
           @provider-change="emit('provider-change', $event)"

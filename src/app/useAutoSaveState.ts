@@ -16,6 +16,7 @@ export function useAutoSaveState() {
   );
   const isSavingLocale = computed(() => Boolean(savingFields.value["settings.locale"]));
   const isSavingTheme = computed(() => Boolean(savingFields.value["settings.theme"]));
+  const isSavingDesign = computed(() => Boolean(savingFields.value["settings.design"]));
   const isSavingProvider = computed(() => Boolean(savingFields.value["settings.provider"]));
   const savingAiKeyField = computed<keyof StoredAiKeys | "">(() => {
     const key = Object.keys(savingFields.value).find((item) => item.startsWith("credentials."));
@@ -64,6 +65,7 @@ export function useAutoSaveState() {
     isSavingTdeeEquation,
     isSavingLocale,
     isSavingTheme,
+    isSavingDesign,
     isSavingProvider,
     savingAiKeyField,
     savingHistoryCalories,
