@@ -184,9 +184,12 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
 	            <td><strong>{{ t("observedTdee") }}</strong></td>
             <td class="calorie-cell">{{ tdee.observedTdee ?? "-" }}</td>
             <td>
-              <span
-                class="math-equation"
+              <div
+                class="tdee-source-helper"
                 dir="ltr"
+              >
+                <span
+                class="math-equation"
                 :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
               >
                 <span class="math-equation__term">{{ t("observedTdeeFormulaLabel") }}</span>
@@ -210,17 +213,21 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
                     <span class="math-equation__term">{{ t("observedTdeeFormulaDays") }}</span>
                   </span>
                 </span>
-              </span>
+                </span>
+              </div>
               <span v-if="tdee.observedTdee == null">
                 <br />
                 <em class="muted">{{ observedEmptyText() }}</em>
               </span>
-              <span v-if="tdee.observedFromDate && tdee.observedToDate">
-                <br />
+              <div
+                v-if="tdee.observedFromDate && tdee.observedToDate"
+                class="tdee-source-helper tdee-source-helper--range"
+                dir="ltr"
+              >
                 {{ t("observedTdeeRange") }}:
-                  {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
+                {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
                 {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
-              </span>
+              </div>
             </td>
           </tr>
           <tr v-for="(value, name) in tdee.formulaBreakdown" :key="name">
@@ -282,10 +289,14 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
             <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
             <div class="tdee-card__value">{{ tdee.observedTdee ?? "-" }}</div>
           </div>
+          <div class="tdee-card__label">{{ t("tdeeSource") }}</div>
           <div class="tdee-card__helper">
-            <span
-              class="math-equation"
+            <div
+              class="tdee-source-helper"
               dir="ltr"
+            >
+              <span
+              class="math-equation"
               :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
             >
               <span class="math-equation__term">{{ t("observedTdeeFormulaLabel") }}</span>
@@ -309,17 +320,21 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
                   <span class="math-equation__term">{{ t("observedTdeeFormulaDays") }}</span>
                 </span>
               </span>
-            </span>
+              </span>
+            </div>
             <span v-if="tdee.observedTdee == null">
               <br />
               <em class="muted">{{ observedEmptyText() }}</em>
             </span>
-            <span v-if="tdee.observedFromDate && tdee.observedToDate">
-              <br />
+            <div
+              v-if="tdee.observedFromDate && tdee.observedToDate"
+              class="tdee-source-helper tdee-source-helper--range"
+              dir="ltr"
+            >
               {{ t("observedTdeeRange") }}:
               {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
               {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
-            </span>
+            </div>
           </div>
         </div>
       </div>
@@ -737,11 +752,21 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
     text-align: end;
   }
 
-  .tdee-card__helper {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
+.tdee-card__helper {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.tdee-source-helper {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.tdee-source-helper--range {
+  margin-block-start: 0.35rem;
+}
 
   .tdee-custom-cell-mobile {
     display: flex;

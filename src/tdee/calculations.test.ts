@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildTdeeSnapshot, calculateObservedTdee } from "./calculations";
+import {
+  buildTdeeSnapshot,
+  calculateObservedTdee,
+  calculateFormulaTdee,
+} from "./calculations";
 import {
   makeEntry,
   makeInsufficientObservedEntries,
@@ -108,6 +112,28 @@ describe("calculateObservedTdee", () => {
     ];
 
     expect(calculateObservedTdee(entries)).toBe(3252);
+  });
+});
+
+describe("calculateFormulaTdee", () => {
+  it("uses the selected activity factor directly", () => {
+    const profile = makeProfile({
+      activityFactor: "moderate",
+    });
+
+    const result = calculateFormulaTdee(profile, 80);
+
+    expect(result.activityMultiplier).toBe(1.55);
+  });
+
+  it("supports the extra active multiplier", () => {
+    const profile = makeProfile({
+      activityFactor: "extraActive",
+    });
+
+    const result = calculateFormulaTdee(profile, 80);
+
+    expect(result.activityMultiplier).toBe(1.9);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { AiAnalysisInput } from "../types";
+import { activityFactorPromptLabel } from "../domain/activity-factor";
 import { renderPromptTemplate } from "./prompt-template";
 import nutritionAnalysisPromptTemplate from "./prompts/nutrition-analysis.md?raw";
 
@@ -18,7 +19,7 @@ export function buildGeminiNutritionPrompt(input: AiAnalysisInput): string {
     heightCm: input.profile.height ?? "unknown",
     estimatedWeightKg: input.profile.estimatedWeight ?? "unknown",
     bodyFatPercent: input.profile.bodyFat ?? "unknown",
-    activityPrompt: input.profile.activityPrompt || "none provided",
+    activityFactor: activityFactorPromptLabel(input.profile.activityFactor ?? "sedentary"),
     savedInstructions: savedInstructions || "- none",
     foodLogText: input.foodLogText,
   });

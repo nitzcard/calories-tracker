@@ -54,8 +54,7 @@ interface Profile {
   bodyFat: number | null;
   goalMode: "cut" | "leanMass" | "maingain";
   tdeeEquation: "mifflinStJeor" | "harrisBenedict" | "cunningham" | "observedTdee";
-  activityFactor: "inferred" | "sedentary" | "light" | "moderate" | "veryActive";
-  activityPrompt: string;
+  activityFactor: "sedentary" | "light" | "moderate" | "veryActive" | "extraActive";
   foodInstructions: string;
   aiModel: string;
   locale: "en" | "he";

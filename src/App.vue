@@ -69,7 +69,6 @@ const {
   isSavingWeight,
   isSavingFoodLog,
   isSavingFoodInstructions,
-  isSavingActivityPrompt,
   isSavingTdeeEquation,
   isSavingLocale,
   isSavingTheme,
@@ -97,7 +96,6 @@ const {
   acceptSuggestedModelSwitch,
   dismissSuggestedModelSwitch,
   saveProfileDraft,
-  saveActivitySettings,
   saveTdeeEquation,
   saveFoodInstructions,
   saveAiKey,
@@ -149,8 +147,8 @@ const isProfileReady = computed(
   () =>
     Boolean(
       profile.value?.age &&
-        profile.value?.height &&
-        profile.value?.activityPrompt.trim(),
+      profile.value?.height &&
+        profile.value?.activityFactor,
     ),
 );
 const hasConfiguredGeminiKey = computed(() => Boolean(aiKeys.value.gemini.trim()));
@@ -647,11 +645,6 @@ async function retryAnalysisWithModel(providerId: string) {
   await analyzeCurrentDay();
 }
 
-async function saveActivityAndHighlight(activityPrompt: string) {
-  await saveActivitySettings(activityPrompt);
-  tdeeHighlightToken.value += 1;
-}
-
 async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   await saveProfileDraft(nextProfile ?? undefined);
   tdeeHighlightToken.value += 1;
@@ -859,10 +852,8 @@ async function confirmDeleteDay() {
           :locale="locale"
           :profile="profile"
           :estimated-lean-weight="estimatedLeanWeight"
-          :is-saving-activity="isSavingActivityPrompt"
           @update:profile="profile = $event"
           @save="saveProfileAndHighlight"
-          @save-activity="saveActivityAndHighlight"
         />
 
 	        <TdeeSummaryPanel
@@ -870,7 +861,7 @@ async function confirmDeleteDay() {
 	          :tdee="tdee"
 	          :selected-equation="profile.tdeeEquation"
 	          :highlight-token="tdeeHighlightToken"
-	          :is-updating="isSavingActivityPrompt || isSavingTdeeEquation"
+	          :is-updating="isSavingTdeeEquation"
 	          @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;

@@ -11,9 +11,6 @@ export function useAutoSaveState() {
   const isSavingFoodInstructions = computed(() =>
     Boolean(savingFields.value["constants.foodInstructions"]),
   );
-  const isSavingActivityPrompt = computed(() =>
-    Boolean(savingFields.value["constants.profile.activityPrompt"]),
-  );
   const isSavingTdeeEquation = computed(() =>
     Boolean(savingFields.value["constants.profile.tdeeEquation"]),
   );
@@ -46,7 +43,7 @@ export function useAutoSaveState() {
       savingFields.value = { ...savingFields.value, [fieldKey]: true };
     }
     try {
-      const minimumDelay = fieldKey === "constants.profile.activityPrompt" ? 520 : 280;
+      const minimumDelay = fieldKey === "constants.profile.activityFactor" ? 520 : 280;
       await Promise.all([action(), new Promise((resolve) => window.setTimeout(resolve, minimumDelay))]);
     } finally {
       activeAutoSaves = Math.max(0, activeAutoSaves - 1);
@@ -64,7 +61,6 @@ export function useAutoSaveState() {
     isSavingWeight,
     isSavingFoodLog,
     isSavingFoodInstructions,
-    isSavingActivityPrompt,
     isSavingTdeeEquation,
     isSavingLocale,
     isSavingTheme,

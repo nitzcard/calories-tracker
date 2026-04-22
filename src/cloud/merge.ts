@@ -1,5 +1,6 @@
 import type { ExportedAppData } from "../storage/repository";
 import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
+import { normalizeStoredActivityFactor } from "../domain/activity-factor";
 import type {
   DailyEntry,
   DeletedDailyEntryTombstone,
@@ -59,7 +60,7 @@ function mergeProfilePreservingData(
   const DEFAULT = {
     sex: "male" as const,
     tdeeEquation: "mifflinStJeor" as const,
-    activityFactor: "inferred" as const,
+    activityFactor: "sedentary" as const,
     aiModel: DEFAULT_GEMINI_MODEL,
     locale: "en" as const,
     themeMode: "system" as const,
@@ -68,6 +69,11 @@ function mergeProfilePreservingData(
 
   const preferred = options.prefer === "remote" ? remote : local;
   const other = preferred === remote ? local : remote;
+  const preferredLegacy = preferred as Profile & {
+    activityPrompt?: string | null;
+    activityFactor?: unknown;
+  };
+  const otherLegacy = other as Profile & { activityFactor?: unknown };
 
   const pickNonEmpty = (a: string, b: string) => {
     const aTrim = a.trim();
@@ -123,7 +129,10 @@ function mergeProfilePreservingData(
     id: "default",
     sex: mergedSex,
     tdeeEquation: mergedEquation,
-    activityFactor: "inferred" as const,
+    activityFactor: normalizeStoredActivityFactor(
+      preferred.activityFactor ?? preferredLegacy.activityFactor ?? other.activityFactor ?? otherLegacy.activityFactor,
+      preferredLegacy.activityPrompt,
+    ),
     locale: mergedLocale,
     themeMode: mergedTheme,
     aiModel: mergedModel,
@@ -133,7 +142,6 @@ function mergeProfilePreservingData(
     estimatedWeight: pickNullableNumber(preferred.estimatedWeight, other.estimatedWeight),
     targetWeight: pickNullableNumber(preferred.targetWeight, other.targetWeight),
     bodyFat: pickNullableNumber(preferred.bodyFat, other.bodyFat),
-    activityPrompt: pickNonEmpty(preferred.activityPrompt ?? "", other.activityPrompt ?? ""),
     foodInstructions: pickNonEmpty(preferred.foodInstructions ?? "", other.foodInstructions ?? ""),
     updatedAt: maxIso(local.updatedAt, remote.updatedAt) || preferred.updatedAt || other.updatedAt,
   };
@@ -208,7 +216,8 @@ function mergeEntryPreservingData(a: DailyEntry, b: DailyEntry): DailyEntry {
   const newer = a.updatedAt >= b.updatedAt ? a : b;
   const older = newer === a ? b : a;
 
-  const mergedFoodLogText = pickTextPreferLonger(a.foodLogText, b.foodLogText, newer);
+  // Food logs are user-authored source-of-truth text. On conflict, keep the newer save.
+  const mergedFoodLogText = newer.foodLogText;
   // Weight can be intentionally cleared by the user. If the newest entry has `null`,
   // keep that explicit clear instead of resurrecting an older non-null value.
   const mergedWeight = newer.weight;
@@ -240,17 +249,6 @@ function mergeEntryPreservingData(a: DailyEntry, b: DailyEntry): DailyEntry {
       b.createdAt || b.updatedAt,
     ),
   };
-}
-
-function pickTextPreferLonger(a: string, b: string, newer: DailyEntry): string {
-  const aTrim = a.trim();
-  const bTrim = b.trim();
-  if (!aTrim && !bTrim) return "";
-  if (!aTrim) return b;
-  if (!bTrim) return a;
-  if (aTrim.length !== bTrim.length) return aTrim.length > bTrim.length ? a : b;
-  // Same length: prefer the side that is newer overall for determinism.
-  return newer.foodLogText === a ? a : b;
 }
 
 function pickNutritionSide(a: DailyEntry, b: DailyEntry, newer: DailyEntry): DailyEntry {
@@ -315,7 +313,6 @@ function isBaselineBlob(blob: ExportedAppData) {
 	      !p.estimatedWeight &&
 	      !p.targetWeight &&
 	      !p.bodyFat &&
-	      !p.activityPrompt.trim() &&
 	      !p.foodInstructions.trim());
 
   const hasMeaningfulEntry = blob.dailyEntries.some((entry) => scoreEntry(entry) >= 2);

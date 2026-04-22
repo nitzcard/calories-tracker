@@ -729,17 +729,6 @@ export function useDashboard() {
     scheduleCloudPush("constants.profile");
   }
 
-  async function saveActivitySettings(activityPrompt: string) {
-    if (!profile.value) return;
-    profile.value = { ...profile.value!, activityFactor: "inferred", activityPrompt };
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        await saveProfile(profile.value!);
-      }, "constants.profile.activityPrompt");
-    });
-    scheduleCloudPush("constants.profile.activityPrompt");
-  }
-
   async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
     if (!profile.value) return;
     profile.value = { ...profile.value!, tdeeEquation };
@@ -1476,7 +1465,6 @@ export function useDashboard() {
     isSavingWeight: autoSave.isSavingWeight,
     isSavingFoodLog: autoSave.isSavingFoodLog,
     isSavingFoodInstructions: autoSave.isSavingFoodInstructions,
-    isSavingActivityPrompt: autoSave.isSavingActivityPrompt,
     isSavingTdeeEquation: autoSave.isSavingTdeeEquation,
     isSavingLocale: autoSave.isSavingLocale,
     isSavingTheme: autoSave.isSavingTheme,
@@ -1519,7 +1507,6 @@ export function useDashboard() {
     acceptSuggestedModelSwitch: analysis.acceptSuggestedModelSwitch,
     dismissSuggestedModelSwitch: analysis.dismissSuggestedModelSwitch,
     saveProfileDraft,
-    saveActivitySettings,
     saveTdeeEquation,
     saveFoodInstructions,
     saveAiKey,

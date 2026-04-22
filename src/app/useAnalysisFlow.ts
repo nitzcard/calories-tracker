@@ -66,7 +66,7 @@ export function useAnalysisFlow(args: {
   let suggestTimer: number | null = null;
 
   function getAnalyzeGate(_activeProvider: string, foodLogText: string): AnalyzeGate {
-    if (!args.profile.value?.age || !args.profile.value?.height || !args.profile.value.activityPrompt.trim()) {
+    if (!args.profile.value?.age || !args.profile.value?.height) {
       return { ok: false, reason: "incomplete-profile" };
     }
 

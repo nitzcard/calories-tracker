@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
+import { normalizeStoredActivityFactor } from "../domain/activity-factor";
 import type {
   DailyEntry,
   DailyEntryInput,
@@ -36,8 +37,7 @@ const DEFAULT_PROFILE: Profile = {
   bodyFat: null,
   goalMode: "maingain",
   tdeeEquation: "mifflinStJeor",
-  activityFactor: "inferred",
-  activityPrompt: "Office work and walking daily",
+  activityFactor: "sedentary",
   foodInstructions: "",
   aiModel: DEFAULT_GEMINI_MODEL,
   locale: "en",
@@ -51,7 +51,11 @@ export async function ensureDefaultProfile(
 ): Promise<Profile> {
   const existing = await db.profile.get("default");
   if (existing) {
-    const legacyExisting = existing as Profile & { targetWeight?: number | null };
+    const legacyExisting = existing as Profile & {
+      targetWeight?: number | null;
+      activityPrompt?: string | null;
+      activityFactor?: unknown;
+    };
     const legacyEquation = (existing as Profile & { tdeeEquation?: unknown }).tdeeEquation;
     const normalizedEquation =
       legacyEquation === "mifflinStJeor" ||
@@ -75,10 +79,7 @@ export async function ensureDefaultProfile(
       bodyFat: existing.bodyFat ?? DEFAULT_PROFILE.bodyFat,
       goalMode: normalizedGoalMode,
       tdeeEquation: normalizedEquation,
-      activityFactor: "inferred" as const,
-      activityPrompt: existing.activityPrompt?.trim()
-        ? existing.activityPrompt
-        : DEFAULT_PROFILE.activityPrompt,
+      activityFactor: normalizeStoredActivityFactor(existing.activityFactor, legacyExisting.activityPrompt),
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
@@ -96,7 +97,7 @@ export async function saveProfile(profile: Profile): Promise<void> {
   await db.profile.put(
     toPlain({
       ...profile,
-      activityFactor: "inferred" as const,
+      activityFactor: normalizeStoredActivityFactor(profile.activityFactor),
       updatedAt: new Date().toISOString(),
     }),
   );

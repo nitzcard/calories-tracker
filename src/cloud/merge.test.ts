@@ -92,13 +92,40 @@ describe("mergeExportedAppData", () => {
     expect(merged.dailyEntries[0]?.analysisStale).toBe(true);
   });
 
+  it("keeps the newer food log even when the older one is longer", () => {
+    const remote = makeExportedData({
+      dailyEntries: [
+        makeEntry({
+          date: "2026-04-20",
+          foodLogText: "eggs toast yogurt banana",
+          updatedAt: "2026-04-21T08:00:00.000Z",
+        }),
+      ],
+    });
+    const local = makeExportedData({
+      dailyEntries: [
+        makeEntry({
+          date: "2026-04-20",
+          foodLogText: "eggs toast",
+          updatedAt: "2026-04-21T09:00:00.000Z",
+        }),
+      ],
+    });
+
+    const merged = mergeExportedAppData(local, remote);
+
+    expect(merged.dailyEntries[0]?.foodLogText).toBe("eggs toast");
+  });
+
   it("prefers stronger remote profile over baseline local defaults", () => {
     const local = makeExportedData({
       profile: [
         makeProfile({
           age: null,
           height: null,
-          activityPrompt: "",
+          estimatedWeight: null,
+          targetWeight: null,
+          bodyFat: null,
           themeMode: "system",
           updatedAt: "2026-04-21T10:00:00.000Z",
         }),
@@ -109,7 +136,7 @@ describe("mergeExportedAppData", () => {
         makeProfile({
           age: 30,
           height: 175,
-          activityPrompt: "Gym 4 workouts a week",
+          activityFactor: "moderate",
           themeMode: "dark",
           updatedAt: "2026-04-20T10:00:00.000Z",
         }),
@@ -120,8 +147,8 @@ describe("mergeExportedAppData", () => {
 
     expect(merged.profile[0]?.age).toBe(30);
     expect(merged.profile[0]?.height).toBe(175);
-    expect(merged.profile[0]?.activityPrompt).toContain("Gym");
-    expect(merged.profile[0]?.themeMode).toBe("system");
+    expect(merged.profile[0]?.activityFactor).toBe("moderate");
+    expect(merged.profile[0]?.themeMode).toBe("dark");
   });
 
   it("keeps a newer male sex choice instead of treating it like a weak default", () => {

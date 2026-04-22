@@ -72,10 +72,12 @@ const activeTrendline = computed(() => {
 });
 const hasReferenceLines = computed(() => activeReferenceLines.value.length > 0);
 const normalizedPoints = computed(() =>
-  props.points.map((point) => ({
-    x: normalizeTimestamp(point.x),
-    y: point.y,
-  })),
+  props.points
+    .map((point) => ({
+      x: normalizeTimestamp(point.x),
+      y: point.y,
+    }))
+    .sort((left, right) => left.x - right.x),
 );
 const trendlineValues = computed(() =>
   activeTrendline.value ? buildTrendlineValues(normalizedPoints.value) : [],
@@ -114,6 +116,7 @@ function renderChart() {
   const allYValues = hasReferenceLines.value
     ? [...yValues, ...trendValues, ...referenceValuesList.flatMap((values) => values as Array<number | null>)]
     : [...yValues, ...trendValues];
+  const allSeriesValues = [yValues, ...(trendValues.length ? [trendValues] : []), ...referenceValuesList];
 
   const chartWidth = chartRef.value?.clientWidth || 320;
   const domainMin = xSplits[0] ?? 0;
@@ -137,6 +140,7 @@ function renderChart() {
           label: props.label,
           stroke: primarySeriesColor,
           width: 2,
+          spanGaps: true,
           points: { size: 8, stroke: primarySeriesColor, fill: primarySeriesColor, width: 2 },
         },
         ...(activeTrendline.value
@@ -145,6 +149,7 @@ function renderChart() {
                 label: activeTrendline.value.label,
                 stroke: activeTrendline.value.color ?? "#5e4aa8",
                 width: 3,
+                spanGaps: true,
                 points: { show: false },
               },
             ]
@@ -165,7 +170,7 @@ function renderChart() {
         },
         y: {
           auto: false,
-          range: () => buildYRange(yValues, allYValues),
+          range: () => buildVisibleYRange(xValues, allSeriesValues, yValues, allYValues),
         },
       },
       axes: [
@@ -436,6 +441,36 @@ function buildYRange(primaryValues: Array<number | null>, fallbackValues: Array<
   const pad = Math.max(span * 0.08, 0.25);
   const minBound = lower >= 0 ? 0 : Number.NEGATIVE_INFINITY;
   return [Math.max(minBound, lower - pad), upper + pad];
+}
+
+function buildVisibleYRange(
+  xValues: number[],
+  seriesValues: Array<Array<number | null>>,
+  primaryValues: Array<number | null>,
+  fallbackValues: Array<number | null>,
+): [number, number] {
+  const currentWindow = currentXScale.value ?? getXDomain();
+  const visibleValues: number[] = [];
+
+  for (let index = 0; index < xValues.length; index += 1) {
+    const x = xValues[index];
+    if (x < currentWindow.min || x > currentWindow.max) {
+      continue;
+    }
+
+    for (const values of seriesValues) {
+      const value = values[index];
+      if (typeof value === "number") {
+        visibleValues.push(value);
+      }
+    }
+  }
+
+  if (visibleValues.length) {
+    return buildYRange(visibleValues);
+  }
+
+  return buildYRange(primaryValues, fallbackValues);
 }
 
 function onVisibilityChange() {

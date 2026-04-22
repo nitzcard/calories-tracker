@@ -14,7 +14,6 @@ export function makeProfile(overrides: Partial<Profile> = {}): Profile {
     goalMode: "maingain",
     tdeeEquation: "mifflinStJeor",
     activityFactor: "light",
-    activityPrompt: "Office work and walking daily",
     foodInstructions: "",
     aiModel: "gemini-2.5-flash",
     locale: "en",

@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
-import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { AppLocale, BiologicalSex, Profile } from "../../types";
+import type { AppLocale, ActivityFactor, BiologicalSex, Profile } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
   profile: Profile;
   estimatedLeanWeight: number | null;
-  isSavingActivity: boolean;
 }>();
 
 const { t } = useI18n();
@@ -18,25 +16,48 @@ const { t } = useI18n();
 const emit = defineEmits<{
   "update:profile": [profile: Profile];
   save: [profile: Profile];
-  "save-activity": [activityPrompt: string];
 }>();
 
-const activityDraft = ref(props.profile.activityPrompt);
 const isProfileRequiredMissing = () =>
-  props.profile.age == null || props.profile.height == null || !activityDraft.value.trim();
+  props.profile.age == null || props.profile.height == null;
+
+const activityOptions = computed<Array<{ value: ActivityFactor; label: string; description: string }>>(() => [
+  {
+    value: "sedentary",
+    label: t("activityFactorSedentary"),
+    description: t("activityFactorSedentaryExplain"),
+  },
+  {
+    value: "light",
+    label: t("activityFactorLight"),
+    description: t("activityFactorLightExplain"),
+  },
+  {
+    value: "moderate",
+    label: t("activityFactorModerate"),
+    description: t("activityFactorModerateExplain"),
+  },
+  {
+    value: "veryActive",
+    label: t("activityFactorVeryActive"),
+    description: t("activityFactorVeryActiveExplain"),
+  },
+  {
+    value: "extraActive",
+    label: t("activityFactorExtraActive"),
+    description: t("activityFactorExtraActiveExplain"),
+  },
+]);
+
+const activityFactorSearchUrl = computed(() =>
+  props.locale === "he"
+    ? "https://www.google.com/search?q=%D7%90%D7%99%D7%9A+%D7%9C%D7%91%D7%97%D7%95%D7%A8+%D7%9E%D7%A7%D7%93%D7%9D+%D7%A4%D7%A2%D7%99%D7%9C%D7%95%D7%AA+tdee"
+    : "https://www.google.com/search?q=how+to+choose+activity+factor+tdee",
+);
 
 let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let latestProfileToSave: Profile | null = null;
 const PROFILE_SAVE_DEBOUNCE_MS = 2000;
-let activitySaveTimeout: ReturnType<typeof setTimeout> | null = null;
-let latestActivityToSave: string | null = null;
-
-watch(
-  () => props.profile.activityPrompt,
-  (next) => {
-    activityDraft.value = next;
-  },
-);
 
 function scheduleProfileSave(nextProfile: Profile) {
   latestProfileToSave = nextProfile;
@@ -68,33 +89,8 @@ function saveImmediateProfile(profile: Profile) {
   emit("save", profile);
 }
 
-function saveActivityProfile(nextPrompt: string) {
-  const nextProfile = { ...props.profile, activityFactor: "inferred" as const, activityPrompt: nextPrompt };
-  emit("update:profile", nextProfile);
-  latestActivityToSave = nextPrompt;
-  if (activitySaveTimeout) clearTimeout(activitySaveTimeout);
-  activitySaveTimeout = setTimeout(() => {
-    if (!latestActivityToSave) return;
-    emit("save-activity", latestActivityToSave);
-    activitySaveTimeout = null;
-  }, PROFILE_SAVE_DEBOUNCE_MS);
-}
-
-function flushActivityProfile(nextPrompt: string) {
-  const nextProfile = { ...props.profile, activityFactor: "inferred" as const, activityPrompt: nextPrompt };
-  emit("update:profile", nextProfile);
-  if (activitySaveTimeout) {
-    clearTimeout(activitySaveTimeout);
-    activitySaveTimeout = null;
-  }
-  latestActivityToSave = nextPrompt;
-  emit("save-activity", nextPrompt);
-}
-
-function onActivityPromptInput(event: Event) {
-  const nextPrompt = (event.target as HTMLTextAreaElement).value;
-  activityDraft.value = nextPrompt;
-  saveActivityProfile(nextPrompt);
+function saveActivityFactor(activityFactor: ActivityFactor) {
+  saveImmediateProfile({ ...props.profile, activityFactor });
 }
 </script>
 
@@ -204,23 +200,34 @@ function onActivityPromptInput(event: Event) {
       </FormField>
     </div>
 
-    <FormField
-      :label="t('activityPrompt')"
-      stacked
-      class="stacked"
-    >
-      <div class="activity-pane">
-        <FieldControl as="textarea" :is-saving="isSavingActivity">
-          <textarea
-            class="constant-textarea"
-            :class="{ 'is-missing': !activityDraft.trim() }"
-            :value="activityDraft"
-            :placeholder="t('activityPromptPlaceholder')"
-            @input="onActivityPromptInput"
-            @blur="flushActivityProfile(activityDraft)"
-          ></textarea>
-        </FieldControl>
+    <FormField :label="t('activityFactor')" class="stacked activity-factor-field">
+      <div class="activity-factor-picker">
+        <select
+          class="activity-factor-select"
+          data-testid="activity-factor-select"
+          :value="profile.activityFactor"
+          @change="saveActivityFactor(($event.target as HTMLSelectElement).value as ActivityFactor)"
+        >
+          <option
+            v-for="option in activityOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ `${option.label} - ${option.description}` }}
+          </option>
+        </select>
       </div>
+      <template #helper>
+        <small class="helper-text helper-slot">
+          <a
+            :href="activityFactorSearchUrl"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {{ t("activityFactorLearnMore") }}
+          </a>
+        </small>
+      </template>
     </FormField>
     <p class="status-line">{{ t("profileTdeeAutosave") }}</p>
   </BasePanel>
@@ -249,18 +256,24 @@ function onActivityPromptInput(event: Event) {
   inline-size: calc(var(--compact-control-inline-size) * 1.55);
 }
 
-.stacked {
-  /* no extra margin — BasePanel --panel-gap handles rhythm */
+.activity-factor-field {
+  display: grid;
+  flex: 1 1 100%;
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
-.activity-pane {
+.activity-factor-picker {
   display: grid;
-  gap: var(--field-gap);
-  padding: 0.8rem;
-  padding-block-end: 1rem;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 72%, var(--panel));
-  box-shadow: var(--bevel-raised);
+  gap: 0.75rem;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.activity-factor-select {
+  inline-size: 100%;
+  max-inline-size: none;
+  min-inline-size: 0;
 }
 
 .unit-field {
