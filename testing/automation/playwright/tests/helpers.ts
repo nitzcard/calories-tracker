@@ -230,10 +230,11 @@ export async function readPersistedAppState(page: Page) {
         request.onerror = () => reject(request.error);
       });
 
-    const [profile, dailyEntries, aiKeysRow] = await Promise.all([
+    const [profile, dailyEntries, aiKeysRow, cloudSyncStateRow] = await Promise.all([
       readOne<any>("profile", "default"),
       readAll<any>("dailyEntries"),
       readOne<any>("settings", "aiKeys"),
+      readOne<any>("settings", "cloudSyncState"),
     ]);
 
     await new Promise<void>((resolve, reject) => {
@@ -246,6 +247,7 @@ export async function readPersistedAppState(page: Page) {
       profile,
       dailyEntries,
       aiKeys: aiKeysRow?.aiKeys ?? null,
+      cloudSyncState: cloudSyncStateRow?.cloudSyncState ?? null,
       localStorage: {
         locale: localStorage.getItem("calorie-tracker.locale"),
         themeMode: localStorage.getItem("calorie-tracker.theme-mode"),
@@ -254,4 +256,51 @@ export async function readPersistedAppState(page: Page) {
       },
     };
   });
+}
+
+export async function initializeCloudSyncState(page: Page, state?: {
+  revision?: number;
+  lastSyncedRevision?: number;
+  pendingScopes?: string[];
+  lastRemoteFingerprint?: string;
+}) {
+  await page.evaluate(async ({ state }) => {
+    function openDb(name: string) {
+      return new Promise<IDBDatabase>((resolve, reject) => {
+        let upgradeTx: IDBTransaction | null = null;
+        const request = indexedDB.open(name);
+        request.onerror = () => reject(request.error);
+        request.onupgradeneeded = () => {
+          upgradeTx = request.transaction;
+        };
+        request.onsuccess = () => {
+          if (upgradeTx) {
+            upgradeTx.oncomplete = () => resolve(request.result);
+            upgradeTx.onerror = () => reject(upgradeTx.error || request.error);
+            return;
+          }
+          resolve(request.result);
+        };
+      });
+    }
+
+    const db = await openDb("calorie-tracker");
+    const tx = db.transaction(["settings"], "readwrite");
+    tx.objectStore("settings").put({
+      id: "cloudSyncState",
+      cloudSyncState: {
+        revision: state?.revision ?? 0,
+        lastSyncedRevision: state?.lastSyncedRevision ?? 0,
+        pendingScopes: state?.pendingScopes ?? [],
+        lastRemoteFingerprint: state?.lastRemoteFingerprint ?? "",
+        updatedAt: "2026-04-22T00:00:00.000Z",
+      },
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }, { state });
 }

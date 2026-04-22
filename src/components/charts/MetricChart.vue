@@ -90,6 +90,7 @@ const hasWeekBoundaries = computed(() =>
   buildWeekBoundarySplits(uniqueSorted(normalizedPoints.value.map((point) => point.x))).length > 0,
 );
 const primarySeriesColor = "#0a88a3";
+const chartAxisFont = "600 13px system-ui, sans-serif";
 
 function renderChart() {
   if (!chartRef.value || props.points.length === 0) {
@@ -175,12 +176,14 @@ function renderChart() {
       },
       axes: [
         {
+          font: chartAxisFont,
           stroke: "#5f5a4f",
           grid: { stroke: "rgba(95, 90, 79, 0.18)" },
           splits: (u) => buildVisibleXAxisSplits(u, xSplits, chartWidth),
           values: (_u, splits) => splits.map((value) => formatAxisDay(value)),
         },
         {
+          font: chartAxisFont,
           stroke: "#5f5a4f",
           grid: { stroke: "rgba(95, 90, 79, 0.14)" },
           values: (_u, splits) => splits.map((value) => formatYAxisValue(value)),
@@ -757,80 +760,43 @@ function drawPointValueLabels(u: uPlot, xValues: number[], yValues: Array<number
     .sort((left, right) => left.x - right.x);
 
   const zoomLevel = getZoomLevel(u);
-
-  if (!shouldShowPointLabels(visiblePoints, zoomLevel)) {
-    return;
-  }
+  const fontSize = getPointLabelFontSize(visiblePoints, zoomLevel);
+  const selectedPoints = selectPointLabels(visiblePoints, zoomLevel);
 
   const ctx = u.ctx;
-  const fontSize = getPointLabelFontSize(visiblePoints, zoomLevel);
   ctx.save();
-  ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
-  ctx.textAlign = "center";
+  ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+  ctx.fillStyle = "#0891b2";
+  ctx.strokeStyle = "rgba(11, 18, 32, 0.35)";
+  ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
 
-  for (let index = 0; index < visiblePoints.length; index += 1) {
-    const point = visiblePoints[index];
+  for (const point of selectedPoints) {
     const label = formatYAxisValue(point.value);
-    const labelWidth = Math.max(40, ctx.measureText(label).width + 4);
-    const labelHeight = fontSize + 4;
-    const labelX = Math.min(
-      Math.max(point.x, u.bbox.left + labelWidth / 2 + 4),
-      u.bbox.left + u.bbox.width - labelWidth / 2 - 4,
-    );
-    const offsetY = Math.max(18, Math.round(fontSize * 0.95));
-    const aboveY = point.y - offsetY;
-    const belowY = point.y + offsetY;
-    const labelY =
-      aboveY - labelHeight / 2 >= u.bbox.top + 4
-        ? aboveY
-        : belowY + labelHeight / 2 <= u.bbox.top + u.bbox.height - 4
-          ? belowY
-          : point.y;
+    const labelWidth = ctx.measureText(label).width;
+    const gap = Math.max(4, Math.round(fontSize * 0.45));
+    const placeRight = point.x + gap + labelWidth + 4 <= u.bbox.left + u.bbox.width - 4;
+    const x = placeRight ? point.x + gap : Math.max(u.bbox.left + 4, point.x - gap - labelWidth - 4);
+    const placeAbove = point.y - gap >= u.bbox.top + 8;
+    const y = placeAbove ? point.y - gap : point.y + gap;
 
-    ctx.fillStyle = primarySeriesColor;
-    ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
-    ctx.shadowBlur = 1;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 1;
-    ctx.fillText(label, labelX, labelY + 0.5);
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    ctx.strokeText(label, x, y);
+    ctx.fillText(label, x, y);
   }
 
   ctx.restore();
 }
 
-function shouldShowPointLabels(points: Array<{ x: number; y: number }>, zoomLevel: number) {
-  if (points.length === 1) {
-    return true;
-  }
-
-  if (points.length < 2) {
-    return false;
-  }
-
-  const minimumGap = points.slice(1).reduce((smallest, point, index) => {
-    const previous = points[index];
-    return Math.min(smallest, Math.abs(point.x - previous.x));
-  }, Number.POSITIVE_INFINITY);
-
-  if (zoomLevel < 1.3) {
-    return minimumGap >= 28 && points.length <= 10;
-  }
-
-  if (zoomLevel < 2.1) {
-    return minimumGap >= 36 && points.length <= 8;
-  }
-
-  return minimumGap >= 42 && points.length <= 6;
-}
-
 function getPointLabelFontSize(points: Array<{ x: number; y: number }>, zoomLevel: number) {
   if (points.length === 1) {
-    return clampNumber(Math.round(18 * Math.min(1.35, zoomLevel)), 16, 24);
+    return clampNumber(Math.round(20 * Math.min(1.45, zoomLevel)), 18, 28);
   }
 
   const minimumGap = points.slice(1).reduce((smallest, point, index) => {
@@ -838,8 +804,30 @@ function getPointLabelFontSize(points: Array<{ x: number; y: number }>, zoomLeve
     return Math.min(smallest, Math.abs(point.x - previous.x));
   }, Number.POSITIVE_INFINITY);
 
-  const zoomBoost = Math.max(0, zoomLevel - 1) * 3;
-  return clampNumber(Math.round(13 + minimumGap / 14 + zoomBoost), 13, 22);
+  const zoomBoost = Math.max(0, zoomLevel - 1) * 4;
+  return clampNumber(Math.round(16 + minimumGap / 20 + zoomBoost), 16, 28);
+}
+
+function selectPointLabels(points: Array<{ x: number; y: number; value: number }>, zoomLevel: number) {
+  if (points.length <= 1) {
+    return points;
+  }
+
+  if (zoomLevel >= 2.5) {
+    return points;
+  }
+
+  const maxLabels = zoomLevel < 1.2 ? 6 : zoomLevel < 1.8 ? 9 : 12;
+  const selected: Array<{ x: number; y: number; value: number }> = [];
+  const slot = Math.max(1, Math.ceil(points.length / maxLabels));
+
+  for (let index = 0; index < points.length; index += 1) {
+    if (index === 0 || index === points.length - 1 || index % slot === 0) {
+      selected.push(points[index]);
+    }
+  }
+
+  return selected;
 }
 
 function getZoomLevel(u: uPlot) {

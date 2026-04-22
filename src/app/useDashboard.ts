@@ -512,6 +512,56 @@ export function useDashboard() {
     });
   }
 
+  function toScopeList(scopes: string | string[]) {
+    return Array.isArray(scopes) ? scopes : [scopes];
+  }
+
+  async function notifyPersistedChange(scopes: string | string[]) {
+    for (const scope of toScopeList(scopes)) {
+      await markCloudChange(scope);
+    }
+    scheduleCloudPush(toScopeList(scopes)[0] ?? "");
+  }
+
+  async function runPersistedAutoSave(
+    fieldKey: string,
+    scopes: string | string[],
+    persist: () => Promise<{ changed: boolean }>,
+    onChanged?: () => Promise<void> | void,
+  ) {
+    let changed = false;
+    await autoSave.runAutoSave(async () => {
+      const result = await persist();
+      changed = result.changed;
+      if (!changed) {
+        return;
+      }
+      await onChanged?.();
+    }, fieldKey);
+
+    if (changed) {
+      await notifyPersistedChange(scopes);
+    }
+
+    return changed;
+  }
+
+  async function runQueuedProfileSave(
+    fieldKey: string,
+    scopes: string | string[],
+    nextProfile: Profile | null | undefined,
+  ) {
+    if (!nextProfile) return false;
+    profile.value = nextProfile;
+
+    let changed = false;
+    await profileSaveQueue.enqueue(async () => {
+      changed = await runPersistedAutoSave(fieldKey, scopes, () => saveProfile(profile.value!));
+    });
+
+    return changed;
+  }
+
   async function persistDraftsForDate(date: string) {
     const savedEntry = findEntryByDate(entries.value, date);
     const savedFoodLog = savedEntry?.foodLogText ?? "";
@@ -535,15 +585,14 @@ export function useDashboard() {
       update.weight = normalizedWeight;
     }
 
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const result = await upsertDailyEntry(update);
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      entries.value = await listEntries();
-    }, "today.persistDrafts");
+    const changed = await runPersistedAutoSave(
+      "today.persistDrafts",
+      [foodLogDirty ? "today.foodLog" : "", weightDirty ? "today.weight" : ""].filter(Boolean),
+      () => upsertDailyEntry(update),
+      async () => {
+        entries.value = await listEntries();
+      },
+    );
 
     clearPersistedDraftFieldsIfUnchanged(date, {
       foodLogText: update.foodLogText,
@@ -555,17 +604,7 @@ export function useDashboard() {
           : undefined,
     });
 
-    if (!changed) {
-      return;
-    }
-
-    if (foodLogDirty) {
-      await markCloudChange("today.foodLog");
-    }
-    if (weightDirty) {
-      await markCloudChange("today.weight");
-    }
-    scheduleCloudPush(foodLogDirty ? "today.foodLog" : "today.weight");
+    if (!changed) return;
   }
 
   function loadSelectedEntry(options?: { skipFoodLog?: boolean; preserveDirtyFields?: boolean }) {
@@ -608,33 +647,13 @@ export function useDashboard() {
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, nextLocale);
     ensureProviderOption(provider.value, nextLocale);
     refreshVisibleProviderOptions(nextLocale);
-    if (!profile.value) return;
-    profile.value = { ...profile.value!, locale: locale.value };
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        const result = await saveProfile(profile.value!);
-        if (result.changed) {
-          await markCloudChange("settings.locale");
-          scheduleCloudPush("settings.locale");
-        }
-      }, "settings.locale");
-    });
+    await runQueuedProfileSave("settings.locale", "settings.locale", profile.value ? { ...profile.value, locale: locale.value } : null);
   }
 
   async function onThemeChange(nextTheme: ThemeMode) {
     themeMode.value = nextTheme;
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, nextTheme);
-    if (!profile.value) return;
-    profile.value = { ...profile.value!, themeMode: themeMode.value };
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        const result = await saveProfile(profile.value!);
-        if (result.changed) {
-          await markCloudChange("settings.theme");
-          scheduleCloudPush("settings.theme");
-        }
-      }, "settings.theme");
-    });
+    await runQueuedProfileSave("settings.theme", "settings.theme", profile.value ? { ...profile.value, themeMode: themeMode.value } : null);
   }
 
   async function onProviderChange(nextProvider: string) {
@@ -642,17 +661,7 @@ export function useDashboard() {
     provider.value = nextProvider;
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, nextProvider);
     localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet, "1");
-    if (!profile.value) return;
-    profile.value = { ...profile.value!, aiModel: nextProvider };
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        const result = await saveProfile(profile.value!);
-        if (result.changed) {
-          await markCloudChange("settings.provider");
-          scheduleCloudPush("settings.provider");
-        }
-      }, "settings.provider");
-    });
+    await runQueuedProfileSave("settings.provider", "settings.provider", profile.value ? { ...profile.value, aiModel: nextProvider } : null);
     refreshVisibleProviderOptions();
   }
 
@@ -664,29 +673,27 @@ export function useDashboard() {
 
     const rawWeight = currentWeight.value;
     const date = selectedDate.value;
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const parsed = rawWeight.trim() ? Number(rawWeight) : null;
-      const normalizedWeight =
-        parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-      const result = await upsertDailyEntry({
+    const parsed = rawWeight.trim() ? Number(rawWeight) : null;
+    const normalizedWeight =
+      parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    const changed = await runPersistedAutoSave(
+      "today.weight",
+      "today.weight",
+      () => upsertDailyEntry({
         date,
         weight: normalizedWeight,
-      });
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      await refreshState();
-      if (selectedDate.value === date) {
-        currentWeight.value = normalizedWeight !== null ? String(normalizedWeight) : "";
-        hasUserEditedCurrentWeight.value = false;
-      }
-    }, "today.weight");
+      }),
+      async () => {
+        await refreshState();
+        if (selectedDate.value === date) {
+          currentWeight.value = normalizedWeight !== null ? String(normalizedWeight) : "";
+          hasUserEditedCurrentWeight.value = false;
+        }
+      },
+    );
     clearPersistedDraftFields(date, ["weight"]);
-    if (changed) {
-      await markCloudChange("today.weight");
-      scheduleCloudPush("today.weight");
+    if (!changed && selectedDate.value === date) {
+      hasUserEditedCurrentWeight.value = false;
     }
   }
 
@@ -698,24 +705,20 @@ export function useDashboard() {
 
     const foodLogText = currentFoodLog.value;
     const date = selectedDate.value;
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const result = await upsertDailyEntry({
+    const changed = await runPersistedAutoSave(
+      "today.foodLog",
+      "today.foodLog",
+      () => upsertDailyEntry({
         date,
         foodLogText,
-      });
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      await refreshState({ skipReloadFoodLog: true });
-    }, "today.foodLog");
+      }),
+      async () => {
+        await refreshState({ skipReloadFoodLog: true });
+      },
+    );
     hasUserEditedCurrentFoodLog.value = false;
     clearPersistedDraftFieldsIfUnchanged(date, { foodLogText });
-    if (changed) {
-      await markCloudChange("today.foodLog");
-      scheduleCloudPush("today.foodLog");
-    }
+    void changed;
   }
 
   async function deleteDay(date: string) {
@@ -728,119 +731,81 @@ export function useDashboard() {
       weightDraftSaveTimer = null;
     }
 
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const result = await deleteDailyEntry(date);
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      localStorage.removeItem(dailyDraftStorageKey(date));
-      await refreshState({ preserveDirtyFields: false });
-    }, `day.delete.${date}`);
+    const changed = await runPersistedAutoSave(
+      `day.delete.${date}`,
+      `day.delete.${date}`,
+      () => deleteDailyEntry(date),
+      async () => {
+        localStorage.removeItem(dailyDraftStorageKey(date));
+        await refreshState({ preserveDirtyFields: false });
+      },
+    );
 
     if (changed) {
       notice.value = "day-deleted";
-      await markCloudChange(`day.delete.${date}`);
-      scheduleCloudPush(`day.delete.${date}`);
     }
   }
 
   async function saveHistoryCalories(date: string, calories: number | null) {
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const result = await upsertDailyEntry({
+    await runPersistedAutoSave(
+      `history.calories.${date}`,
+      `history.calories.${date}`,
+      () => upsertDailyEntry({
         date,
         manualCalories: calories,
-      });
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      await refreshState();
-    }, `history.calories.${date}`);
-    if (changed) {
-      await markCloudChange(`history.calories.${date}`);
-      scheduleCloudPush(`history.calories.${date}`);
-    }
+      }),
+      async () => {
+        await refreshState();
+      },
+    );
   }
 
   async function saveHistoryWeight(date: string, weight: number | null) {
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const result = await upsertDailyEntry({
+    await runPersistedAutoSave(
+      `history.weight.${date}`,
+      `history.weight.${date}`,
+      () => upsertDailyEntry({
         date,
         weight,
-      });
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      await refreshState();
-    }, `history.weight.${date}`);
-    if (changed) {
-      await markCloudChange(`history.weight.${date}`);
-      scheduleCloudPush(`history.weight.${date}`);
-    }
+      }),
+      async () => {
+        await refreshState();
+      },
+    );
   }
 
   async function saveProfileDraft(nextProfile?: Profile) {
-    const profileToSave = nextProfile ?? profile.value;
-    if (!profileToSave) return;
-    profile.value = profileToSave;
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        const result = await saveProfile(profile.value!);
-        if (result.changed) {
-          await markCloudChange("constants.profile");
-          scheduleCloudPush("constants.profile");
-        }
-      }, "constants.profile");
-    });
+    await runQueuedProfileSave("constants.profile", "constants.profile", nextProfile ?? profile.value);
   }
 
   async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
-    if (!profile.value) return;
-    profile.value = { ...profile.value!, tdeeEquation };
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        const result = await saveProfile(profile.value!);
-        if (result.changed) {
-          await markCloudChange("constants.profile.tdeeEquation");
-          scheduleCloudPush("constants.profile.tdeeEquation");
-        }
-      }, "constants.profile.tdeeEquation");
-    });
+    await runQueuedProfileSave(
+      "constants.profile.tdeeEquation",
+      "constants.profile.tdeeEquation",
+      profile.value ? { ...profile.value, tdeeEquation } : null,
+    );
   }
 
   async function saveFoodInstructions(foodInstructions: string) {
-    if (!profile.value) return;
-    profile.value = { ...profile.value!, foodInstructions };
-    await profileSaveQueue.enqueue(async () => {
-      await autoSave.runAutoSave(async () => {
-        const result = await saveProfile(profile.value!);
-        if (result.changed) {
-          await markCloudChange("constants.foodInstructions");
-          scheduleCloudPush("constants.foodInstructions");
-        }
-      }, "constants.foodInstructions");
-    });
+    await runQueuedProfileSave(
+      "constants.foodInstructions",
+      "constants.foodInstructions",
+      profile.value ? { ...profile.value, foodInstructions } : null,
+    );
   }
 
   async function saveAiKey(providerKey: keyof StoredAiKeys, value: string) {
-    let changed = false;
-    await autoSave.runAutoSave(async () => {
+    await runPersistedAutoSave(
+      `credentials.${providerKey}`,
+      `credentials.${providerKey}`,
+      async () => {
       aiKeys.value = { ...aiKeys.value, [providerKey]: value };
       saveStoredAiKeys(aiKeys.value);
-      const result = await saveStoredAiKeysToDb(aiKeys.value);
-      changed = result.changed;
-    }, `credentials.${providerKey}`);
+        return saveStoredAiKeysToDb(aiKeys.value);
+      },
+    );
     // Keys are stored separately from the IndexedDB backup; cloud sync can encrypt them
     // only when a passphrase is provided.
-    if (changed) {
-      await markCloudChange(`credentials.${providerKey}`);
-      scheduleCloudPush(`credentials.${providerKey}`);
-    }
   }
 
   function clearNotice() {
