@@ -1,4 +1,5 @@
 import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
+import { localIsoDate } from "../domain/dates";
 import type {
   ActivityFactor,
   DailyEntry,
@@ -202,12 +203,23 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   daySpanDays: number | null;
   reason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
 } {
+  const temporal = (globalThis as any).Temporal as any;
+  if (!temporal?.PlainDate?.from || !temporal?.PlainDate?.compare) {
+    throw new Error("Temporal API is required but not available in this browser/runtime.");
+  }
+
+  const today = temporal.PlainDate.from(localIsoDate());
   const valid = entries
     .map((entry) => ({
       ...entry,
       effectiveWeight: deducedWeightFromEntries(entries, entry.date),
     }))
-    .filter((entry) => entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null)
+    .filter((entry) => {
+      if (temporal.PlainDate.compare(temporal.PlainDate.from(entry.date), today) >= 0) {
+        return false;
+      }
+      return entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null;
+    })
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (valid.length < MIN_OBSERVED_TDEE_ENTRIES) {
@@ -234,7 +246,9 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
     };
   }
 
-  const daySpan = Math.max(1, (Date.parse(last.date) - Date.parse(first.date)) / 86400000);
+  const firstDate = temporal.PlainDate.from(first.date);
+  const lastDate = temporal.PlainDate.from(last.date);
+  const daySpan = Math.max(1, firstDate.until(lastDate).days);
   if (daySpan < MIN_OBSERVED_TDEE_DAYS) {
     return {
       value: null,
@@ -250,9 +264,9 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
     valid.reduce((sum, entry) => sum + (resolvedDailyCalories(entry) ?? 0), 0) / valid.length;
   const firstWeight = valid[0].effectiveWeight as number;
   const lastWeight = valid[valid.length - 1].effectiveWeight as number;
-  const weightChangeKg = lastWeight - firstWeight;
-  const dailyWeightEnergy = Math.round((weightChangeKg * 7700) / daySpan);
-  const observedTdee = Math.round(avgCalories - dailyWeightEnergy);
+  const observedTdee = Math.round(
+    avgCalories - ((lastWeight - firstWeight) * 7700) / daySpan,
+  );
 
   if (observedTdee < OBSERVED_TDEE_MIN || observedTdee > OBSERVED_TDEE_MAX) {
     return {
