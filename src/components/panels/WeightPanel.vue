@@ -72,19 +72,21 @@ const { t } = useI18n();
 }
 
 .date-input {
-  inline-size: auto;
-  min-inline-size: 11.5rem;
+  inline-size: min(100%, 14rem);
+  max-inline-size: 100%;
 }
 
 .weight-box {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  inline-size: min(100%, 12rem);
+  max-inline-size: 100%;
 }
 
 .weight-input {
-  inline-size: 8rem;
-  max-inline-size: 8rem;
+  flex: 1 1 auto;
+  min-inline-size: 0;
 }
 
 .unit-pill {
@@ -105,11 +107,6 @@ const { t } = useI18n();
 
   .weight-box {
     inline-size: 100%;
-  }
-
-  .weight-input {
-    inline-size: 100%;
-    max-inline-size: none;
   }
 }
 </style>

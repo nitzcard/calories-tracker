@@ -101,6 +101,12 @@ describe("calculateObservedTdee", () => {
     expect(calculateObservedTdee(makeInsufficientObservedEntries())).toBeNull();
   });
 
+  it("works when Temporal is unavailable", () => {
+    (globalThis as any).Temporal = undefined;
+
+    expect(calculateObservedTdee(makeObservedTdeeEntries())).toBe(3252);
+  });
+
   it("uses average calories and start-to-end weight change", () => {
     expect(calculateObservedTdee(makeObservedTdeeEntries())).toBe(3252);
   });

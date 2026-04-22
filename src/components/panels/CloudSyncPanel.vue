@@ -37,7 +37,7 @@ const cloudModeSelectWidth = computed(() => {
   const offlineLabel = t("cloudModeOffline");
   const cloudLabel = hasConfirmedUser.value ? t("cloudModeCloud") : t("cloudModeCloudPending");
   const longest = Math.max(offlineLabel.trim().length, cloudLabel.trim().length);
-  const widthCh = Math.min(70, Math.max(36, longest + 10));
+  const widthCh = Math.min(24, Math.max(16, longest + 4));
   return `${widthCh}ch`;
 });
 let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -310,7 +310,9 @@ function onSubmit() {
 .cloud-actions {
   display: flex;
   align-items: end;
+  flex-wrap: wrap;
   gap: 8px;
+  min-inline-size: 0;
 }
 
 .auth-block {
@@ -321,6 +323,10 @@ function onSubmit() {
 
 .auth-block > * {
   min-inline-size: 0;
+}
+
+.auth-block :deep(.field-control) {
+  inline-size: 100%;
 }
 
 @media (min-width: 860px) {

@@ -30,6 +30,8 @@ withDefaults(
 <style scoped>
 .field-control {
   position: relative;
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .field-control :deep(input),
@@ -38,8 +40,19 @@ withDefaults(
   min-inline-size: 0;
 }
 
+.field-control :deep(input) {
+  inline-size: min(100%, var(--field-input-inline-size, var(--text-control-inline-size)));
+  max-inline-size: var(--field-input-inline-size, var(--text-control-inline-size));
+}
+
 .field-control :deep(textarea) {
   inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.field-control :deep(select) {
+  inline-size: min(100%, var(--field-select-inline-size, var(--select-control-inline-size, 80%)));
+  max-inline-size: 100%;
 }
 
 .field-control--input .field-spinner,

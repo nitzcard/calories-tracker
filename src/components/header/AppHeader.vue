@@ -254,8 +254,13 @@ const confirmedUserTag = computed(() => {
   max-inline-size: 100%;
 }
 
+.controls-grid :deep(.field-control) {
+  inline-size: 100%;
+}
+
 .controls-grid :deep(select) {
   /* Keep the header controls readable even when option labels are long. */
+  --field-select-inline-size: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

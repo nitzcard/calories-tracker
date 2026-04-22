@@ -252,6 +252,11 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
   max-inline-size: 100%;
 }
 
+.controls-grid :deep(input),
+.controls-grid :deep(select) {
+  min-inline-size: 0;
+}
+
 .controls-grid :deep(.goal-mode-field) {
   inline-size: calc(var(--compact-control-inline-size) * 1.55);
 }
@@ -277,11 +282,16 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
 }
 
 .unit-field {
-  display: inline-flex;
+  display: flex;
   gap: var(--field-gap);
   align-items: center;
-  inline-size: min(100%, max-content);
-  max-inline-size: 100%;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.unit-field :deep(input) {
+  flex: 1 1 auto;
+  min-inline-size: 0;
 }
 
 .field-unit {
@@ -323,12 +333,11 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
   }
 
   .unit-field {
-    display: flex;
     inline-size: 100%;
   }
 
   .unit-field :deep(input) {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-inline-size: 0;
   }
 

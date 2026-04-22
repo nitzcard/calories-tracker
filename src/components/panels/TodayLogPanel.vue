@@ -385,20 +385,22 @@ const localizedSelectedDate = computed(() =>
 }
 
 .unit-field {
-  display: inline-flex;
+  display: flex;
   gap: var(--field-gap);
   align-items: center;
-  inline-size: min(100%, max-content);
-  max-inline-size: 100%;
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .weight-control {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-inline-size: 0;
 }
 
 .weight-control :deep(input) {
-  inline-size: 8rem;
-  max-inline-size: 8rem;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .field-unit {
@@ -412,7 +414,8 @@ const localizedSelectedDate = computed(() =>
 }
 
 .weight-input {
-  inline-size: min(100%, 8rem);
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .form-row {

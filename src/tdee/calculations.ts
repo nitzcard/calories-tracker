@@ -1,5 +1,5 @@
 import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
-import { localIsoDate } from "../domain/dates";
+import { compareIsoDates, diffIsoDays, localIsoDate } from "../domain/dates";
 import type {
   ActivityFactor,
   DailyEntry,
@@ -86,19 +86,14 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   daySpanDays: number | null;
   reason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
 } {
-  const temporal = (globalThis as any).Temporal as any;
-  if (!temporal?.PlainDate?.from || !temporal?.PlainDate?.compare) {
-    throw new Error("Temporal API is required but not available in this browser/runtime.");
-  }
-
-  const today = temporal.PlainDate.from(localIsoDate());
+  const today = localIsoDate();
   const valid = entries
     .map((entry) => ({
       ...entry,
       effectiveWeight: deducedWeightFromEntries(entries, entry.date),
     }))
     .filter((entry) => {
-      if (temporal.PlainDate.compare(temporal.PlainDate.from(entry.date), today) >= 0) {
+      if (compareIsoDates(entry.date, today) >= 0) {
         return false;
       }
       return entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null;
@@ -129,9 +124,7 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
     };
   }
 
-  const firstDate = temporal.PlainDate.from(first.date);
-  const lastDate = temporal.PlainDate.from(last.date);
-  const daySpan = Math.max(1, firstDate.until(lastDate).days);
+  const daySpan = Math.max(1, diffIsoDays(first.date, last.date));
   if (daySpan < MIN_OBSERVED_TDEE_DAYS) {
     return {
       value: null,
