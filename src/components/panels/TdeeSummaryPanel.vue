@@ -133,6 +133,10 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
     year: "2-digit",
   }).format(new Date(`${date}T00:00:00`));
 }
+
+function observedTdeeExplainHref() {
+  return "https://www.google.com/search?q=observed+tdee+equation+reddit&rlz=1C5GCEM_en&oq=observed+tdee+equation+reddit&gs_lcrp=EgZjaHJvbWUyCQgAEEUYORigATIHCAEQIRigATIHCAIQIRigATIGCAMQIRgV0gEINTU3MWowajSoAgOwAgHxBZ2TZ5I-sSdr&sourceid=chrome&ie=UTF-8";
+}
 </script>
 
 	<template>
@@ -172,7 +176,7 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
           </tr>
         </thead>
 	        <tbody>
-		          <tr>
+          <tr>
             <td class="pick-col">
               <input
                 type="radio"
@@ -181,53 +185,59 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
                 @change="onPick('observedTdee')"
               />
             </td>
-	            <td><strong>{{ t("observedTdee") }}</strong></td>
+	            <td>
+              <a
+                class="formula-link observed-tdee-source-link"
+                :href="observedTdeeExplainHref()"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {{ t("observedTdee") }}
+              </a>
+              <div
+                v-if="tdee.observedFromDate && tdee.observedToDate"
+                class="helper-text observed-tdee-range"
+                dir="ltr"
+              >
+                {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
+                {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
+              </div>
+            </td>
             <td class="calorie-cell">{{ tdee.observedTdee ?? "-" }}</td>
             <td>
               <div
                 class="tdee-source-helper"
                 dir="ltr"
               >
-                <span
-                class="math-equation"
-                :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
-              >
-                <span class="math-equation__term">{{ t("observedTdeeFormulaLabel") }}</span>
-                <span class="math-equation__eq">=</span>
-                <span class="math-equation__term">{{ t("observedTdeeFormulaAverage") }}</span>
-                <span class="math-equation__eq">−</span>
-                <span class="math-fraction">
-                  <span class="math-fraction__num">
-                    <span class="math-group">
-                      <span class="math-equation__eq">(</span>
-                      <span class="math-equation__term">{{ t("observedTdeeFormulaLastWeight") }}</span>
-                      <span class="math-equation__eq">−</span>
-                      <span class="math-equation__term">{{ t("observedTdeeFormulaFirstWeight") }}</span>
-                      <span class="math-equation__eq">)</span>
-                    </span>
-                    <span class="math-equation__eq">×</span>
-                    <span class="math-equation__term">7700</span>
-                  </span>
-                  <span class="math-fraction__bar"></span>
-                  <span class="math-fraction__den">
-                    <span class="math-equation__term">{{ t("observedTdeeFormulaDays") }}</span>
-                  </span>
-                </span>
-                </span>
+                <math
+                  class="math-equation"
+                  xmlns="http://www.w3.org/1998/Math/MathML"
+                  :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
+                >
+                  <mrow>
+                    <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
+                    <mo>=</mo>
+                    <mtext>{{ t("observedTdeeFormulaAverage") }}</mtext>
+                    <mo>−</mo>
+                    <mfrac>
+                      <mrow>
+                        <mo>(</mo>
+                        <mtext>{{ t("observedTdeeFormulaLastWeight") }}</mtext>
+                        <mo>−</mo>
+                        <mtext>{{ t("observedTdeeFormulaFirstWeight") }}</mtext>
+                        <mo>)</mo>
+                        <mo>×</mo>
+                        <mn>7700</mn>
+                      </mrow>
+                      <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
+                    </mfrac>
+                  </mrow>
+                </math>
               </div>
               <span v-if="tdee.observedTdee == null">
                 <br />
                 <em class="muted">{{ observedEmptyText() }}</em>
               </span>
-              <div
-                v-if="tdee.observedFromDate && tdee.observedToDate"
-                class="tdee-source-helper tdee-source-helper--range"
-                dir="ltr"
-              >
-                {{ t("observedTdeeRange") }}:
-                {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
-                {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
-              </div>
             </td>
           </tr>
           <tr v-for="(value, name) in tdee.formulaBreakdown" :key="name">
@@ -282,45 +292,49 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
             @change="onPick('observedTdee')"
             class="tdee-card__radio"
           />
-          <strong class="tdee-card__title">{{ t("observedTdee") }}</strong>
+          <a
+            class="formula-link tdee-card__title"
+            :href="observedTdeeExplainHref()"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {{ t("observedTdee") }}
+          </a>
         </div>
         <div class="tdee-card__content">
           <div class="tdee-card__row">
             <div class="tdee-card__label">{{ t("tdeeCalories") }}</div>
             <div class="tdee-card__value">{{ tdee.observedTdee ?? "-" }}</div>
           </div>
-          <div class="tdee-card__label">{{ t("tdeeSource") }}</div>
           <div class="tdee-card__helper">
             <div
               class="tdee-source-helper"
               dir="ltr"
             >
-              <span
-              class="math-equation"
-              :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
-            >
-              <span class="math-equation__term">{{ t("observedTdeeFormulaLabel") }}</span>
-              <span class="math-equation__eq">=</span>
-              <span class="math-equation__term">{{ t("observedTdeeFormulaAverage") }}</span>
-              <span class="math-equation__eq">−</span>
-              <span class="math-fraction">
-                <span class="math-fraction__num">
-                  <span class="math-group">
-                    <span class="math-equation__eq">(</span>
-                    <span class="math-equation__term">{{ t("observedTdeeFormulaLastWeight") }}</span>
-                    <span class="math-equation__eq">−</span>
-                    <span class="math-equation__term">{{ t("observedTdeeFormulaFirstWeight") }}</span>
-                    <span class="math-equation__eq">)</span>
-                  </span>
-                  <span class="math-equation__eq">×</span>
-                  <span class="math-equation__term">7700</span>
-                </span>
-                <span class="math-fraction__bar"></span>
-                <span class="math-fraction__den">
-                  <span class="math-equation__term">{{ t("observedTdeeFormulaDays") }}</span>
-                </span>
-              </span>
-              </span>
+              <math
+                class="math-equation"
+                xmlns="http://www.w3.org/1998/Math/MathML"
+                :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
+              >
+                <mrow>
+                  <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
+                  <mo>=</mo>
+                  <mtext>{{ t("observedTdeeFormulaAverage") }}</mtext>
+                  <mo>−</mo>
+                  <mfrac>
+                    <mrow>
+                      <mo>(</mo>
+                      <mtext>{{ t("observedTdeeFormulaLastWeight") }}</mtext>
+                      <mo>−</mo>
+                      <mtext>{{ t("observedTdeeFormulaFirstWeight") }}</mtext>
+                      <mo>)</mo>
+                      <mo>×</mo>
+                      <mn>7700</mn>
+                    </mrow>
+                    <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
+                  </mfrac>
+                  </mrow>
+                </math>
             </div>
             <span v-if="tdee.observedTdee == null">
               <br />
@@ -328,10 +342,9 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
             </span>
             <div
               v-if="tdee.observedFromDate && tdee.observedToDate"
-              class="tdee-source-helper tdee-source-helper--range"
+              class="helper-text observed-tdee-range"
               dir="ltr"
             >
-              {{ t("observedTdeeRange") }}:
               {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
               {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
             </div>
@@ -415,44 +428,14 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
   }
 
 .math-equation {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.18rem;
+  display: inline-block;
+  max-inline-size: 100%;
   font-family: "Times New Roman", Georgia, serif;
-  font-size: 1.02em;
-  line-height: 1.15;
-  row-gap: 0.28rem;
-  max-inline-size: 100%;
-  white-space: normal;
-}
-
-.math-equation__term,
-.math-equation__eq {
-  white-space: nowrap;
-}
-
-.math-fraction {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
-  min-inline-size: 6.2rem;
-  max-inline-size: 100%;
-}
-
-.math-fraction__num,
-.math-fraction__den {
-  display: flex;
-  justify-content: center;
-  gap: 0.18rem;
-  padding-inline: 0.15rem;
-  white-space: nowrap;
-}
-
-.math-fraction__bar {
-  block-size: 1px;
-  background: currentColor;
-  margin-block: 0.12rem;
+  font-size: 1.12em;
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--text-primary);
+  vertical-align: middle;
 }
 
 .tdee-part-heading {
@@ -546,17 +529,17 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
 
 .tdee-table th:nth-child(2),
 .tdee-table td:nth-child(2) {
-  inline-size: 24%;
+  inline-size: 20%;
 }
 
 .tdee-table th:nth-child(3),
 .tdee-table td:nth-child(3) {
-  inline-size: 22%;
+  inline-size: 16%;
 }
 
 .tdee-table th:nth-child(4),
 .tdee-table td:nth-child(4) {
-  inline-size: 52%;
+  inline-size: 64%;
 }
 
 .calorie-cell {
@@ -646,6 +629,17 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
   align-items: baseline;
   gap: 0.2rem;
   white-space: nowrap;
+}
+
+.helper-text {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.observed-tdee-range {
+  font-size: 0.8rem;
+  margin-block-start: 0.2rem;
 }
 
 :deep(.tdee-panel--highlighted) {
@@ -758,15 +752,48 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
   line-height: 1.4;
 }
 
-.tdee-source-helper {
+.helper-text {
   color: var(--text-muted);
   font-size: 0.9rem;
   line-height: 1.4;
 }
 
-.tdee-source-helper--range {
-  margin-block-start: 0.35rem;
+.tdee-source-helper {
+  color: var(--text-muted);
+  font-size: inherit;
+  line-height: 1.4;
+  display: grid;
+  gap: 0.2rem;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
+
+.observed-tdee-source-link {
+  display: inline-block;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 1em;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.observed-tdee-source-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.observed-tdee-range {
+  font-size: 0.8rem;
+  margin-block-start: 0.2rem;
+}
+
+  .math-equation {
+    display: block;
+    font-size: 0.76em;
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
 
   .tdee-custom-cell-mobile {
     display: flex;

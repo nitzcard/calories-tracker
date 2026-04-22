@@ -132,12 +132,13 @@ export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
         const request = indexedDB.open(name);
         request.onerror = () => reject(request.error);
         request.onupgradeneeded = () => {
-          upgradeTx = request.transaction;
+          upgradeTx = request.transaction!;
         };
         request.onsuccess = () => {
-          if (upgradeTx) {
-            upgradeTx.oncomplete = () => resolve(request.result);
-            upgradeTx.onerror = () => reject(upgradeTx.error || request.error);
+          const tx = upgradeTx;
+          if (tx) {
+            tx.oncomplete = () => resolve(request.result);
+            tx.onerror = () => reject(tx.error || request.error);
             return;
           }
           resolve(request.result);
@@ -200,12 +201,13 @@ export async function readPersistedAppState(page: Page) {
         const request = indexedDB.open(name);
         request.onerror = () => reject(request.error);
         request.onupgradeneeded = () => {
-          upgradeTx = request.transaction;
+          upgradeTx = request.transaction!;
         };
         request.onsuccess = () => {
-          if (upgradeTx) {
-            upgradeTx.oncomplete = () => resolve(request.result);
-            upgradeTx.onerror = () => reject(upgradeTx.error || request.error);
+          const tx = upgradeTx;
+          if (tx) {
+            tx.oncomplete = () => resolve(request.result);
+            tx.onerror = () => reject(tx.error || request.error);
             return;
           }
           resolve(request.result);
@@ -271,12 +273,13 @@ export async function initializeCloudSyncState(page: Page, state?: {
         const request = indexedDB.open(name);
         request.onerror = () => reject(request.error);
         request.onupgradeneeded = () => {
-          upgradeTx = request.transaction;
+          upgradeTx = request.transaction!;
         };
         request.onsuccess = () => {
-          if (upgradeTx) {
-            upgradeTx.oncomplete = () => resolve(request.result);
-            upgradeTx.onerror = () => reject(upgradeTx.error || request.error);
+          const tx = upgradeTx;
+          if (tx) {
+            tx.oncomplete = () => resolve(request.result);
+            tx.onerror = () => reject(tx.error || request.error);
             return;
           }
           resolve(request.result);
@@ -303,4 +306,20 @@ export async function initializeCloudSyncState(page: Page, state?: {
     });
     db.close();
   }, { state });
+}
+
+export async function clearAppStorage(page: Page) {
+  await page.evaluate(async () => {
+    localStorage.clear();
+
+    const deleteDb = (name: string) =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => resolve();
+      });
+
+    await deleteDb("calorie-tracker");
+  });
 }

@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { isoDate, readPersistedAppState, seedProfileAndEntries } from "./helpers";
 
-async function forceOpenPanel(page: Parameters<typeof test>[0]["page"], selector: string) {
-  await page.locator(selector).evaluate((node) => {
+async function forceOpenPanel(page: Page, selector: string) {
+  await page.locator(selector).evaluate((node: Element) => {
     if (node instanceof HTMLDetailsElement) {
       node.open = true;
     }
