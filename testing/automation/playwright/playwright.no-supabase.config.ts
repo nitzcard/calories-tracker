@@ -2,13 +2,12 @@ import { defineConfig } from "@playwright/test";
 
 declare const process: {
   env: Record<string, string | undefined> & {
-    APP_URL?: string;
     CI?: string;
   };
 };
 
 const isCI = Boolean(process.env.CI);
-const noSupabaseBaseURL = process.env.APP_URL || "http://127.0.0.1:7002";
+const noSupabaseBaseURL = "http://127.0.0.1:7002";
 
 export default defineConfig({
   testDir: "./tests",
