@@ -149,8 +149,8 @@ const hasEffectiveGeminiKey = computed(() =>
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 const isJasmineThemeActive = computed(() => themeMode.value === "jasmine");
-const showCloudLoginGate = computed(() => !supabaseConfigured.value);
-const cloudLoginGateMessage = computed(() => cloudError.value || t("cloudSupabaseMissing"));
+const hasConfirmedCloudLogin = computed(() => Boolean(cloudConfirmedUsername.value.trim()));
+const showCloudLoginGate = computed(() => supabaseConfigured.value && !hasConfirmedCloudLogin.value);
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
   if (slope === null || !Number.isFinite(slope)) {
@@ -726,9 +726,27 @@ async function confirmDeleteDay() {
       @theme-change="onThemeChange"
     />
 
-    <BasePanel :title="t('cloudLogin')" :helper="t('cloudSyncHelper')">
-      <p class="login-gate-error" dir="ltr">{{ cloudLoginGateMessage }}</p>
-    </BasePanel>
+    <section v-if="profile" class="content-grid">
+      <div class="grid-cell span-12">
+        <CloudSyncPanel
+          :locale="locale"
+          :profile="profile"
+          :cloud-username="cloudUsername"
+          :cloud-confirmed-username="cloudConfirmedUsername"
+          :has-saved-cloud-password="hasSavedCloudPassword"
+          :is-cloud-busy="isCloudBusy"
+          :cloud-status="cloudStatus"
+          :cloud-last-synced-at="cloudLastSyncedAt"
+          :cloud-error="cloudError"
+          :supabase-configured="supabaseConfigured"
+          @update:profile="profile = $event"
+          @save="saveProfileAndHighlight"
+          @update:cloudUsername="setCloudUsername"
+          @sync="cloudSyncNow($event)"
+          @logout="cloudLogout"
+        />
+      </div>
+    </section>
   </main>
 
   <main v-else class="app-shell">
@@ -1031,9 +1049,6 @@ async function confirmDeleteDay() {
 
 .app-shell--blocked {
   min-block-size: 100vh;
-  display: grid;
-  align-content: center;
-  gap: var(--space-4);
 }
 
 .login-gate-error {

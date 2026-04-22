@@ -17,6 +17,7 @@ const props = defineProps<{
   cloudLastSyncedAt: string;
   cloudError: string;
   supabaseConfigured: boolean;
+  authView?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -147,8 +148,8 @@ function onSubmit() {
 </script>
 
 <template>
-  <BasePanel :title="t('cloudSyncTitle')" :helper="t('cloudSyncHelper')">
-    <div class="cloud-controls">
+  <BasePanel :title="t('cloudSyncTitle')" :helper="t('cloudSyncHelper')" :class="{ 'cloud-panel--auth': authView }">
+    <div class="cloud-controls" :class="{ 'cloud-controls--auth': authView }">
       <form class="auth-block" @submit.prevent="onSubmit">
         <FormField :label="t('cloudUsername')" reserve-helper-space>
           <FieldControl>
@@ -178,7 +179,7 @@ function onSubmit() {
           </FieldControl>
         </FormField>
 
-        <FormField :helper="t('emailHelper')">
+        <FormField v-if="!authView" :helper="t('emailHelper')">
           <template #label>
             <span class="field-label-with-pill">
               <span>{{ t("email") }}</span>
@@ -231,36 +232,30 @@ function onSubmit() {
       </form>
     </div>
 
-    <details class="merge-rules">
-      <summary class="merge-rules__summary">{{ t("cloudMergeRulesTitle") }}</summary>
-      <ul class="merge-rules__list">
-        <li>{{ t("cloudMergeRulePullMergePush") }}</li>
-        <li>{{ t("cloudMergeRulePerDayNewestWins") }}</li>
-        <li>{{ t("cloudMergeRuleDefaultsWeaker") }}</li>
-        <li>{{ t("cloudMergeRuleNeverWipesLocal") }}</li>
-        <li>{{ t("cloudMergeRuleAutoSync") }}</li>
-        <li>{{ t("cloudMergeRulePassword") }}</li>
-      </ul>
-    </details>
-
     <p v-if="statusText" class="status-pill">
       {{ statusText }}
       <span v-if="cloudLastSyncedAt" class="muted">({{ cloudLastSyncedAt }})</span>
     </p>
     <p v-if="cloudError" class="status-pill status-pill--error" dir="ltr">{{ cloudError }}</p>
     <p v-if="draftDiffersFromConfirmed" class="status-pill">{{ t("cloudUsernameNeedsSync") }}</p>
-    <p v-if="!hasConfirmedUser" class="status-pill">{{ t("cloudLoginPending") }}</p>
-    <p v-if="!draftUsername.trim()" class="status-pill">{{ t("cloudUsernameMissing") }}</p>
-    <p v-else-if="usernameTooShort" class="status-pill">{{ t("cloudUsernameTooShort", { min: 3 }) }}</p>
     <p v-if="!supabaseConfigured" class="status-pill">{{ t("cloudSupabaseMissing") }}</p>
   </BasePanel>
 </template>
 
 <style scoped>
+.cloud-panel--auth {
+  inline-size: min(100%, 46rem);
+  margin: 0 auto;
+}
+
 .cloud-controls {
   display: grid;
   gap: 8px;
   margin-block-start: 10px;
+}
+
+.cloud-controls--auth {
+  margin-block-start: 0;
 }
 
 .auth-block :deep(.helper-slot) {
@@ -308,6 +303,27 @@ function onSubmit() {
   }
 }
 
+.cloud-panel--auth .auth-block {
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.cloud-panel--auth .cloud-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+.cloud-panel--auth .status-pill {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .cloud-panel--auth .auth-block {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field-label-with-pill {
   display: inline-flex;
   flex-wrap: wrap;
@@ -325,29 +341,6 @@ function onSubmit() {
   font-size: 0.78rem;
   line-height: 1;
   box-shadow: var(--bevel-raised);
-}
-
-.merge-rules {
-  margin: 8px 0 0;
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  box-shadow: var(--bevel-sunken);
-  color: var(--text-muted);
-}
-
-.merge-rules__summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--pill-text);
-}
-
-.merge-rules__list {
-  margin: 0.45rem 0 0;
-  padding-inline-start: 1.1rem;
-  display: grid;
-  gap: 0.25rem;
-  line-height: 1.35;
 }
 
 .logout-action {

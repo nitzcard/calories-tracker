@@ -13,6 +13,13 @@ async function forceOpenPanel(page: Page, selector: string) {
 test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   const today = isoDate(0);
   const yesterday = isoDate(-1);
+  await page.route("**/rest/v1/user_blobs*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: route.request().method() === "GET" ? "[]" : "[]",
+    });
+  });
 
   await page.goto("/", { waitUntil: "networkidle" });
   await seedProfileAndEntries(page, [
@@ -21,21 +28,25 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   ]);
 
   await page.reload({ waitUntil: "networkidle" });
+  const cloudPanel = page.locator("main.app-shell--blocked");
+  await expect(page.locator("header .sync-pill")).toContainText("Sign in");
+  await cloudPanel.locator('input[autocomplete="username"]').fill("persist-user");
+  await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
+  await cloudPanel.getByRole("button", { name: "Login" }).click();
+  await expect(page.locator("main.app-shell--blocked")).toHaveCount(0);
 
   await forceOpenPanel(page, "#appSetupPanel");
   await forceOpenPanel(page, "#constantDataPanel");
 
   const appSetup = page.locator("#appSetupPanel");
   const appSetupGridItems = appSetup.locator(".constant-data-grid > *");
-  const cloudPanel = appSetupGridItems.nth(0);
+  const cloudPanelInsideApp = appSetupGridItems.nth(0);
   const apiKeysPanel = appSetupGridItems.nth(1);
   const profilePanel = page.locator("#constantDataPanel .constant-data-grid > *").nth(0);
   const tdeePanel = page.locator("#constantDataPanel .constant-data-grid > *").nth(1);
 
-  await expect(page.locator("header .sync-pill")).toContainText("Sign in");
-
-  await cloudPanel.locator('input[type="email"]').fill("qa@example.com");
-  await cloudPanel.locator('input[type="email"]').blur();
+  await cloudPanelInsideApp.locator('input[type="email"]').fill("qa@example.com");
+  await cloudPanelInsideApp.locator('input[type="email"]').blur();
 
   await apiKeysPanel.locator('input[type="password"]').fill("gemini-test-key");
   await apiKeysPanel.locator('input[type="password"]').blur();

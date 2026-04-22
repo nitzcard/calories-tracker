@@ -12,6 +12,7 @@ const props = defineProps<{
   isSavingTheme: boolean;
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
+  authView?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -36,12 +37,16 @@ const confirmedUserTag = computed(() => {
 </script>
 
 <template>
-  <header class="header-shell panel">
+  <header class="header-shell panel" :class="{ 'header-shell--auth': authView }">
     <div class="copy">
       <h1 class="title">
         <span>{{ t("appTitle") }}</span>
         <span class="beta-pill">{{ t("beta") }}</span>
-        <span class="sync-pill" :class="{ cloud: showCloudIndicator, pending: showCloudPending }">
+        <span
+          v-if="!authView"
+          class="sync-pill"
+          :class="{ cloud: showCloudIndicator, pending: showCloudPending }"
+        >
           <span
             class="live-dot"
             :class="{ busy: isCloudBusy }"
@@ -54,6 +59,7 @@ const confirmedUserTag = computed(() => {
           <span v-if="confirmedUserTag" class="sync-user" dir="ltr">{{ confirmedUserTag }}</span>
         </span>
         <a
+          v-if="!authView"
           class="feedback-pill"
           href="https://github.com/nitzcard/calories-tracker/issues"
           target="_blank"
@@ -113,10 +119,21 @@ const confirmedUserTag = computed(() => {
   margin-block-end: var(--space-3);
 }
 
+.header-shell--auth {
+  max-inline-size: 58rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  align-items: center;
+}
+
 .copy {
   display: grid;
   gap: var(--field-gap);
   max-inline-size: 42rem;
+}
+
+.header-shell--auth .copy {
+  max-inline-size: 44rem;
 }
 
 .toolbar {
@@ -125,6 +142,10 @@ const confirmedUserTag = computed(() => {
   justify-items: end;
   inline-size: fit-content;
   max-inline-size: 100%;
+}
+
+.header-shell--auth .toolbar {
+  align-self: start;
 }
 
 .title {
@@ -264,6 +285,14 @@ const confirmedUserTag = computed(() => {
   color: var(--text-muted);
   margin: 0;
   max-inline-size: 46rem;
+}
+
+.header-shell--auth .title {
+  font-size: clamp(1.4rem, 2vw, 1.8rem);
+}
+
+.header-shell--auth :deep(.field) {
+  inline-size: min(12rem, 100%);
 }
 
 @media (max-width: 960px) {

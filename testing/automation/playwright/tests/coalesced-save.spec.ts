@@ -3,6 +3,13 @@ import { initializeCloudSyncState, isoDate, readPersistedAppState, seedProfileAn
 
 test("@inputs rapid edits coalesce into one committed revision per field", async ({ page }) => {
   const today = isoDate(0);
+  await page.route("**/rest/v1/user_blobs*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: route.request().method() === "GET" ? "[]" : "[]",
+    });
+  });
 
   await page.goto("/", { waitUntil: "networkidle" });
   await seedProfileAndEntries(page, [
@@ -20,9 +27,11 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   const before = await readPersistedAppState(page);
   const beforeToday = before.dailyEntries.find((entry: { date: string }) => entry.date === today);
 
-  await page.locator("#appSetupPanel").evaluate((node) => {
-    if (node instanceof HTMLDetailsElement) node.open = true;
-  });
+  const cloudPanel = page.locator("main.app-shell--blocked");
+  await cloudPanel.locator('input[autocomplete="username"]').fill("coalesced-user");
+  await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
+  await cloudPanel.getByRole("button", { name: "Login" }).click();
+  await expect(page.locator("main.app-shell--blocked")).toHaveCount(0);
 
   const foodLog = page.locator("#dailyDeskPanel textarea").first();
   await foodLog.fill("base log plus");

@@ -54,23 +54,21 @@ test("@cloud mocked Supabase roundtrip persists and reloads remote data", async 
   });
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.locator("#appSetupPanel").evaluate((node) => {
-    if (node instanceof HTMLDetailsElement) node.open = true;
-  });
-
-  const cloudPanel = page.locator("#appSetupPanel .constant-data-grid > *").nth(0);
+  const cloudPanel = page.locator("main.app-shell--blocked");
   await cloudPanel.locator('input[autocomplete="username"]').fill("playwright-user");
   await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
+
+  await cloudPanel.getByRole("button", { name: "Login" }).click();
+
+  await expect.poll(() => writeCount).toBeGreaterThan(0);
+  await expect(page.locator("main.app-shell--blocked")).toHaveCount(0);
+  await expect(page.locator("header .sync-pill")).toContainText("Cloud");
 
   await page.locator("#dailyDeskPanel .weight-input").first().fill("81.3");
   await page.locator("#dailyDeskPanel .weight-input").first().blur();
   await page.locator("#dailyDeskPanel textarea").first().fill("cloud synced oats and yogurt");
   await page.locator("#dailyDeskPanel textarea").first().blur();
-
-  await cloudPanel.getByRole("button", { name: "Login" }).click();
-
-  await expect.poll(() => writeCount).toBeGreaterThan(0);
-  await expect(page.locator("header .sync-pill")).toContainText("Cloud");
+  await page.locator("#appSetupPanel .constant-data-grid > *").nth(0).getByRole("button", { name: "Sync now" }).click();
 
   const savedRemote = remoteRows.get("playwright-user");
   expect(savedRemote).toBeTruthy();
@@ -79,11 +77,7 @@ test("@cloud mocked Supabase roundtrip persists and reloads remote data", async 
 
   await clearAppStorage(page);
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator("#appSetupPanel").evaluate((node) => {
-    if (node instanceof HTMLDetailsElement) node.open = true;
-  });
-
-  const freshCloudPanel = page.locator("#appSetupPanel .constant-data-grid > *").nth(0);
+  const freshCloudPanel = page.locator("main.app-shell--blocked");
   await freshCloudPanel.locator('input[autocomplete="username"]').fill("playwright-user");
   await freshCloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
   await freshCloudPanel.getByRole("button", { name: "Login" }).click();

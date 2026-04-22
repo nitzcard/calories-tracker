@@ -27,26 +27,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
 	      "Used here to encrypt your cloud data and API keys.",
 	    cloudPasswordSaved: "Password is saved on this device.",
 	    cloudPasswordSavedPlaceholder: "Saved",
-	    cloudMergeRulesTitle: "Sync & merge rules",
-	    cloudMergeRulePullMergePush:
-	      "Manual sync: pulls cloud → merges with local → pushes the merged result back to cloud.",
-	    cloudMergeRulePerDayNewestWins:
-	      "Daily history merges per date: if both sides have the same day, the newer edit wins for that day.",
-	    cloudMergeRuleDefaultsWeaker:
-	      "Defaults are treated as weaker: if you just logged in and a value is missing/default locally, the cloud value should win.",
-	    cloudMergeRuleNeverWipesLocal:
-	      "Defensive rule: sync never intentionally wipes your existing local history, profile, or rules.",
-	    cloudMergeRuleAutoSync:
-	      "Auto-sync: after changes, the app does a background merge-and-push to cloud (it won’t replace your screen mid-edit).",
-	    cloudMergeRulePassword:
-	      "Password is not a server login: it only encrypts/decrypts your cloud data. Wrong password = can’t decrypt.",
 	    cloudUsernameNeedsSync: "Username changed. Click sync to confirm and load cloud data.",
-	    cloudLoginPending: "Sign in to connect this browser to cloud.",
 	    cloudSyncSuccess: "Cloud sync finished.",
 	    cloudSyncFailed: "Cloud sync failed.",
 	    cloudSupabaseMissing: "Supabase is not configured in this build.",
-    cloudUsernameMissing: "Enter a username to sync.",
-    cloudUsernameTooShort: "Username must be at least {min} characters.",
     geminiKey: "Gemini key",
     getGeminiKey: "Get a Gemini API key",
     byokExplainLink: "What does “bring your own key” mean?",
@@ -419,7 +403,7 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     appSetup: "הגדרות אפליקציה",
     appSetupHelper: "כאן נמצאים חיבור הענן ומפתחות ה-API. אפשר לכווץ את החלק הזה מתי שרוצים.",
     appSetupRequiredHelper: "צריך להוסיף כאן קודם מפתח Gemini. החלק הזה נפתח בהתחלה כשחסרה הגדרת אפליקציה נדרשת.",
-    cloudSyncTitle: "Login",
+    cloudSyncTitle: "התחבר",
     cloudSyncHelper:
       "התחבר עם שם משתמש וסיסמה כדי לסנכרן את הדפדפן הזה עם נתוני הענן שלך.",
     cloudUsername: "שם משתמש",
@@ -431,26 +415,10 @@ export const translations: Record<AppLocale, Record<string, string>> = {
 	      "משמשת כאן להצפנת נתוני הענן ומפתחות ה-API.",
 	    cloudPasswordSaved: "הסיסמה שמורה במכשיר הזה.",
 	    cloudPasswordSavedPlaceholder: "נשמרה",
-	    cloudMergeRulesTitle: "כללי סנכרון ומיזוג",
-	    cloudMergeRulePullMergePush:
-	      "סנכרון ידני: מושך מהענן → ממזג עם המקומי → דוחף את התוצאה הממוזגת חזרה לענן.",
-	    cloudMergeRulePerDayNewestWins:
-	      "היסטוריה יומית מתמזגת לפי תאריך: אם יש אותו יום בשני הצדדים, העריכה האחרונה של אותו יום מנצחת.",
-	    cloudMergeRuleDefaultsWeaker:
-	      "ברירות מחדל חלשות יותר: אם רק התחברת וחסר/ברירת מחדל מקומית, הערך מהענן אמור לנצח.",
-	    cloudMergeRuleNeverWipesLocal:
-	      "כלל הגנה: סנכרון לא אמור למחוק בכוונה היסטוריה/פרופיל/חוקים שכבר קיימים מקומית.",
-	    cloudMergeRuleAutoSync:
-	      "סנכרון אוטומטי: אחרי שינויים האפליקציה עושה מיזוג+דחיפה ברקע (לא מחליף את המסך באמצע עריכה).",
-	    cloudMergeRulePassword:
-	      "הסיסמה לא משמשת להתחברות לשרת: היא רק להצפנה/פענוח של הנתונים בענן. סיסמה שגויה = אי אפשר לפענח.",
 	    cloudUsernameNeedsSync: "שם המשתמש השתנה. לחץ סנכרון כדי לאשר ולטעון נתוני ענן.",
-	    cloudLoginPending: "התחבר כדי לחבר את הדפדפן הזה לענן.",
 	    cloudSyncSuccess: "הסנכרון לענן הושלם.",
 	    cloudSyncFailed: "הסנכרון לענן נכשל.",
 	    cloudSupabaseMissing: "Supabase לא מוגדר בבנייה הזאת.",
-    cloudUsernameMissing: "הכנס שם משתמש כדי לסנכרן.",
-    cloudUsernameTooShort: "שם משתמש חייב להיות לפחות {min} תווים.",
     geminiKey: "מפתח Gemini",
     getGeminiKey: "קבל מפתח Gemini",
     byokExplainLink: 'מה זה בעצם "הבא מפתח משלך"?',
