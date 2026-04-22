@@ -8,8 +8,6 @@ export const DASHBOARD_STORAGE_KEYS = {
   aiModel: "calorie-tracker.ai-model",
   aiModelUserSet: "calorie-tracker.ai-model-user-set",
   geminiLatestModel: "calorie-tracker.gemini-latest-model",
-  autoBackupAfterAnalyze: "calorie-tracker.auto-backup-after-analyze",
-  cloudMode: "calorie-tracker.cloud-mode",
   cloudUsername: "calorie-tracker.cloud-username",
   cloudConfirmedUsername: "calorie-tracker.cloud-confirmed-username",
   dailyDraftPrefix: "calorie-tracker.daily-draft::",

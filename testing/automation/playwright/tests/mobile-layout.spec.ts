@@ -40,12 +40,12 @@ test("mobile layout stays usable without Temporal", async ({ page }) => {
   await openPanel(page, "#constantDataPanel");
 
   const usernameInput = page.locator('input[autocomplete="username"]').first();
-  const cloudModeSelect = page.locator("#appSetupPanel select").first();
+  const passwordInput = page.locator('input[autocomplete="current-password"]').first();
   const profileSelect = page.getByTestId("activity-factor-select");
   const weightInput = page.locator("#dailyDeskPanel .weight-input").first();
 
   await expectWithinViewport(page, usernameInput);
-  await expectWithinViewport(page, cloudModeSelect);
+  await expectWithinViewport(page, passwordInput);
   await expectWithinViewport(page, profileSelect);
   await expectWithinViewport(page, weightInput);
 
@@ -62,6 +62,5 @@ test("desktop fields stay compact unless layout opts into full width", async ({ 
 
   await expectMaxWidth(page.locator('input[autocomplete="username"]').first(), 320);
   await expectMaxWidth(page.locator('input[autocomplete="current-password"]').first(), 320);
-  await expectMaxWidth(page.locator("#appSetupPanel select").first(), 280);
   await expectMaxWidth(page.locator('#constantDataPanel input[type="number"]').first(), 220);
 });

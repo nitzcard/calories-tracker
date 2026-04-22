@@ -14,7 +14,6 @@ import { formatEntryDate } from "./domain/entries";
 const MetricChart = defineAsyncComponent(() => import("./components/charts/MetricChart.vue"));
 const ApiKeysPanel = defineAsyncComponent(() => import("./components/panels/ApiKeysPanel.vue"));
 const CloudSyncPanel = defineAsyncComponent(() => import("./components/panels/CloudSyncPanel.vue"));
-const DataTransferPanel = defineAsyncComponent(() => import("./components/panels/DataTransferPanel.vue"));
 const HistoryPanel = defineAsyncComponent(() => import("./components/panels/HistoryPanel.vue"));
 const InsightsPanel = defineAsyncComponent(() => import("./components/panels/InsightsPanel.vue"));
 const ProfilePanel = defineAsyncComponent(() => import("./components/panels/ProfilePanel.vue"));
@@ -60,12 +59,10 @@ const {
   provider,
   providerOptions,
   aiKeys,
-  dataTransferStatus,
   isAnalyzing,
   showModelSwitchPrompt,
   suggestedModelLabel,
   isAutoSaving,
-  isTransferringData,
   isSavingWeight,
   isSavingFoodLog,
   isSavingFoodInstructions,
@@ -103,23 +100,17 @@ const {
   saveFoodCorrectionInstructionOnly,
   applyFoodCorrectionToCurrentEntry,
   applyMealTotalCorrectionToCurrentEntry,
-  cloudMode,
   cloudUsername,
   cloudConfirmedUsername,
-  autoBackupAfterAnalyze,
   hasSavedCloudPassword,
   isCloudBusy,
-    isCloudSyncing,
+  isCloudSyncing,
   cloudStatus,
   cloudLastSyncedAt,
   cloudError,
   supabaseConfigured,
-  exportData,
-  importData,
-  setAutoBackupAfterAnalyze,
-  setCloudMode,
   setCloudUsername,
-    cloudLogout,
+  cloudLogout,
   cloudSyncNow,
   notice,
   clearNotice,
@@ -158,9 +149,7 @@ const hasEffectiveGeminiKey = computed(() =>
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 const isJasmineThemeActive = computed(() => themeMode.value === "jasmine");
-const showCloudLoginGate = computed(
-  () => cloudMode.value === "cloud" && !cloudConfirmedUsername.value && !supabaseConfigured.value,
-);
+const showCloudLoginGate = computed(() => !supabaseConfigured.value);
 const cloudLoginGateMessage = computed(() => cloudError.value || t("cloudSupabaseMissing"));
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
@@ -321,19 +310,15 @@ const activeToasts = computed(() => {
   }> = [];
 
   const cloudActive = isCloudSyncing.value || cloudToastVisibleUntil.value > Date.now();
-  const localActive =
-    isAutoSaving.value || isTransferringData.value || localToastVisibleUntil.value > Date.now();
-
-  const shouldCombine = cloudMode.value === "cloud" && (localActive || cloudActive);
+  const localActive = isAutoSaving.value || localToastVisibleUntil.value > Date.now();
+  const shouldCombine = cloudActive && localActive;
 
   const activeToast =
     shouldCombine
       ? {
           id: "sync-active",
           kind: "cloud" as const,
-          message: isTransferringData.value
-            ? `💾☁️ ${t("toastLocalCloudTransferring")}`
-            : `💾☁️ ${t("toastLocalCloudSyncing")}`,
+          message: `💾☁️ ${t("toastLocalCloudSyncing")}`,
           spinning: true,
         }
       : cloudActive
@@ -347,9 +332,7 @@ const activeToasts = computed(() => {
           ? {
               id: "local-active",
               kind: "local" as const,
-              message: isTransferringData.value
-                ? `💾 ${t("toastLocalTransferring")}`
-                : `💾 ${t("toastLocalSaving")}`,
+              message: `💾 ${t("toastLocalSaving")}`,
               spinning: true,
             }
           : null;
@@ -414,7 +397,7 @@ watch(
 );
 
 watch(
-  () => isAutoSaving.value || isTransferringData.value,
+  isAutoSaving,
   (active, wasActive) => {
     if (active) {
       bumpToastVisibility("local");
@@ -737,7 +720,6 @@ async function confirmDeleteDay() {
       :theme-mode="themeMode"
       :is-saving-locale="isSavingLocale"
       :is-saving-theme="isSavingTheme"
-      :cloud-mode="cloudMode"
       :cloud-confirmed-username="cloudConfirmedUsername"
       :is-cloud-busy="isCloudSyncing"
       @locale-change="onLocaleChange"
@@ -746,11 +728,6 @@ async function confirmDeleteDay() {
 
     <BasePanel :title="t('cloudLogin')" :helper="t('cloudSyncHelper')">
       <p class="login-gate-error" dir="ltr">{{ cloudLoginGateMessage }}</p>
-      <div class="login-gate-actions">
-        <button type="button" class="secondary-action" @click="setCloudMode('offline')">
-          {{ t("cloudModeOffline") }}
-        </button>
-      </div>
     </BasePanel>
   </main>
 
@@ -762,7 +739,6 @@ async function confirmDeleteDay() {
       :theme-mode="themeMode"
       :is-saving-locale="isSavingLocale"
       :is-saving-theme="isSavingTheme"
-      :cloud-mode="cloudMode"
       :cloud-confirmed-username="cloudConfirmedUsername"
       :is-cloud-busy="isCloudSyncing"
       @locale-change="onLocaleChange"
@@ -815,22 +791,20 @@ async function confirmDeleteDay() {
       </summary>
 
       <div class="constant-data-grid">
-	        <CloudSyncPanel
-	          :locale="locale"
-            :profile="profile"
-	          :cloud-mode="cloudMode"
-	          :cloud-username="cloudUsername"
-	          :cloud-confirmed-username="cloudConfirmedUsername"
-            :has-saved-cloud-password="hasSavedCloudPassword"
+        <CloudSyncPanel
+          :locale="locale"
+          :profile="profile"
+          :cloud-username="cloudUsername"
+          :cloud-confirmed-username="cloudConfirmedUsername"
+          :has-saved-cloud-password="hasSavedCloudPassword"
 	          :is-cloud-busy="isCloudBusy"
 	          :cloud-status="cloudStatus"
-	          :cloud-last-synced-at="cloudLastSyncedAt"
-	          :cloud-error="cloudError"
-	          :supabase-configured="supabaseConfigured"
+          :cloud-last-synced-at="cloudLastSyncedAt"
+          :cloud-error="cloudError"
+          :supabase-configured="supabaseConfigured"
           @update:profile="profile = $event"
           @save="saveProfileAndHighlight"
-          @update:cloud-mode="setCloudMode"
-          @update:cloud-username="setCloudUsername"
+          @update:cloudUsername="setCloudUsername"
           @sync="cloudSyncNow($event)"
           @logout="cloudLogout"
         />
@@ -841,18 +815,6 @@ async function confirmDeleteDay() {
           :saving-field="savingAiKeyField"
           @save="saveAiKey"
         />
-
-        <div class="constant-data-full">
-          <DataTransferPanel
-            :locale="locale"
-            :is-busy="isTransferringData"
-            :status="dataTransferStatus"
-            :auto-backup-after-analyze="autoBackupAfterAnalyze"
-            @export-data="exportData"
-            @import-data="importData"
-            @update:auto-backup-after-analyze="setAutoBackupAfterAnalyze"
-          />
-        </div>
       </div>
     </details>
 
@@ -922,9 +884,9 @@ async function confirmDeleteDay() {
           :is-saving-food-log="isSavingFoodLog"
           :food-instructions="profile.foodInstructions"
           :is-saving-food-instructions="isSavingFoodInstructions"
-          @update:selected-date="selectedDate = $event"
-          @update:current-weight="updateCurrentWeight"
-          @update:food-log="updateCurrentFoodLog"
+          @update:selectedDate="selectedDate = $event"
+          @update:currentWeight="updateCurrentWeight"
+          @update:foodLog="updateCurrentFoodLog"
           @save-weight="saveWeightDraft"
           @save-draft="saveFoodDraft"
           @analyze="analyzeCurrentDay"

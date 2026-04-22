@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { getStoredAiKeys, saveStoredAiKeys, type StoredAiKeys } from "../ai/credentials";
 import { detectLocale, localeDirection, syncI18nLocale } from "../i18n";
 import {
@@ -12,7 +12,6 @@ import {
 import { useAutoSaveState } from "./useAutoSaveState";
 import { createSerialTaskQueue } from "./serialTaskQueue";
 import { useAnalysisFlow } from "./useAnalysisFlow";
-import { useDataTransferState } from "./useDataTransferState";
 import { useFoodCorrectionState } from "./useFoodCorrectionState";
 import {
   ensureDefaultProfile,
@@ -78,16 +77,9 @@ export function useDashboard() {
   const aiKeys = ref<StoredAiKeys>(getStoredAiKeys());
   const notice = ref("");
   const autoSave = useAutoSaveState();
-  const cloudMode = ref<"offline" | "cloud">(
-    (localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudMode) as "offline" | "cloud" | null) ??
-      "offline",
-  );
   const cloudUsername = ref(localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudUsername) ?? "");
   const cloudConfirmedUsername = ref(
     localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername) ?? "",
-  );
-  const autoBackupAfterAnalyze = ref(
-    localStorage.getItem(DASHBOARD_STORAGE_KEYS.autoBackupAfterAnalyze) === "1",
   );
   const isCloudBusy = ref(false);
   const cloudStatus = ref<"idle" | "synced" | "failed">("idle");
@@ -665,7 +657,12 @@ export function useDashboard() {
     refreshVisibleProviderOptions();
   }
 
-  async function saveWeightDraft() {
+  async function saveWeightDraft(weightOverride?: string) {
+    if (typeof weightOverride === "string") {
+      currentWeight.value = weightOverride;
+      hasUserEditedCurrentWeight.value = true;
+    }
+    await nextTick();
     if (weightDraftSaveTimer) {
       clearTimeout(weightDraftSaveTimer);
       weightDraftSaveTimer = null;
@@ -697,7 +694,12 @@ export function useDashboard() {
     }
   }
 
-  async function saveFoodDraft() {
+  async function saveFoodDraft(foodLogOverride?: string) {
+    if (typeof foodLogOverride === "string") {
+      currentFoodLog.value = foodLogOverride;
+      hasUserEditedCurrentFoodLog.value = true;
+    }
+    await nextTick();
     if (foodDraftSaveTimer) {
       clearTimeout(foodDraftSaveTimer);
       foodDraftSaveTimer = null;
@@ -831,13 +833,6 @@ export function useDashboard() {
       notice.value = value;
     },
   });
-
-  const dataTransfer = useDataTransferState(refreshState);
-
-  function autoExportFilename(date: string) {
-    const day = localIsoDate();
-    return `calorie-tracker-backup-${day}-after-${date}.json`;
-  }
 
   type CloudEncryptedEnvelopeV1 = {
     kind: "encrypted-v1";
@@ -1056,13 +1051,6 @@ export function useDashboard() {
   }
 
   async function cloudSyncNow(options?: { backupBeforePull?: boolean; username?: string; password?: string }) {
-    if (cloudMode.value !== "cloud") {
-      cloudStatus.value = "idle";
-      cloudLastSyncedAt.value = "";
-      cloudError.value = "";
-      return;
-    }
-
     const username = normalizeUsername(options?.username ?? cloudUsername.value);
     if (!username) {
       cloudStatus.value = "failed";
@@ -1165,13 +1153,6 @@ export function useDashboard() {
         merged.foodRules = localBefore.foodRules;
       }
 
-      if (remotePayload && options?.backupBeforePull !== false) {
-        // Backup the local copy before we replace local state with a merged copy.
-        await dataTransfer.exportData({
-          filename: `calorie-tracker-backup-${localIsoDate()}-before-cloud-merge-${username}.json`,
-        });
-      }
-
       const mergedFingerprint = canonicalCloudFingerprint(merged);
 
       if (!canonicalPayloadEquals(localBefore, merged)) {
@@ -1237,7 +1218,6 @@ export function useDashboard() {
   }
 
   function canAutoCloudSync() {
-    if (cloudMode.value !== "cloud") return false;
     if (!supabaseConfigured.value) return false;
     if (typeof navigator !== "undefined" && !navigator.onLine) return false;
     const normalized = normalizeUsername(cloudUsername.value);
@@ -1329,11 +1309,6 @@ export function useDashboard() {
     }
   }
 
-  function setCloudMode(next: "offline" | "cloud") {
-    cloudMode.value = next;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudMode, next);
-  }
-
   function setCloudUsername(next: string) {
     cloudUsername.value = next;
     if (next.trim()) {
@@ -1375,8 +1350,6 @@ export function useDashboard() {
     cloudStatus.value = "idle";
     cloudLastSyncedAt.value = "";
     cloudError.value = "";
-    // Keep cloud mode so the user can log back in without switching modes again.
-    // Only clear the username and password so the login form is ready for re-entry.
     setCloudUsername("");
   }
 
@@ -1384,18 +1357,9 @@ export function useDashboard() {
     await analysis.analyzeCurrentDay();
     const finished = findEntryByDate(entries.value, selectedDate.value);
     if (finished?.aiStatus === "done" && finished.nutritionSnapshot) {
-      if (autoBackupAfterAnalyze.value) {
-        // Best-effort: some browsers may block non-user-gesture downloads.
-        await dataTransfer.exportData({ filename: autoExportFilename(selectedDate.value) });
-      }
       await markCloudChange("analysis.done");
       scheduleCloudPush("analysis.done");
     }
-  }
-
-  function setAutoBackupAfterAnalyze(nextValue: boolean) {
-    autoBackupAfterAnalyze.value = nextValue;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.autoBackupAfterAnalyze, nextValue ? "1" : "0");
   }
 
   watch(
@@ -1473,7 +1437,6 @@ export function useDashboard() {
 
   async function maybeInitCloudSync() {
     if (didInitCloudSync.value) return;
-    if (cloudMode.value !== "cloud") return;
     if (!supabaseConfigured.value) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     const username = normalizeUsername(cloudConfirmedUsername.value || cloudUsername.value);
@@ -1505,6 +1468,8 @@ export function useDashboard() {
         saveStoredAiKeys(aiKeys.value);
       }
     }
+    localStorage.removeItem("calorie-tracker.cloud-mode");
+    localStorage.removeItem("calorie-tracker.auto-backup-after-analyze");
     syncChrome();
     await refreshState();
 
@@ -1584,10 +1549,8 @@ export function useDashboard() {
     savingHistoryCalories: autoSave.savingHistoryCalories,
     savingHistoryWeight: autoSave.savingHistoryWeight,
     notice,
-    cloudMode,
     cloudUsername,
     cloudConfirmedUsername,
-    autoBackupAfterAnalyze,
     hasSavedCloudPassword,
     isCloudBusy,
     isCloudSyncing: cloudIsSyncing,
@@ -1595,8 +1558,6 @@ export function useDashboard() {
     cloudLastSyncedAt,
     cloudError,
     supabaseConfigured,
-    dataTransferStatus: dataTransfer.dataTransferStatus,
-    isTransferringData: dataTransfer.isTransferringData,
     statusLabel,
     loadSelectedEntry,
     onLocaleChange,
@@ -1717,10 +1678,6 @@ export function useDashboard() {
         scheduleCloudPush("nutrition.correction");
       }
     },
-    exportData: dataTransfer.exportData,
-    importData: dataTransfer.importData,
-    setAutoBackupAfterAnalyze,
-    setCloudMode,
     setCloudUsername,
     cloudLogout,
     cloudSyncNow,

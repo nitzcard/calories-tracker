@@ -23,7 +23,6 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   await page.locator("#appSetupPanel").evaluate((node) => {
     if (node instanceof HTMLDetailsElement) node.open = true;
   });
-  await page.locator(".cloud-mode-field select").selectOption("cloud");
 
   const foodLog = page.locator("#dailyDeskPanel textarea").first();
   await foodLog.fill("base log plus");
@@ -35,7 +34,19 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   await ageInput.fill("36");
   await ageInput.fill("37");
 
-  await page.waitForTimeout(2600);
+  await expect
+    .poll(async () => {
+      const state = await readPersistedAppState(page);
+      const entry = state.dailyEntries.find((item: { date: string }) => item.date === today);
+      return {
+        age: state.profile?.age ?? null,
+        foodLogText: entry?.foodLogText ?? "",
+      };
+    })
+    .toMatchObject({
+      age: 37,
+      foodLogText: "base log plus fruit and yogurt",
+    });
 
   const after = await readPersistedAppState(page);
   const afterToday = after.dailyEntries.find((entry: { date: string }) => entry.date === today);
@@ -50,4 +61,3 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   );
   expect((after.cloudSyncState?.pendingScopes ?? []).length).toBe(2);
 });
-

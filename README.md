@@ -5,11 +5,19 @@
 
 ## Deploy (Cloudflare Pages)
 
-This repo is connected to Cloudflare Pages as a GitHub app integration, so Cloudflare builds and deploys automatically from `main`.
+Cloudflare deploy now runs from GitHub Actions after `testing` succeeds on `main`.
+If the Cloudflare Pages GitHub App is still connected, disable it or you may get duplicate deploys.
 
 ### Required GitHub Secrets
 
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with Pages deploy access
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID
 - `VITE_SUPABASE_URL`: Supabase project URL
 - `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
 
-Set the build command to `npm run build` and the output directory to `dist` in the Cloudflare Pages project settings.
+### Required GitHub Variable
+
+- `CLOUDFLARE_PAGES_PROJECT_NAME`: Cloudflare Pages project name
+
+Build output is `dist`, and the deploy workflow is in [`.github/workflows/deploy-cloudflare.yml`](/Users/Nitzan/calorie-tracker/.github/workflows/deploy-cloudflare.yml:1).
+If you set `CLOUDFLARE_PAGES_PROJECT_NAME` to `min-cal-tracker`, the Pages URL will be `https://min-cal-tracker.pages.dev` if that subdomain is available.

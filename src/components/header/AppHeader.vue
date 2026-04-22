@@ -10,7 +10,6 @@ const props = defineProps<{
   themeMode: ThemeMode;
   isSavingLocale: boolean;
   isSavingTheme: boolean;
-  cloudMode: "offline" | "cloud";
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
 }>();
@@ -24,17 +23,12 @@ const { t } = useI18n();
 
 const syncIndicator = computed(() => {
   const normalized = props.cloudConfirmedUsername.trim();
-  if (props.cloudMode === "cloud") {
-    if (normalized) return t("syncIndicatorCloud");
-    return t("syncIndicatorCloudPending");
-  }
-  return t("syncIndicatorLocal");
+  if (normalized) return t("syncIndicatorCloud");
+  return t("syncIndicatorCloudPending");
 });
 
-const showCloudIndicator = computed(() => props.cloudMode === "cloud" && props.cloudConfirmedUsername.trim());
-const showCloudPending = computed(
-  () => props.cloudMode === "cloud" && !props.cloudConfirmedUsername.trim(),
-);
+const showCloudIndicator = computed(() => props.cloudConfirmedUsername.trim());
+const showCloudPending = computed(() => !props.cloudConfirmedUsername.trim());
 const confirmedUserTag = computed(() => {
   const user = props.cloudConfirmedUsername.trim();
   return user ? `${user}` : "";

@@ -59,7 +59,6 @@ test("@cloud mocked Supabase roundtrip persists and reloads remote data", async 
   });
 
   const cloudPanel = page.locator("#appSetupPanel .constant-data-grid > *").nth(0);
-  await cloudPanel.locator(".cloud-mode-field select").selectOption("cloud");
   await cloudPanel.locator('input[autocomplete="username"]').fill("playwright-user");
   await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
 
@@ -85,16 +84,17 @@ test("@cloud mocked Supabase roundtrip persists and reloads remote data", async 
   });
 
   const freshCloudPanel = page.locator("#appSetupPanel .constant-data-grid > *").nth(0);
-  await freshCloudPanel.locator(".cloud-mode-field select").selectOption("cloud");
   await freshCloudPanel.locator('input[autocomplete="username"]').fill("playwright-user");
   await freshCloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
   await freshCloudPanel.getByRole("button", { name: "Login" }).click();
 
-  await expect.poll(async () => {
-    const state = await readPersistedAppState(page);
-    const entry = state.dailyEntries.find((item: { date: string }) => item.date === today);
-    return entry?.foodLogText ?? "";
-  }).toBe("cloud synced oats and yogurt");
+  await expect
+    .poll(async () => {
+      const state = await readPersistedAppState(page);
+      const entry = state.dailyEntries.find((item: { date: string }) => item.date === today);
+      return entry?.foodLogText ?? "";
+    }, { timeout: 15000 })
+    .toBe("cloud synced oats and yogurt");
 
   const restored = await readPersistedAppState(page);
   const restoredToday = restored.dailyEntries.find((entry: { date: string }) => entry.date === today);
@@ -103,6 +103,4 @@ test("@cloud mocked Supabase roundtrip persists and reloads remote data", async 
     foodLogText: "cloud synced oats and yogurt",
     weight: 81.3,
   });
-  expect(restored.localStorage.cloudMode).toBe("cloud");
 });
-

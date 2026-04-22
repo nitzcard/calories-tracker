@@ -34,8 +34,8 @@ const emit = defineEmits<{
   "update:selectedDate": [value: string];
   "update:currentWeight": [value: string];
   "update:foodLog": [value: string];
-  "save-weight": [];
-  "save-draft": [];
+  "save-weight": [value?: string];
+  "save-draft": [value?: string];
   analyze: [];
   "provider-change": [provider: string];
   "accept-model-switch": [];
@@ -73,11 +73,11 @@ const { t } = useI18n();
           :analysis-retry-model-id="analysisRetryModelId"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
-          @update:selected-date="emit('update:selectedDate', $event)"
-          @update:current-weight="emit('update:currentWeight', $event)"
-          @update:food-log="emit('update:foodLog', $event)"
-          @save-weight="emit('save-weight')"
-          @save-draft="emit('save-draft')"
+          @update:selectedDate="emit('update:selectedDate', $event)"
+          @update:currentWeight="emit('update:currentWeight', $event)"
+          @update:foodLog="emit('update:foodLog', $event)"
+          @save-weight="emit('save-weight', $event)"
+          @save-draft="emit('save-draft', $event)"
           @provider-change="emit('provider-change', $event)"
           @analyze="emit('analyze')"
           @accept-model-switch="emit('accept-model-switch')"

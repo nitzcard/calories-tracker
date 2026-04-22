@@ -6,22 +6,20 @@ import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
 import type { AppLocale, Profile } from "../../types";
 
-	const props = defineProps<{
-	  locale: AppLocale;
-    profile: Profile;
-	  cloudMode: "offline" | "cloud";
-	  cloudUsername: string;
-	  cloudConfirmedUsername?: string;
-    hasSavedCloudPassword: boolean;
-	  isCloudBusy: boolean;
-	  cloudStatus: "idle" | "synced" | "failed";
-	  cloudLastSyncedAt: string;
-	  cloudError: string;
-	  supabaseConfigured: boolean;
-	}>();
+const props = defineProps<{
+  locale: AppLocale;
+  profile: Profile;
+  cloudUsername: string;
+  cloudConfirmedUsername?: string;
+  hasSavedCloudPassword: boolean;
+  isCloudBusy: boolean;
+  cloudStatus: "idle" | "synced" | "failed";
+  cloudLastSyncedAt: string;
+  cloudError: string;
+  supabaseConfigured: boolean;
+}>();
 
 const emit = defineEmits<{
-  "update:cloudMode": [value: "offline" | "cloud"];
   "update:cloudUsername": [value: string];
   "update:profile": [profile: Profile];
   save: [profile: Profile];
@@ -33,13 +31,6 @@ const { t } = useI18n();
 const isOnline = ref(typeof navigator === "undefined" ? true : navigator.onLine);
 const draftUsername = ref(props.cloudUsername);
 const draftPassword = ref("");
-const cloudModeSelectWidth = computed(() => {
-  const offlineLabel = t("cloudModeOffline");
-  const cloudLabel = t("cloudModeCloud");
-  const longest = Math.max(offlineLabel.trim().length, cloudLabel.trim().length);
-  const widthCh = Math.min(24, Math.max(16, longest + 4));
-  return `${widthCh}ch`;
-});
 let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let latestProfileToSave: Profile | null = null;
 const PROFILE_SAVE_DEBOUNCE_MS = 2000;
@@ -85,9 +76,7 @@ const statusText = computed(() => {
 });
 
 const usernameNormalized = computed(() => draftUsername.value.trim().toLowerCase());
-const usernameTooShort = computed(
-  () => props.cloudMode === "cloud" && usernameNormalized.value.length > 0 && usernameNormalized.value.length < 3,
-);
+const usernameTooShort = computed(() => usernameNormalized.value.length > 0 && usernameNormalized.value.length < 3);
 const confirmedNormalized = computed(() => (props.cloudConfirmedUsername ?? "").trim().toLowerCase());
 const hasConfirmedUser = computed(() => Boolean(confirmedNormalized.value));
 const draftDiffersFromConfirmed = computed(
@@ -100,7 +89,6 @@ const isLoggedIn = computed(() => hasConfirmedUser.value && confirmedNormalized.
 const canLogin = computed(
   () =>
     !props.isCloudBusy &&
-    props.cloudMode === "cloud" &&
     !isLoggedIn.value &&
     usernameNormalized.value.length >= 3 &&
     (Boolean(draftPassword.value.trim()) || props.hasSavedCloudPassword) &&
@@ -108,11 +96,7 @@ const canLogin = computed(
     isOnline.value,
 );
 const canSyncExistingUser = computed(
-  () =>
-    !props.isCloudBusy &&
-    props.cloudMode === "cloud" &&
-    props.supabaseConfigured &&
-    isOnline.value,
+  () => !props.isCloudBusy && isLoggedIn.value && props.supabaseConfigured && isOnline.value,
 );
 
 function scheduleProfileSave(nextProfile: Profile) {
@@ -132,18 +116,18 @@ function saveEmail(event: Event) {
   scheduleProfileSave(nextProfile);
 }
 
-	function syncNow() {
-	  // Only commit the username when the user explicitly approves sync.
-	  emit("update:cloudUsername", draftUsername.value);
-	  const password = draftPassword.value.trim();
-	  emit("sync", { username: draftUsername.value, password: password || undefined });
-	  draftPassword.value = "";
-	}
+function syncNow() {
+  emit("update:cloudUsername", draftUsername.value);
+  const password = draftPassword.value.trim();
+  emit("sync", { username: draftUsername.value, password: password || undefined });
+  draftPassword.value = "";
+}
 
-	function syncExistingUser() {
-	  emit("update:cloudUsername", draftUsername.value);
-	  emit("sync", { username: draftUsername.value, password: draftPassword.value.trim() || undefined });
-	}
+function syncExistingUser() {
+  emit("update:cloudUsername", draftUsername.value);
+  emit("sync", { username: draftUsername.value, password: draftPassword.value.trim() || undefined });
+  draftPassword.value = "";
+}
 
 function logout() {
   draftPassword.value = "";
@@ -156,7 +140,7 @@ function onSubmit() {
     return;
   }
 
-  if (isLoggedIn.value && canSyncExistingUser.value) {
+  if (canSyncExistingUser.value) {
     syncExistingUser();
   }
 }
@@ -165,28 +149,12 @@ function onSubmit() {
 <template>
   <BasePanel :title="t('cloudSyncTitle')" :helper="t('cloudSyncHelper')">
     <div class="cloud-controls">
-      <FormField
-        class="cloud-mode-field"
-        :label="t('cloudMode')"
-        :style="{ '--cloud-mode-select-width': cloudModeSelectWidth }"
-      >
-        <FieldControl as="select">
-          <select
-            :value="cloudMode"
-            @change="emit('update:cloudMode', ($event.target as HTMLSelectElement).value as 'offline' | 'cloud')"
-          >
-            <option value="offline">{{ t("cloudModeOffline") }}</option>
-            <option value="cloud">{{ t("cloudModeCloud") }}</option>
-          </select>
-        </FieldControl>
-      </FormField>
-
-      <form class="auth-block" :class="{ 'auth-block--disabled': cloudMode !== 'cloud' }" @submit.prevent="onSubmit">
+      <form class="auth-block" @submit.prevent="onSubmit">
         <FormField :label="t('cloudUsername')" reserve-helper-space>
           <FieldControl>
             <input
               type="text"
-              :disabled="cloudMode !== 'cloud' || isCloudBusy"
+              :disabled="isCloudBusy"
               :value="draftUsername"
               autocomplete="username"
               @input="draftUsername = ($event.target as HTMLInputElement).value"
@@ -196,19 +164,19 @@ function onSubmit() {
 
         <FormField
           :label="t('cloudPassword')"
-          :helper="cloudMode === 'cloud' ? (hasSavedCloudPassword ? t('cloudPasswordSaved') : t('cloudPasswordHint')) : ''"
+          :helper="hasSavedCloudPassword ? t('cloudPasswordSaved') : t('cloudPasswordHint')"
         >
-	          <FieldControl>
-	            <input
-	              type="password"
-	              autocomplete="current-password"
-	              :disabled="cloudMode !== 'cloud' || isCloudBusy || hasSavedCloudPassword"
-	              :value="draftPassword"
+          <FieldControl>
+            <input
+              type="password"
+              autocomplete="current-password"
+              :disabled="isCloudBusy || hasSavedCloudPassword"
+              :value="draftPassword"
               :placeholder="hasSavedCloudPassword ? t('cloudPasswordSavedPlaceholder') : ''"
-	              @input="draftPassword = ($event.target as HTMLInputElement).value"
-	            />
-	          </FieldControl>
-	        </FormField>
+              @input="draftPassword = ($event.target as HTMLInputElement).value"
+            />
+          </FieldControl>
+        </FormField>
 
         <FormField :helper="t('emailHelper')">
           <template #label>
@@ -229,12 +197,12 @@ function onSubmit() {
           </FieldControl>
         </FormField>
 
-	        <div class="cloud-actions">
-	          <button
-	            type="submit"
-	            class="secondary-action"
-	            :disabled="!canLogin"
-	          >
+        <div class="cloud-actions">
+          <button
+            type="submit"
+            class="secondary-action"
+            :disabled="!canLogin"
+          >
             <span v-if="isCloudBusy" class="button-feedback" aria-hidden="true"></span>
             {{ t("cloudLogin") }}
           </button>
@@ -258,33 +226,33 @@ function onSubmit() {
             @click="logout"
           >
             {{ t("cloudLogout") }}
-	          </button>
-	        </div>
-	      </form>
-	    </div>
+          </button>
+        </div>
+      </form>
+    </div>
 
-      <details class="merge-rules">
-        <summary class="merge-rules__summary">{{ t("cloudMergeRulesTitle") }}</summary>
-        <ul class="merge-rules__list">
-          <li>{{ t("cloudMergeRulePullMergePush") }}</li>
-          <li>{{ t("cloudMergeRulePerDayNewestWins") }}</li>
-          <li>{{ t("cloudMergeRuleDefaultsWeaker") }}</li>
-          <li>{{ t("cloudMergeRuleNeverWipesLocal") }}</li>
-          <li>{{ t("cloudMergeRuleAutoSync") }}</li>
-          <li>{{ t("cloudMergeRulePassword") }}</li>
-        </ul>
-      </details>
+    <details class="merge-rules">
+      <summary class="merge-rules__summary">{{ t("cloudMergeRulesTitle") }}</summary>
+      <ul class="merge-rules__list">
+        <li>{{ t("cloudMergeRulePullMergePush") }}</li>
+        <li>{{ t("cloudMergeRulePerDayNewestWins") }}</li>
+        <li>{{ t("cloudMergeRuleDefaultsWeaker") }}</li>
+        <li>{{ t("cloudMergeRuleNeverWipesLocal") }}</li>
+        <li>{{ t("cloudMergeRuleAutoSync") }}</li>
+        <li>{{ t("cloudMergeRulePassword") }}</li>
+      </ul>
+    </details>
 
-	    <p v-if="statusText" class="status-pill">
-	      {{ statusText }}
-	      <span v-if="cloudLastSyncedAt" class="muted">({{ cloudLastSyncedAt }})</span>
-	    </p>
-	    <p v-if="cloudError" class="status-pill status-pill--error" dir="ltr">{{ cloudError }}</p>
+    <p v-if="statusText" class="status-pill">
+      {{ statusText }}
+      <span v-if="cloudLastSyncedAt" class="muted">({{ cloudLastSyncedAt }})</span>
+    </p>
+    <p v-if="cloudError" class="status-pill status-pill--error" dir="ltr">{{ cloudError }}</p>
     <p v-if="draftDiffersFromConfirmed" class="status-pill">{{ t("cloudUsernameNeedsSync") }}</p>
-    <p v-if="cloudMode === 'cloud' && !hasConfirmedUser" class="status-pill">{{ t("cloudLoginPending") }}</p>
-    <p v-if="cloudMode === 'cloud' && !draftUsername.trim()" class="status-pill">{{ t("cloudUsernameMissing") }}</p>
+    <p v-if="!hasConfirmedUser" class="status-pill">{{ t("cloudLoginPending") }}</p>
+    <p v-if="!draftUsername.trim()" class="status-pill">{{ t("cloudUsernameMissing") }}</p>
     <p v-else-if="usernameTooShort" class="status-pill">{{ t("cloudUsernameTooShort", { min: 3 }) }}</p>
-    <p v-if="cloudMode === 'cloud' && !supabaseConfigured" class="status-pill">{{ t("cloudSupabaseMissing") }}</p>
+    <p v-if="!supabaseConfigured" class="status-pill">{{ t("cloudSupabaseMissing") }}</p>
   </BasePanel>
 </template>
 
@@ -293,11 +261,6 @@ function onSubmit() {
   display: grid;
   gap: 8px;
   margin-block-start: 10px;
-}
-
-.cloud-mode-field {
-  inline-size: min(100%, var(--cloud-mode-select-width, 30rem));
-  max-inline-size: 100%;
 }
 
 .auth-block :deep(.helper-slot) {
@@ -364,38 +327,33 @@ function onSubmit() {
   box-shadow: var(--bevel-raised);
 }
 
-	.auth-block--disabled {
-	  filter: grayscale(1);
-	  opacity: 0.72;
-	}
+.merge-rules {
+  margin: 8px 0 0;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  box-shadow: var(--bevel-sunken);
+  color: var(--text-muted);
+}
 
-  .merge-rules {
-    margin: 8px 0 0;
-    padding: 0.35rem 0.45rem;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-    box-shadow: var(--bevel-sunken);
-    color: var(--text-muted);
-  }
+.merge-rules__summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--pill-text);
+}
 
-  .merge-rules__summary {
-    cursor: pointer;
-    font-weight: 700;
-    color: var(--pill-text);
-  }
+.merge-rules__list {
+  margin: 0.45rem 0 0;
+  padding-inline-start: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+  line-height: 1.35;
+}
 
-  .merge-rules__list {
-    margin: 0.45rem 0 0;
-    padding-inline-start: 1.1rem;
-    display: grid;
-    gap: 0.25rem;
-    line-height: 1.35;
-  }
-
-	.logout-action {
-	  background: color-mix(in srgb, #7c2d2d 14%, var(--surface-1));
-	  border-color: color-mix(in srgb, #7c2d2d 55%, var(--border-strong));
-	}
+.logout-action {
+  background: color-mix(in srgb, #7c2d2d 14%, var(--surface-1));
+  border-color: color-mix(in srgb, #7c2d2d 55%, var(--border-strong));
+}
 
 .logout-action:hover {
   background: color-mix(in srgb, #7c2d2d 18%, var(--surface-1));

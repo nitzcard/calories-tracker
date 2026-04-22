@@ -253,7 +253,6 @@ export async function readPersistedAppState(page: Page) {
       localStorage: {
         locale: localStorage.getItem("calorie-tracker.locale"),
         themeMode: localStorage.getItem("calorie-tracker.theme-mode"),
-        cloudMode: localStorage.getItem("calorie-tracker.cloud-mode"),
         aiModel: localStorage.getItem("calorie-tracker.ai-model"),
       },
     };

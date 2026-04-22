@@ -37,8 +37,8 @@ const emit = defineEmits<{
   "update:selectedDate": [value: string];
   "update:currentWeight": [value: string];
   "update:foodLog": [value: string];
-  "save-weight": [];
-  "save-draft": [];
+  "save-weight": [value?: string];
+  "save-draft": [value?: string];
   analyze: [];
   "provider-change": [provider: string];
   "accept-model-switch": [];
@@ -115,7 +115,7 @@ const localizedSelectedDate = computed(() =>
 		                  dir="ltr"
 		                  :value="currentWeight"
 		                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
-		                  @blur="emit('save-weight')"
+		                  @blur="emit('save-weight', ($event.target as HTMLInputElement).value)"
 		                />
 	              </FieldControl>
 	              <span class="field-unit">{{ t("unitKg") }}</span>
@@ -134,7 +134,7 @@ const localizedSelectedDate = computed(() =>
             :value="foodLog"
             :placeholder="t('foodPlaceholder')"
             @input="emit('update:foodLog', ($event.target as HTMLTextAreaElement).value)"
-            @blur="emit('save-draft')"
+            @blur="emit('save-draft', ($event.target as HTMLTextAreaElement).value)"
           ></textarea>
         </FieldControl>
       </FormField>
@@ -163,7 +163,7 @@ const localizedSelectedDate = computed(() =>
 
         <p class="helper-text">{{ t("analyzeHelper") }}</p>
         <div class="form-row">
-          <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
+          <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft', foodLog)">
             {{ t("saveOnly") }}
           </button>
           <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
@@ -223,16 +223,16 @@ const localizedSelectedDate = computed(() =>
 	        <FormField :label="t('todayWeight')" :helper="t('weightHelper')">
 	          <div class="unit-field">
 	            <FieldControl class="weight-control" :is-saving="isSavingWeight">
-	              <input
-	                class="weight-input"
-	                type="number"
-	                step="0.1"
-	                min="0"
-	                dir="ltr"
-	                :value="currentWeight"
-	                @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
-	                @blur="emit('save-weight')"
-	              />
+	                <input
+	                  class="weight-input"
+	                  type="number"
+	                  step="0.1"
+	                  min="0"
+	                  dir="ltr"
+	                  :value="currentWeight"
+	                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
+	                  @blur="emit('save-weight', ($event.target as HTMLInputElement).value)"
+	                />
 	            </FieldControl>
 	            <span class="field-unit">{{ t("unitKg") }}</span>
 	          </div>
@@ -250,7 +250,7 @@ const localizedSelectedDate = computed(() =>
           :value="foodLog"
           :placeholder="t('foodPlaceholder')"
           @input="emit('update:foodLog', ($event.target as HTMLTextAreaElement).value)"
-          @blur="emit('save-draft')"
+          @blur="emit('save-draft', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
       </FieldControl>
     </FormField>
