@@ -309,6 +309,9 @@ p {
 
 html {
   scroll-behavior: smooth;
+  /* Prevent accidental horizontal viewport scroll caused by any overflowing child.
+     Individual overflow-x: auto containers (tables, etc.) still scroll independently. */
+  overflow-x: clip;
 }
 
 html,

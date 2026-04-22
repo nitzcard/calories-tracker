@@ -309,5 +309,15 @@ function onActivityPromptInput(event: Event) {
     inline-size: 100%;
   }
 
+  .unit-field {
+    display: flex;
+    inline-size: 100%;
+  }
+
+  .unit-field :deep(input) {
+    flex: 1 1 0;
+    min-inline-size: 0;
+  }
+
 }
 </style>

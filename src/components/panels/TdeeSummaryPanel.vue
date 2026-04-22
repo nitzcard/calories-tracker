@@ -283,7 +283,33 @@ function formatObservedRangeDate(date: string, locale: AppLocale) {
             <div class="tdee-card__value">{{ tdee.observedTdee ?? "-" }}</div>
           </div>
           <div class="tdee-card__helper">
-            {{ t("observedTdeeExplain") }}
+            <span
+              class="math-equation"
+              dir="ltr"
+              :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
+            >
+              <span class="math-equation__term">{{ t("observedTdeeFormulaLabel") }}</span>
+              <span class="math-equation__eq">=</span>
+              <span class="math-equation__term">{{ t("observedTdeeFormulaAverage") }}</span>
+              <span class="math-equation__eq">−</span>
+              <span class="math-fraction">
+                <span class="math-fraction__num">
+                  <span class="math-group">
+                    <span class="math-equation__eq">(</span>
+                    <span class="math-equation__term">{{ t("observedTdeeFormulaLastWeight") }}</span>
+                    <span class="math-equation__eq">−</span>
+                    <span class="math-equation__term">{{ t("observedTdeeFormulaFirstWeight") }}</span>
+                    <span class="math-equation__eq">)</span>
+                  </span>
+                  <span class="math-equation__eq">×</span>
+                  <span class="math-equation__term">7700</span>
+                </span>
+                <span class="math-fraction__bar"></span>
+                <span class="math-fraction__den">
+                  <span class="math-equation__term">{{ t("observedTdeeFormulaDays") }}</span>
+                </span>
+              </span>
+            </span>
             <span v-if="tdee.observedTdee == null">
               <br />
               <em class="muted">{{ observedEmptyText() }}</em>
