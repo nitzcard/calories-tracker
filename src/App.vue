@@ -30,7 +30,7 @@ function readStoredOpen(key: string): boolean | null {
     const raw = localStorage.getItem(key);
     if (raw === "0" || raw === "1") return raw === "1";
   } catch {
-    // ignore
+    // ignore and del
   }
   return null;
 }
