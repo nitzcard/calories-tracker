@@ -30,7 +30,6 @@ test("@inputs unchanged saves do not rewrite persisted timestamps or sync revisi
 
   const headerSelects = page.locator("header select");
   await headerSelects.nth(0).selectOption("en");
-  await headerSelects.nth(1).selectOption("light");
 
   await page.locator("#dailyDeskPanel .weight-input").first().fill("80.1");
   await page.locator("#dailyDeskPanel .weight-input").first().blur();
@@ -67,4 +66,3 @@ test("@inputs unchanged saves do not rewrite persisted timestamps or sync revisi
   expect(after.cloudSyncState?.pendingScopes ?? []).toEqual([]);
   expect(after.cloudSyncState?.lastRemoteFingerprint).toBe("fingerprint-1");
 });
-

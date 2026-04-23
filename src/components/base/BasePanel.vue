@@ -150,7 +150,8 @@ function onToggle(event: Event) {
   justify-self: center;
   border: 2px solid #000;
   border-color: #808080 #fff #fff #808080;
-  background: #ffffff;
+  background: var(--surface-2);
+  color: var(--text-primary);
   padding: 22px 18px;
   box-shadow: none;
 }

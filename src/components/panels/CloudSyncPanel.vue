@@ -336,7 +336,7 @@ function onSubmit() {
   padding: 0.1rem 0.35rem;
   border: 2px solid #000;
   border-color: #fff #808080 #808080 #fff;
-  background: #c0c0c0;
+  background: var(--surface-1);
   color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1;
@@ -344,11 +344,11 @@ function onSubmit() {
 }
 
 .logout-action {
-  background: #c0c0c0;
+  background: var(--surface-1);
 }
 
 .logout-action:hover {
-  background: #c0c0c0;
+  background: var(--surface-1);
 }
 
 .status-pill {
@@ -356,7 +356,7 @@ function onSubmit() {
   padding: 0.28rem 0.45rem;
   border: 2px solid #000;
   border-color: #808080 #fff #fff #808080;
-  background: #ffffff;
+  background: var(--surface-2);
   box-shadow: none;
   color: var(--text-muted);
 }

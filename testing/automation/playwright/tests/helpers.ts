@@ -130,8 +130,12 @@ function sumFoods(foods: Array<ReturnType<typeof makeFoodSeed>>) {
   };
 }
 
-export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
-  await page.evaluate(async ({ entries }) => {
+export async function seedProfileAndEntries(
+  page: Page,
+  entries: SeedEntry[],
+  options?: { signedInUsername?: string | null },
+) {
+  await page.evaluate(async ({ entries, options }) => {
     function openDb(name: string) {
       return new Promise<IDBDatabase>((resolve, reject) => {
         let upgradeTx: IDBTransaction | null = null;
@@ -170,7 +174,6 @@ export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
       foodInstructions: "",
       aiModel: "gemini-2.5-flash",
       locale: "en",
-      themeMode: "light",
       updatedAt: new Date().toISOString(),
     });
 
@@ -195,8 +198,21 @@ export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
       tx.onerror = () => reject(tx.error);
     });
 
+    const signedInUsername = (
+      options?.signedInUsername === undefined ? "playwright-user" : options.signedInUsername ?? ""
+    )
+      .trim()
+      .toLowerCase();
+    if (signedInUsername) {
+      localStorage.setItem("calorie-tracker.cloud-username", signedInUsername);
+      localStorage.setItem("calorie-tracker.cloud-confirmed-username", signedInUsername);
+    } else {
+      localStorage.removeItem("calorie-tracker.cloud-username");
+      localStorage.removeItem("calorie-tracker.cloud-confirmed-username");
+    }
+
     db.close();
-  }, { entries });
+  }, { entries, options });
 }
 
 export async function readPersistedAppState(page: Page) {
@@ -258,7 +274,6 @@ export async function readPersistedAppState(page: Page) {
       cloudSyncState: cloudSyncStateRow?.cloudSyncState ?? null,
       localStorage: {
         locale: localStorage.getItem("calorie-tracker.locale"),
-        themeMode: localStorage.getItem("calorie-tracker.theme-mode"),
         aiModel: localStorage.getItem("calorie-tracker.ai-model"),
       },
     };

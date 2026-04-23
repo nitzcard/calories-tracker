@@ -4,10 +4,8 @@ import { detectLocale, localeDirection, syncI18nLocale } from "../i18n";
 import {
   DASHBOARD_STORAGE_KEYS,
   normalizeProvider,
-  readStoredDesignMode,
   readStoredLocale,
   readStoredProvider,
-  readStoredThemeMode,
   statusLabel,
 } from "./dashboard-helpers";
 import { useAutoSaveState } from "./useAutoSaveState";
@@ -38,8 +36,8 @@ import {
 } from "../domain/entries";
 import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
-import { applyTheme, detectThemeMode } from "../theme";
-import type { AiProviderOption, AppLocale, DailyEntry, DesignMode, Profile, TdeeEquation, ThemeMode } from "../types";
+import { applyTheme } from "../theme";
+import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation } from "../types";
 import {
   decryptJsonWithPassphrase,
   encryptJsonWithPassphrase,
@@ -65,8 +63,6 @@ export function useDashboard() {
 
   const today = localIsoDate();
   const locale = ref<AppLocale>(readStoredLocale() ?? detectLocale());
-  const themeMode = ref<ThemeMode>(readStoredThemeMode() ?? detectThemeMode());
-  const designMode = ref<DesignMode>(readStoredDesignMode() ?? "win95");
   const profile = ref<Profile | null>(null);
   const entries = ref<DailyEntry[]>([]);
   const selectedDate = ref(today);
@@ -95,8 +91,6 @@ export function useDashboard() {
   let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
   let cloudPushPending = false;
   let cloudPushInFlight = false;
-  let systemThemeQuery: MediaQueryList | null = null;
-
   let cachedCloudBlobModule:
     | Promise<{
         createUserBlob: (username: string, raw: unknown) => Promise<any>;
@@ -467,13 +461,13 @@ export function useDashboard() {
     document.documentElement.dir = direction;
     document.body.dir = direction;
     document.body.style.direction = direction;
-    applyTheme(themeMode.value, designMode.value);
+    applyTheme();
   }
 
   async function refreshState(opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) {
     entries.value = await listEntries();
     const savedProfile = await getProfile();
-    profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value, themeMode.value, designMode.value));
+    profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value));
     loadSelectedEntry({
       skipFoodLog: opts?.skipReloadFoodLog,
       preserveDirtyFields: opts?.preserveDirtyFields ?? true,
@@ -616,28 +610,6 @@ export function useDashboard() {
     ensureProviderOption(provider.value, nextLocale);
     refreshVisibleProviderOptions(nextLocale);
     await runQueuedProfileSave("settings.locale", "settings.locale", profile.value ? { ...profile.value, locale: locale.value } : null);
-  }
-
-  async function onThemeChange(nextTheme: ThemeMode) {
-    themeMode.value = nextTheme;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, nextTheme);
-    syncChrome();
-    await runQueuedProfileSave(
-      "settings.theme",
-      "settings.theme",
-      profile.value ? { ...profile.value, themeMode: nextTheme } : null,
-    );
-  }
-
-  async function onDesignChange(nextDesign: DesignMode) {
-    designMode.value = nextDesign;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.designMode, nextDesign);
-    syncChrome();
-    await runQueuedProfileSave(
-      "settings.design",
-      "settings.design",
-      profile.value ? { ...profile.value, designMode: nextDesign } : null,
-    );
   }
 
   async function onProviderChange(nextProvider: string) {
@@ -1155,10 +1127,6 @@ export function useDashboard() {
         if (profile.value) {
           locale.value = profile.value.locale;
           localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
-          themeMode.value = profile.value.themeMode;
-          localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, themeMode.value);
-          designMode.value = profile.value.designMode;
-          localStorage.setItem(DASHBOARD_STORAGE_KEYS.designMode, designMode.value);
           provider.value = normalizeProvider(profile.value.aiModel);
           localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
           ensureProviderOption(provider.value, locale.value);
@@ -1373,8 +1341,6 @@ export function useDashboard() {
     { flush: "sync" },
   );
   watch(locale, syncChrome);
-  watch(themeMode, syncChrome);
-  watch(designMode, syncChrome);
 
   watch(
     () => aiKeys.value.gemini,
@@ -1443,21 +1409,15 @@ export function useDashboard() {
   }
 
   onMounted(async () => {
-    profile.value = await ensureDefaultProfile(locale.value, themeMode.value, designMode.value);
+    profile.value = await ensureDefaultProfile(locale.value);
     provider.value = normalizeProvider(readStoredProvider() ?? profile.value.aiModel);
     locale.value = readStoredLocale() ?? profile.value.locale;
-    themeMode.value = readStoredThemeMode() ?? profile.value.themeMode;
-    designMode.value = readStoredDesignMode() ?? profile.value.designMode;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, themeMode.value);
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.designMode, designMode.value);
     ensureProviderOption(provider.value, locale.value);
     refreshVisibleProviderOptions();
     profile.value = {
       ...profile.value,
       aiModel: provider.value,
       locale: locale.value,
-      themeMode: themeMode.value,
-      designMode: designMode.value,
     };
     // If localStorage was cleared but IndexedDB still has keys, restore them.
     if (!aiKeys.value.gemini.trim()) {
@@ -1503,29 +1463,18 @@ export function useDashboard() {
     void analysis.flushPendingAnalysis(false);
   }
 
-  function handleSystemThemeChange() {
-    if (themeMode.value === "system") {
-      syncChrome();
-    }
-  }
-
   onMounted(() => {
     window.addEventListener("online", handleOnline);
-    systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    systemThemeQuery.addEventListener("change", handleSystemThemeChange);
   });
 
   onUnmounted(() => {
     window.removeEventListener("online", handleOnline);
-    systemThemeQuery?.removeEventListener("change", handleSystemThemeChange);
     if (foodDraftSaveTimer) clearTimeout(foodDraftSaveTimer);
     if (weightDraftSaveTimer) clearTimeout(weightDraftSaveTimer);
   });
 
   return {
     locale,
-    themeMode,
-    designMode,
     profile,
     entries: displayEntries,
     selectedDate,
@@ -1545,8 +1494,6 @@ export function useDashboard() {
     isSavingFoodInstructions: autoSave.isSavingFoodInstructions,
     isSavingTdeeEquation: autoSave.isSavingTdeeEquation,
     isSavingLocale: autoSave.isSavingLocale,
-    isSavingTheme: autoSave.isSavingTheme,
-    isSavingDesign: autoSave.isSavingDesign ?? false,
     isSavingProvider: autoSave.isSavingProvider,
     savingAiKeyField: autoSave.savingAiKeyField,
     analyzeIssue: analysis.analyzeIssue,
@@ -1571,8 +1518,6 @@ export function useDashboard() {
     statusLabel,
     loadSelectedEntry,
     onLocaleChange,
-    onThemeChange,
-    onDesignChange,
     onProviderChange,
     saveWeightDraft,
     saveFoodDraft,

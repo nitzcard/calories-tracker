@@ -63,8 +63,6 @@ function mergeProfilePreservingData(
     activityFactor: "sedentary" as const,
     aiModel: DEFAULT_GEMINI_MODEL,
     locale: "en" as const,
-    themeMode: "system" as const,
-    designMode: "win95" as const,
     goalMode: "maingain" as const,
   };
 
@@ -111,16 +109,6 @@ function mergeProfilePreservingData(
     DEFAULT.tdeeEquation,
   );
   const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
-  const mergedTheme = pickEnumWithWeakDefault(
-    preferred.themeMode ?? DEFAULT.themeMode,
-    other.themeMode ?? DEFAULT.themeMode,
-    DEFAULT.themeMode,
-  );
-  const mergedDesign = pickEnumWithWeakDefault(
-    preferred.designMode ?? DEFAULT.designMode,
-    other.designMode ?? DEFAULT.designMode,
-    DEFAULT.designMode,
-  );
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
   const mergedGoalMode = pickEnumWithWeakDefault(
     preferred.goalMode ?? DEFAULT.goalMode,
@@ -141,8 +129,6 @@ function mergeProfilePreservingData(
       preferredLegacy.activityPrompt,
     ),
     locale: mergedLocale,
-    themeMode: mergedTheme,
-    designMode: mergedDesign,
     aiModel: mergedModel,
     goalMode: mergedGoalMode,
     age: pickNullableNumber(preferred.age, other.age),

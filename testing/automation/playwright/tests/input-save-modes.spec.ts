@@ -25,7 +25,7 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   await seedProfileAndEntries(page, [
     { date: today, foodLogText: "seed today", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "seed yesterday", weight: 80.4, manualCalories: 1900 },
-  ]);
+  ], { signedInUsername: null });
 
   await page.reload({ waitUntil: "networkidle" });
   const cloudPanel = page.locator("main.app-shell--blocked");
@@ -47,7 +47,6 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   await apiKeysPanel.locator('input[type="password"]').blur();
 
   const headerSelects = page.locator("header select");
-  await headerSelects.nth(1).selectOption("dark");
 
   const profileSelects = profilePanel.locator("select");
   await profileSelects.nth(0).selectOption("female");
@@ -113,7 +112,6 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   const yesterdayEntry = persisted.dailyEntries.find((entry: { date: string }) => entry.date === yesterday);
 
   expect(persisted.localStorage.locale).toBe("he");
-  expect(persisted.localStorage.themeMode).toBe("dark");
 
   expect(persisted.profile).toMatchObject({
     sex: "female",
@@ -127,7 +125,6 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
     tdeeEquation: "harrisBenedict",
     foodInstructions: "banana: 90 calories for 100 gr",
     locale: "he",
-    themeMode: "dark",
   });
 
   expect(persisted.aiKeys).toMatchObject({

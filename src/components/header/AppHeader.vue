@@ -3,15 +3,11 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { AppLocale, DesignMode, ThemeMode } from "../../types";
+import type { AppLocale } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
   isSavingLocale: boolean;
-  themeMode: ThemeMode;
-  isSavingTheme: boolean;
-  designMode: DesignMode;
-  isSavingDesign: boolean;
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
   showLogout?: boolean;
@@ -20,8 +16,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "locale-change": [locale: AppLocale];
-  "theme-change": [themeMode: ThemeMode];
-  "design-change": [designMode: DesignMode];
   logout: [];
 }>();
 
@@ -103,34 +97,6 @@ const confirmedUserTag = computed(() => {
             </select>
           </FieldControl>
         </FormField>
-        <FormField :label="t('theme')">
-          <FieldControl as="select" :is-saving="isSavingTheme">
-            <select
-              :value="themeMode"
-              @change="
-                emit('theme-change', ($event.target as HTMLSelectElement).value as ThemeMode)
-              "
-            >
-              <option value="system">{{ t("system") }}</option>
-              <option value="light">{{ t("light") }}</option>
-              <option value="dark">{{ t("dark") }}</option>
-            </select>
-          </FieldControl>
-        </FormField>
-        <FormField :label="t('design')">
-          <FieldControl as="select" :is-saving="isSavingDesign">
-            <select
-              :value="designMode"
-              @change="
-                emit('design-change', ($event.target as HTMLSelectElement).value as DesignMode)
-              "
-            >
-              <option value="win95">{{ t("designWin95") }}</option>
-              <option value="mac90s">{{ t("designMac90s") }}</option>
-              <option value="win7">{{ t("designWin7") }}</option>
-            </select>
-          </FieldControl>
-        </FormField>
       </div>
     </div>
   </header>
@@ -149,7 +115,7 @@ const confirmedUserTag = computed(() => {
   max-inline-size: 58rem;
   margin: 0 auto;
   padding: clamp(1rem, 2vw, 1.5rem);
-  align-items: center;
+  align-items: start;
 }
 
 .copy {

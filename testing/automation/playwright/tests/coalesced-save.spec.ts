@@ -14,7 +14,7 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   await page.goto("/login", { waitUntil: "networkidle" });
   await seedProfileAndEntries(page, [
     { date: today, foodLogText: "base log", weight: 80.1, manualCalories: 2100 },
-  ]);
+  ], { signedInUsername: null });
   await initializeCloudSyncState(page, {
     revision: 5,
     lastSyncedRevision: 5,

@@ -1,11 +1,9 @@
 import { isSupportedProviderOption } from "../ai/registry";
 import { DEFAULT_GEMINI_MODEL, isGeminiModelId } from "../ai/gemini-config";
-import type { AppLocale, AiStatus, DesignMode, ThemeMode } from "../types";
+import type { AppLocale, AiStatus } from "../types";
 
 export const DASHBOARD_STORAGE_KEYS = {
   locale: "calorie-tracker.locale",
-  themeMode: "calorie-tracker.theme-mode",
-  designMode: "calorie-tracker.design-mode",
   aiModel: "calorie-tracker.ai-model",
   aiModelUserSet: "calorie-tracker.ai-model-user-set",
   geminiLatestModel: "calorie-tracker.gemini-latest-model",
@@ -13,14 +11,6 @@ export const DASHBOARD_STORAGE_KEYS = {
   cloudConfirmedUsername: "calorie-tracker.cloud-confirmed-username",
   dailyDraftPrefix: "calorie-tracker.daily-draft::",
 } as const;
-
-const STORED_THEME_MODES = ["system", "light", "dark"] as const satisfies readonly ThemeMode[];
-const LEGACY_DARK_THEME_MODES = ["purple-dark", "jasmine", "cs16", "steam", "cyberpunk-2077"] as const;
-const STORED_DESIGN_MODES = ["win95", "mac90s", "win7"] as const satisfies readonly DesignMode[];
-
-function isOneOf<T extends string>(value: string | null, options: readonly T[]): value is T {
-  return value !== null && options.includes(value as T);
-}
 
 export function normalizeProvider(value: string | null): string {
   if (value && (isSupportedProviderOption(value) || isGeminiModelId(value))) {
@@ -73,24 +63,6 @@ export function statusLabel(labelFor: (key: string) => string, status: AiStatus 
 export function readStoredLocale(): AppLocale | null {
   const value = localStorage.getItem(DASHBOARD_STORAGE_KEYS.locale);
   return value === "he" || value === "en" ? value : null;
-}
-
-export function readStoredThemeMode(): ThemeMode | null {
-  const value = localStorage.getItem(DASHBOARD_STORAGE_KEYS.themeMode);
-  if (isOneOf(value, STORED_THEME_MODES)) {
-    return value;
-  }
-
-  if (isOneOf(value, LEGACY_DARK_THEME_MODES)) {
-    return "dark";
-  }
-
-  return null;
-}
-
-export function readStoredDesignMode(): DesignMode | null {
-  const value = localStorage.getItem(DASHBOARD_STORAGE_KEYS.designMode);
-  return isOneOf(value, STORED_DESIGN_MODES) ? value : null;
 }
 
 export function readStoredProvider(): string | null {

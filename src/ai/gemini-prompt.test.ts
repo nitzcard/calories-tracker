@@ -18,8 +18,6 @@ const baseInput: AiAnalysisInput = {
     activityFactor: "moderate",
     aiModel: "gemini-2.5-flash",
     locale: "he",
-    themeMode: "system",
-    designMode: "win95",
     foodInstructions: "",
   },
   foodRules: [],

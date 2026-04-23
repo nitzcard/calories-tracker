@@ -50,8 +50,6 @@ const PANEL_OPEN_KEYS = {
 
 const {
   locale,
-  themeMode,
-  designMode,
   profile,
   entries,
   selectedDate,
@@ -71,8 +69,6 @@ const {
   isSavingFoodInstructions,
   isSavingTdeeEquation,
   isSavingLocale,
-  isSavingTheme,
-  isSavingDesign,
   isSavingProvider,
   savingAiKeyField,
   analyzeIssue,
@@ -86,8 +82,6 @@ const {
   savingHistoryWeight,
   statusLabel,
   onLocaleChange,
-  onThemeChange,
-  onDesignChange,
   onProviderChange,
   saveWeightDraft,
   saveFoodDraft,
@@ -154,6 +148,7 @@ const hasEffectiveGeminiKey = computed(() =>
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 const hasConfirmedCloudLogin = computed(() => Boolean(cloudConfirmedUsername.value.trim()));
+const showCloudLoginGate = computed(() => supabaseConfigured.value && !hasConfirmedCloudLogin.value);
 const isLoginRoute = computed(() => route.name === "login");
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
@@ -392,6 +387,21 @@ watch(
   locale,
   () => {
     document.title = `${t("appTitle")} (${t("beta")})`;
+  },
+  { immediate: true },
+);
+
+watch(
+  [showCloudLoginGate, () => route.name],
+  async ([shouldShowLogin, routeName]) => {
+    if (shouldShowLogin && routeName !== "login") {
+      await router.replace({ name: "login" });
+      return;
+    }
+
+    if (!shouldShowLogin && routeName === "login") {
+      await router.replace({ name: "dashboard" });
+    }
   },
   { immediate: true },
 );
@@ -734,17 +744,11 @@ async function confirmDeleteDay() {
           <AppHeader
             :locale="locale"
             :is-saving-locale="isSavingLocale"
-            :theme-mode="themeMode"
-            :is-saving-theme="isSavingTheme"
-            :design-mode="designMode"
-            :is-saving-design="isSavingDesign"
             :cloud-confirmed-username="cloudConfirmedUsername"
             :is-cloud-busy="isCloudSyncing"
             :show-logout="false"
             :auth-view="true"
             @locale-change="onLocaleChange"
-            @theme-change="onThemeChange"
-            @design-change="onDesignChange"
           />
 
           <section v-if="profile" class="content-grid">
@@ -780,16 +784,10 @@ async function confirmDeleteDay() {
     <AppHeader
       :locale="locale"
       :is-saving-locale="isSavingLocale"
-      :theme-mode="themeMode"
-      :is-saving-theme="isSavingTheme"
-      :design-mode="designMode"
-      :is-saving-design="isSavingDesign"
       :cloud-confirmed-username="cloudConfirmedUsername"
       :is-cloud-busy="isCloudSyncing"
       :show-logout="hasConfirmedCloudLogin"
       @locale-change="onLocaleChange"
-      @theme-change="onThemeChange"
-      @design-change="onDesignChange"
       @logout="cloudLogout"
     />
 
@@ -1127,8 +1125,8 @@ async function confirmDeleteDay() {
   place-items: center;
   border: 2px solid #000;
   border-color: #dfdfdf #3f3f3f #3f3f3f #dfdfdf;
-  background: #c0c0c0;
-  color: #111;
+  background: var(--surface-1);
+  color: var(--text-primary);
   line-height: 1;
 }
 
@@ -1176,7 +1174,7 @@ async function confirmDeleteDay() {
 .login-desktop :deep(.cloud-panel--auth .panel-header) {
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #808080;
+  border-bottom: 1px solid var(--border);
 }
 
 .login-desktop :deep(.cloud-panel--auth .auth-block) {
@@ -1188,8 +1186,8 @@ async function confirmDeleteDay() {
 .login-desktop :deep(.cloud-panel--auth select) {
   border: 2px solid #000;
   border-color: #808080 #fff #fff #808080;
-  background: #fff;
-  color: #111;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .login-desktop :deep(.cloud-panel--auth .cloud-actions) {
@@ -1201,19 +1199,19 @@ async function confirmDeleteDay() {
   min-inline-size: 110px;
   border: 2px solid #000;
   border-color: #fff #3f3f3f #3f3f3f #fff;
-  background: #c0c0c0;
-  color: #111;
+  background: var(--surface-1);
+  color: var(--text-primary);
 }
 
 .login-desktop :deep(.cloud-panel--auth button:disabled) {
-  color: #6a6a6a;
+  color: var(--text-muted);
 }
 
 .login-desktop :deep(.cloud-panel--auth .status-pill) {
   border: 2px solid #000;
   border-color: #808080 #fff #fff #808080;
-  background: #d4d0c8;
-  color: #222;
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 @media (max-width: 720px) {
@@ -1497,7 +1495,7 @@ async function confirmDeleteDay() {
   border-color: #fff #808080 #808080 #fff;
   border-radius: 0;
   background: var(--panel);
-  color: #111;
+  color: var(--text-primary);
   font: inherit;
   font-weight: 700;
   padding: 0.55rem 0.9rem;
