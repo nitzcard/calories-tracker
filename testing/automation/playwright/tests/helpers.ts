@@ -1,9 +1,15 @@
 import type { Page } from "@playwright/test";
 
 export function isoDate(offsetDays: number) {
-  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+  const now = new Date();
+  if (now.getHours() < 6) {
+    now.setDate(now.getDate() - 1);
+  }
   now.setDate(now.getDate() + offsetDays);
-  return now.toISOString().slice(0, 10);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function todayIso() {
@@ -124,8 +130,12 @@ function sumFoods(foods: Array<ReturnType<typeof makeFoodSeed>>) {
   };
 }
 
-export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
-  await page.evaluate(async ({ entries }) => {
+export async function seedProfileAndEntries(
+  page: Page,
+  entries: SeedEntry[],
+  options?: { signedInUsername?: string | null },
+) {
+  await page.evaluate(async ({ entries, options }) => {
     function openDb(name: string) {
       return new Promise<IDBDatabase>((resolve, reject) => {
         let upgradeTx: IDBTransaction | null = null;
@@ -164,7 +174,6 @@ export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
       foodInstructions: "",
       aiModel: "gemini-2.5-flash",
       locale: "en",
-      themeMode: "light",
       updatedAt: new Date().toISOString(),
     });
 
@@ -189,8 +198,21 @@ export async function seedProfileAndEntries(page: Page, entries: SeedEntry[]) {
       tx.onerror = () => reject(tx.error);
     });
 
+    const signedInUsername = (
+      options?.signedInUsername === undefined ? "playwright-user" : options.signedInUsername ?? ""
+    )
+      .trim()
+      .toLowerCase();
+    if (signedInUsername) {
+      localStorage.setItem("calorie-tracker.cloud-username", signedInUsername);
+      localStorage.setItem("calorie-tracker.cloud-confirmed-username", signedInUsername);
+    } else {
+      localStorage.removeItem("calorie-tracker.cloud-username");
+      localStorage.removeItem("calorie-tracker.cloud-confirmed-username");
+    }
+
     db.close();
-  }, { entries });
+  }, { entries, options });
 }
 
 export async function readPersistedAppState(page: Page) {
@@ -252,7 +274,6 @@ export async function readPersistedAppState(page: Page) {
       cloudSyncState: cloudSyncStateRow?.cloudSyncState ?? null,
       localStorage: {
         locale: localStorage.getItem("calorie-tracker.locale"),
-        themeMode: localStorage.getItem("calorie-tracker.theme-mode"),
         aiModel: localStorage.getItem("calorie-tracker.ai-model"),
       },
     };
@@ -308,6 +329,7 @@ export async function initializeCloudSyncState(page: Page, state?: {
 }
 
 export async function clearAppStorage(page: Page) {
+  await page.goto("/test-empty.html", { waitUntil: "networkidle" });
   await page.evaluate(async () => {
     localStorage.clear();
 
@@ -316,7 +338,7 @@ export async function clearAppStorage(page: Page) {
         const request = indexedDB.deleteDatabase(name);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
-        request.onblocked = () => resolve();
+        request.onblocked = () => reject(new Error(`deleteDatabase blocked for ${name}`));
       });
 
     await deleteDb("calorie-tracker");

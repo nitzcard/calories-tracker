@@ -3,21 +3,20 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
-import type { AppLocale, ThemeMode } from "../../types";
+import type { AppLocale } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
-  themeMode: ThemeMode;
   isSavingLocale: boolean;
-  isSavingTheme: boolean;
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
+  showLogout?: boolean;
   authView?: boolean;
 }>();
 
 const emit = defineEmits<{
   "locale-change": [locale: AppLocale];
-  "theme-change": [themeMode: ThemeMode];
+  logout: [];
 }>();
 
 const { t } = useI18n();
@@ -39,11 +38,14 @@ const confirmedUserTag = computed(() => {
 <template>
   <header class="header-shell panel" :class="{ 'header-shell--auth': authView }">
     <div class="copy">
-      <h1 class="title">
-        <span>{{ t("appTitle") }}</span>
+      <div class="title-row">
+        <h1 class="title">
+          <span>{{ t("appTitle") }}</span>
+        </h1>
         <span class="beta-pill">{{ t("beta") }}</span>
+      </div>
+      <div class="meta-row">
         <span
-          v-if="!authView"
           class="sync-pill"
           :class="{ cloud: showCloudIndicator, pending: showCloudPending }"
         >
@@ -67,7 +69,16 @@ const confirmedUserTag = computed(() => {
         >
           {{ t("feedbackLabel") }}
         </a>
-      </h1>
+        <button
+          v-if="showLogout && !authView"
+          type="button"
+          class="logout-pill"
+          :disabled="isCloudBusy"
+          @click="emit('logout')"
+        >
+          {{ t("cloudLogout") }}
+        </button>
+      </div>
       <p>{{ t("appSubtitle") }}</p>
       <p class="helper-text">{{ t("headerHelper") }}</p>
     </div>
@@ -83,25 +94,6 @@ const confirmedUserTag = computed(() => {
             >
               <option value="en">English</option>
               <option value="he">עברית</option>
-            </select>
-          </FieldControl>
-        </FormField>
-        <FormField :label="t('theme')">
-          <FieldControl as="select" :is-saving="isSavingTheme">
-            <select
-              :value="themeMode"
-              @change="
-                emit('theme-change', ($event.target as HTMLSelectElement).value as ThemeMode)
-              "
-            >
-              <option value="system">{{ t("system") }}</option>
-              <option value="light">{{ t("light") }}</option>
-              <option value="dark">{{ t("dark") }}</option>
-              <option value="purple-dark">{{ t("purpleDark") }}</option>
-              <option value="jasmine">{{ t("jasmine") }}</option>
-              <option value="cs16">{{ t("cs16") }}</option>
-              <option value="steam">{{ t("steam") }}</option>
-              <option value="cyberpunk-2077">{{ t("cyberpunk2077") }}</option>
             </select>
           </FieldControl>
         </FormField>
@@ -123,7 +115,7 @@ const confirmedUserTag = computed(() => {
   max-inline-size: 58rem;
   margin: 0 auto;
   padding: clamp(1rem, 2vw, 1.5rem);
-  align-items: center;
+  align-items: start;
 }
 
 .copy {
@@ -149,32 +141,61 @@ const confirmedUserTag = computed(() => {
 }
 
 .title {
-  display: inline-flex;
-  gap: 0.5rem;
-  align-items: baseline;
+  color: var(--accent);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   flex-wrap: wrap;
 }
 
 .beta-pill {
-  padding: 0 0.28rem;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  box-shadow: var(--bevel-raised);
-  color: var(--text-muted);
+  padding: 0.1rem 0.38rem;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--chip-bg);
+  box-shadow: none;
+  color: var(--chip-text);
   font-size: 0.84rem;
   font-weight: 700;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .feedback-pill {
-  padding: 0 0.35rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
-  box-shadow: var(--bevel-raised);
-  color: var(--text-primary);
+  padding: 0.18rem 0.45rem;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--chip-bg);
+  box-shadow: none;
+  color: var(--chip-text);
   font-size: 0.84rem;
   font-weight: 700;
   text-decoration: none;
+  white-space: nowrap;
+}
+
+.logout-pill {
+  padding: 0.18rem 0.52rem;
+  min-block-size: 0;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--chip-bg);
+  box-shadow: none;
+  color: var(--chip-text);
+  font-size: 0.84rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -183,11 +204,12 @@ const confirmedUserTag = computed(() => {
 }
 
 .sync-pill {
-  padding: 0 0.35rem;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  box-shadow: var(--bevel-raised);
-  color: var(--text-muted);
+  padding: 0.18rem 0.48rem;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--chip-bg);
+  box-shadow: none;
+  color: var(--chip-text);
   font-size: 0.84rem;
   font-weight: 700;
   white-space: nowrap;
@@ -197,21 +219,20 @@ const confirmedUserTag = computed(() => {
 }
 
 .sync-user {
-  color: var(--text-muted);
+  color: inherit;
   font-weight: 600;
   font-size: 0.82em;
-  opacity: 0.95;
+  opacity: 1;
 }
 
 .sync-pill.cloud {
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+  color: var(--chip-cloud-text);
+  background: var(--chip-cloud-bg);
 }
 
 .sync-pill.pending {
-  border-color: color-mix(in srgb, #eab308 60%, var(--border));
-  background: color-mix(in srgb, #eab308 12%, var(--surface-2));
+  color: var(--chip-pending-text);
+  background: var(--chip-pending-bg);
 }
 
 .live-dot {
@@ -222,18 +243,17 @@ const confirmedUserTag = computed(() => {
 }
 
 .sync-pill.cloud .live-dot {
-  color: #4ade80;
+  color: #008000;
 }
 
 .sync-pill.pending .live-dot {
-  color: #eab308;
+  color: #8a6d00;
 }
 
 .live-dot.busy {
   animation-duration: 520ms;
 }
 
-/* Radar-like blip when cloud is connected. */
 .sync-pill.cloud .live-dot {
   animation: liveBlink 980ms ease-in-out infinite;
 }
@@ -316,6 +336,10 @@ const confirmedUserTag = computed(() => {
     max-inline-size: none;
     inline-size: 100%;
     min-inline-size: 0;
+  }
+
+  .meta-row {
+    gap: 0.35rem;
   }
 
   .controls-grid :deep(select) {

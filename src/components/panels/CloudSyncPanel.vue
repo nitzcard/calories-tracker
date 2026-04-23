@@ -21,7 +21,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  "update:cloudUsername": [value: string];
+  "update:cloud-username": [value: string];
   "update:profile": [profile: Profile];
   save: [profile: Profile];
   sync: [payload: { username: string; password?: string }];
@@ -117,14 +117,14 @@ function saveEmail(event: Event) {
 }
 
 function syncNow() {
-  emit("update:cloudUsername", draftUsername.value);
+  emit("update:cloud-username", draftUsername.value);
   const password = draftPassword.value.trim();
   emit("sync", { username: draftUsername.value, password: password || undefined });
   draftPassword.value = "";
 }
 
 function syncExistingUser() {
-  emit("update:cloudUsername", draftUsername.value);
+  emit("update:cloud-username", draftUsername.value);
   emit("sync", { username: draftUsername.value, password: draftPassword.value.trim() || undefined });
   draftPassword.value = "";
 }
@@ -334,36 +334,37 @@ function onSubmit() {
   display: inline-flex;
   align-items: center;
   padding: 0.1rem 0.35rem;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--surface-1);
   color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1;
-  box-shadow: var(--bevel-raised);
+  box-shadow: none;
 }
 
 .logout-action {
-  background: color-mix(in srgb, #7c2d2d 14%, var(--surface-1));
-  border-color: color-mix(in srgb, #7c2d2d 55%, var(--border-strong));
+  background: var(--surface-1);
 }
 
 .logout-action:hover {
-  background: color-mix(in srgb, #7c2d2d 18%, var(--surface-1));
+  background: var(--surface-1);
 }
 
 .status-pill {
   margin: 8px 0 0;
   padding: 0.28rem 0.45rem;
-  border: 1px solid var(--border-strong);
+  border: 2px solid #000;
+  border-color: #808080 #fff #fff #808080;
   background: var(--surface-2);
-  box-shadow: var(--bevel-sunken);
+  box-shadow: none;
   color: var(--text-muted);
 }
 
 .status-pill--error {
-  border-color: #7c2d2d;
-  background: #f0c6c3;
-  color: #651c1c;
+  background: var(--panel);
+  color: #7a0000;
+  border-inline-start-color: #7a0000;
   font-weight: 700;
 }
 

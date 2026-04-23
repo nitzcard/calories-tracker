@@ -34,9 +34,9 @@ const props = defineProps<{
 const { t } = useI18n();
 
 const emit = defineEmits<{
-  "update:selectedDate": [value: string];
-  "update:currentWeight": [value: string];
-  "update:foodLog": [value: string];
+  "update:selected-date": [value: string];
+  "update:current-weight": [value: string];
+  "update:food-log": [value: string];
   "save-weight": [value?: string];
   "save-draft": [value?: string];
   analyze: [];
@@ -100,7 +100,7 @@ const localizedSelectedDate = computed(() =>
             <input
               type="date"
               :value="selectedDate"
-              @input="emit('update:selectedDate', ($event.target as HTMLInputElement).value)"
+              @input="emit('update:selected-date', ($event.target as HTMLInputElement).value)"
             />
             <p class="localized-date">{{ localizedSelectedDate }}</p>
 	          </FormField>
@@ -114,7 +114,7 @@ const localizedSelectedDate = computed(() =>
 		                  min="0"
 		                  dir="ltr"
 		                  :value="currentWeight"
-		                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
+		                  @input="emit('update:current-weight', ($event.target as HTMLInputElement).value)"
 		                  @blur="emit('save-weight', ($event.target as HTMLInputElement).value)"
 		                />
 	              </FieldControl>
@@ -133,7 +133,7 @@ const localizedSelectedDate = computed(() =>
           <textarea
             :value="foodLog"
             :placeholder="t('foodPlaceholder')"
-            @input="emit('update:foodLog', ($event.target as HTMLTextAreaElement).value)"
+            @input="emit('update:food-log', ($event.target as HTMLTextAreaElement).value)"
             @blur="emit('save-draft', ($event.target as HTMLTextAreaElement).value)"
           ></textarea>
         </FieldControl>
@@ -216,7 +216,7 @@ const localizedSelectedDate = computed(() =>
           <input
             type="date"
             :value="selectedDate"
-            @input="emit('update:selectedDate', ($event.target as HTMLInputElement).value)"
+            @input="emit('update:selected-date', ($event.target as HTMLInputElement).value)"
           />
           <p class="localized-date">{{ localizedSelectedDate }}</p>
 	        </FormField>
@@ -230,7 +230,7 @@ const localizedSelectedDate = computed(() =>
 	                  min="0"
 	                  dir="ltr"
 	                  :value="currentWeight"
-	                  @input="emit('update:currentWeight', ($event.target as HTMLInputElement).value)"
+	                  @input="emit('update:current-weight', ($event.target as HTMLInputElement).value)"
 	                  @blur="emit('save-weight', ($event.target as HTMLInputElement).value)"
 	                />
 	            </FieldControl>
@@ -249,7 +249,7 @@ const localizedSelectedDate = computed(() =>
         <textarea
           :value="foodLog"
           :placeholder="t('foodPlaceholder')"
-          @input="emit('update:foodLog', ($event.target as HTMLTextAreaElement).value)"
+          @input="emit('update:food-log', ($event.target as HTMLTextAreaElement).value)"
           @blur="emit('save-draft', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
       </FieldControl>
@@ -469,13 +469,16 @@ const localizedSelectedDate = computed(() =>
 
 .analyze-error {
   margin: 6px 0 0;
-  color: #fff1ef;
+  color: #7a0000;
   max-inline-size: 46rem;
   display: inline-block;
   padding: 0.35rem 0.55rem;
-  background: #7a3d36;
-  border: 1px solid #4e221d;
-  box-shadow: var(--bevel-raised);
+  background: var(--panel);
+  border: 2px solid #000;
+  border-color: #808080 #fff #fff #808080;
+  border-inline-start-color: #7a0000;
+  border-inline-start-width: 6px;
+  box-shadow: none;
   white-space: pre-wrap;
 }
 

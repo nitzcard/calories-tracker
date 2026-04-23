@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute, useRouter } from "vue-router";
 import BasePanel from "./components/base/BasePanel.vue";
 import AppHeader from "./components/header/AppHeader.vue";
-import JasmineThemePrompt from "./components/JasmineThemePrompt.vue";
 import AnalysisSwitchSuggestion from "./components/shared/AnalysisSwitchSuggestion.vue";
 import PaneScrubber from "./components/shared/PaneScrubber.vue";
 import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
@@ -22,6 +22,8 @@ const DailyDeskPanel = defineAsyncComponent(() => import("./components/panels/Da
 
 const dashboard = useDashboard();
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
 function readStoredOpen(key: string): boolean | null {
   try {
@@ -48,7 +50,6 @@ const PANEL_OPEN_KEYS = {
 
 const {
   locale,
-  themeMode,
   profile,
   entries,
   selectedDate,
@@ -68,7 +69,6 @@ const {
   isSavingFoodInstructions,
   isSavingTdeeEquation,
   isSavingLocale,
-  isSavingTheme,
   isSavingProvider,
   savingAiKeyField,
   analyzeIssue,
@@ -82,7 +82,6 @@ const {
   savingHistoryWeight,
   statusLabel,
   onLocaleChange,
-  onThemeChange,
   onProviderChange,
   saveWeightDraft,
   saveFoodDraft,
@@ -148,9 +147,9 @@ const hasEffectiveGeminiKey = computed(() =>
 );
 const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
 const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
-const isJasmineThemeActive = computed(() => themeMode.value === "jasmine");
 const hasConfirmedCloudLogin = computed(() => Boolean(cloudConfirmedUsername.value.trim()));
 const showCloudLoginGate = computed(() => supabaseConfigured.value && !hasConfirmedCloudLogin.value);
+const isLoginRoute = computed(() => route.name === "login");
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
   if (slope === null || !Number.isFinite(slope)) {
@@ -296,10 +295,6 @@ function scheduleActiveToastHide(kind: "local" | "cloud") {
   clear();
 }
 
-async function applyJasmineThemeFromDialog() {
-  await onThemeChange("jasmine");
-}
-
 const activeToasts = computed(() => {
   const items: Array<{
     id: string;
@@ -392,6 +387,31 @@ watch(
   locale,
   () => {
     document.title = `${t("appTitle")} (${t("beta")})`;
+  },
+  { immediate: true },
+);
+
+watch(
+  [showCloudLoginGate, () => route.name],
+  async ([shouldShowLogin, routeName]) => {
+    if (shouldShowLogin && routeName !== "login") {
+      await router.replace({ name: "login" });
+      return;
+    }
+
+    if (!shouldShowLogin && routeName === "login") {
+      await router.replace({ name: "dashboard" });
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  [hasConfirmedCloudLogin, () => route.name],
+  async ([isLoggedIn, routeName]) => {
+    if (isLoggedIn && routeName === "login") {
+      await router.replace({ name: "dashboard" });
+    }
   },
   { immediate: true },
 );
@@ -686,12 +706,6 @@ async function confirmDeleteDay() {
     </div>
   </Teleport>
 
-  <JasmineThemePrompt
-    :confirmed-username="cloudConfirmedUsername"
-    :is-theme-active="isJasmineThemeActive"
-    @apply="applyJasmineThemeFromDialog"
-  />
-
   <dialog ref="deleteDayDialogRef" class="confirm-delete-dialog" @close="deleteDayPendingDate = null">
     <form method="dialog" class="confirm-delete-dialog__form" @submit.prevent="confirmDeleteDay">
       <h2 class="confirm-delete-dialog__title">{{ t("deleteDayModalTitle") }}</h2>
@@ -714,37 +728,52 @@ async function confirmDeleteDay() {
     </form>
   </dialog>
 
-  <main v-if="showCloudLoginGate" class="app-shell app-shell--blocked">
-    <AppHeader
-      :locale="locale"
-      :theme-mode="themeMode"
-      :is-saving-locale="isSavingLocale"
-      :is-saving-theme="isSavingTheme"
-      :cloud-confirmed-username="cloudConfirmedUsername"
-      :is-cloud-busy="isCloudSyncing"
-      @locale-change="onLocaleChange"
-      @theme-change="onThemeChange"
-    />
+  <main v-if="isLoginRoute" class="app-shell app-shell--blocked login-desktop">
+    <section class="login-desktop__canvas">
+      <div class="login-desktop__window" role="presentation">
+        <div class="login-desktop__titlebar">
+          <strong>{{ t("cloudSyncTitle") }}</strong>
+          <span class="login-desktop__titlebar-buttons" aria-hidden="true">
+            <span>_</span>
+            <span>□</span>
+            <span>x</span>
+          </span>
+        </div>
 
-    <section v-if="profile" class="content-grid">
-      <div class="grid-cell span-12">
-        <CloudSyncPanel
-          :locale="locale"
-          :profile="profile"
-          :cloud-username="cloudUsername"
-          :cloud-confirmed-username="cloudConfirmedUsername"
-          :has-saved-cloud-password="hasSavedCloudPassword"
-          :is-cloud-busy="isCloudBusy"
-          :cloud-status="cloudStatus"
-          :cloud-last-synced-at="cloudLastSyncedAt"
-          :cloud-error="cloudError"
-          :supabase-configured="supabaseConfigured"
-          @update:profile="profile = $event"
-          @save="saveProfileAndHighlight"
-          @update:cloudUsername="setCloudUsername"
-          @sync="cloudSyncNow($event)"
-          @logout="cloudLogout"
-        />
+        <div class="login-desktop__body">
+          <AppHeader
+            :locale="locale"
+            :is-saving-locale="isSavingLocale"
+            :cloud-confirmed-username="cloudConfirmedUsername"
+            :is-cloud-busy="isCloudSyncing"
+            :show-logout="false"
+            :auth-view="true"
+            @locale-change="onLocaleChange"
+          />
+
+          <section v-if="profile" class="content-grid">
+            <div class="grid-cell span-12">
+              <CloudSyncPanel
+                :locale="locale"
+                :profile="profile"
+                :cloud-username="cloudUsername"
+                :cloud-confirmed-username="cloudConfirmedUsername"
+                :has-saved-cloud-password="hasSavedCloudPassword"
+                :is-cloud-busy="isCloudBusy"
+                :cloud-status="cloudStatus"
+                :cloud-last-synced-at="cloudLastSyncedAt"
+                :cloud-error="cloudError"
+                :supabase-configured="supabaseConfigured"
+                :auth-view="true"
+                @update:profile="profile = $event"
+                @save="saveProfileAndHighlight"
+                @update:cloud-username="setCloudUsername"
+                @sync="cloudSyncNow($event)"
+                @logout="cloudLogout"
+              />
+            </div>
+          </section>
+        </div>
       </div>
     </section>
   </main>
@@ -754,13 +783,12 @@ async function confirmDeleteDay() {
 
     <AppHeader
       :locale="locale"
-      :theme-mode="themeMode"
       :is-saving-locale="isSavingLocale"
-      :is-saving-theme="isSavingTheme"
       :cloud-confirmed-username="cloudConfirmedUsername"
       :is-cloud-busy="isCloudSyncing"
+      :show-logout="hasConfirmedCloudLogin"
       @locale-change="onLocaleChange"
-      @theme-change="onThemeChange"
+      @logout="cloudLogout"
     />
 
     <p v-if="notice === 'queued'" class="notice-banner">
@@ -810,6 +838,7 @@ async function confirmDeleteDay() {
 
       <div class="constant-data-grid">
         <CloudSyncPanel
+          v-if="!hasConfirmedCloudLogin"
           :locale="locale"
           :profile="profile"
           :cloud-username="cloudUsername"
@@ -822,7 +851,7 @@ async function confirmDeleteDay() {
           :supabase-configured="supabaseConfigured"
           @update:profile="profile = $event"
           @save="saveProfileAndHighlight"
-          @update:cloudUsername="setCloudUsername"
+          @update:cloud-username="setCloudUsername"
           @sync="cloudSyncNow($event)"
           @logout="cloudLogout"
         />
@@ -902,9 +931,9 @@ async function confirmDeleteDay() {
           :is-saving-food-log="isSavingFoodLog"
           :food-instructions="profile.foodInstructions"
           :is-saving-food-instructions="isSavingFoodInstructions"
-          @update:selectedDate="selectedDate = $event"
-          @update:currentWeight="updateCurrentWeight"
-          @update:foodLog="updateCurrentFoodLog"
+          @update:selected-date="selectedDate = $event"
+          @update:current-weight="updateCurrentWeight"
+          @update:food-log="updateCurrentFoodLog"
           @save-weight="saveWeightDraft"
           @save-draft="saveFoodDraft"
           @analyze="analyzeCurrentDay"
@@ -1001,18 +1030,13 @@ async function confirmDeleteDay() {
   justify-items: center;
   gap: 0.7rem;
   padding: 1rem 1.15rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-strong));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-1) 88%, var(--accent) 12%) 0%,
-      color-mix(in srgb, var(--surface-2) 92%, var(--accent) 8%) 100%
-    );
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--panel);
   color: var(--text-primary);
-  border-radius: 14px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24), var(--bevel-raised);
+  border-radius: 0;
+  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.24);
   text-align: center;
-  backdrop-filter: blur(10px);
   pointer-events: auto;
 }
 
@@ -1045,26 +1069,167 @@ async function confirmDeleteDay() {
   padding: var(--space-4);
   max-inline-size: 1400px;
   margin: 0 auto;
+  min-block-size: 100vh;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.06) 75%, transparent 75%, transparent) 0 0 / 4px 4px,
+    var(--bg);
 }
 
 .app-shell--blocked {
   min-block-size: 100vh;
 }
 
-.login-gate-error {
-  margin: 0;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #7c2d2d;
-  background: #f0c6c3;
-  color: #651c1c;
-  font-weight: 700;
-  box-shadow: var(--bevel-sunken);
+.login-desktop {
+  max-inline-size: none;
+  padding: 24px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.06) 75%, transparent 75%, transparent) 0 0 / 4px 4px,
+    var(--bg);
 }
 
-.login-gate-actions {
+.login-desktop__canvas {
+  min-block-size: calc(100vh - 48px);
+  display: grid;
+  place-items: center;
+}
+
+.login-desktop__window {
+  inline-size: min(100%, 980px);
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--panel);
+  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.22);
+}
+
+.login-desktop__titlebar {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 0.85rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 7px;
+  border-bottom: 2px solid #808080;
+  background: #000080;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.login-desktop__titlebar-buttons {
+  display: inline-flex;
+  gap: 4px;
+  font-size: 0.78rem;
+}
+
+.login-desktop__titlebar-buttons span {
+  min-inline-size: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid #000;
+  border-color: #dfdfdf #3f3f3f #3f3f3f #dfdfdf;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.login-desktop__body {
+  padding: 14px;
+}
+
+.login-desktop :deep(.header-shell--auth) {
+  max-inline-size: none;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.login-desktop :deep(.header-shell--auth .title) {
+  font-size: 1.25rem;
+}
+
+.login-desktop :deep(.header-shell--auth .beta-pill),
+.login-desktop :deep(.header-shell--auth .field-control),
+.login-desktop :deep(.header-shell--auth select),
+.login-desktop :deep(.cloud-panel--auth),
+.login-desktop :deep(.cloud-panel--auth .status-pill),
+.login-desktop :deep(.cloud-panel--auth .optional-pill),
+.login-desktop :deep(.cloud-panel--auth button) {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.login-desktop :deep(.cloud-panel--auth) {
+  max-inline-size: none;
+  margin: 0;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--panel);
+}
+
+.login-desktop :deep(.cloud-panel--auth .panel-body) {
+  padding: 12px;
+}
+
+.login-desktop :deep(.cloud-panel--auth .panel-header) {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.login-desktop :deep(.cloud-panel--auth .auth-block) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.login-desktop :deep(.cloud-panel--auth input),
+.login-desktop :deep(.cloud-panel--auth select) {
+  border: 2px solid #000;
+  border-color: #808080 #fff #fff #808080;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.login-desktop :deep(.cloud-panel--auth .cloud-actions) {
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+
+.login-desktop :deep(.cloud-panel--auth button) {
+  min-inline-size: 110px;
+  border: 2px solid #000;
+  border-color: #fff #3f3f3f #3f3f3f #fff;
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+.login-desktop :deep(.cloud-panel--auth button:disabled) {
+  color: var(--text-muted);
+}
+
+.login-desktop :deep(.cloud-panel--auth .status-pill) {
+  border: 2px solid #000;
+  border-color: #808080 #fff #fff #808080;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+@media (max-width: 720px) {
+  .login-desktop {
+    padding: 10px;
+  }
+
+  .login-desktop__canvas {
+    min-block-size: calc(100vh - 20px);
+  }
+
+  .login-desktop__body {
+    padding: 10px;
+  }
+
+  .login-desktop :deep(.cloud-panel--auth .auth-block) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .constant-data-panel {
@@ -1089,7 +1254,8 @@ async function confirmDeleteDay() {
   padding-inline-end: 1.5rem;
   padding-block-end: 12px;
   margin-block-end: 12px;
-  border-block-end: 1px solid var(--border);
+  border-block-end: 2px solid #808080;
+  box-shadow: inset 0 -1px 0 #fff;
 }
 
 .constant-data-summary::-webkit-details-marker {
@@ -1118,13 +1284,14 @@ async function confirmDeleteDay() {
   margin-inline-start: 0.45rem;
   display: inline-block;
   padding: 0.12rem 0.42rem;
-  border: 1px solid #7c2d2d;
-  background: #f0c6c3;
-  color: #651c1c;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  background: var(--panel);
+  color: #7a0000;
   font-size: 0.88rem;
   font-weight: 800;
   letter-spacing: 0.01em;
-  box-shadow: var(--bevel-raised);
+  box-shadow: none;
 }
 
 .summary-helper {
@@ -1156,10 +1323,11 @@ async function confirmDeleteDay() {
 .notice-banner {
   margin: 0 0 var(--space-3);
   padding: 0.55rem 0.75rem;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
   border-radius: var(--radius);
-  box-shadow: var(--bevel-raised);
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1186,29 +1354,28 @@ async function confirmDeleteDay() {
   align-items: center;
   gap: 0.7rem;
   max-inline-size: min(32rem, calc(100vw - 2rem));
-  padding: 0.72rem 0.95rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 92%, black 8%);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22), var(--bevel-raised);
+  padding: 0.6rem 0.8rem;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.22);
   color: var(--text-primary);
-  backdrop-filter: blur(10px);
   pointer-events: auto;
 }
 
 .status-toast--local {
-  border-color: color-mix(in srgb, #15803d 56%, var(--border));
-  background: color-mix(in srgb, #15803d 16%, var(--panel));
+  background: #dff0d8;
 }
 
 .status-toast--cloud {
-  border-color: color-mix(in srgb, #16a34a 58%, var(--border));
-  background: color-mix(in srgb, #16a34a 18%, var(--panel));
+  background: #d9edf7;
 }
 
 .status-toast--error {
-  border-color: color-mix(in srgb, #b91c1c 58%, var(--border));
-  background: color-mix(in srgb, #b91c1c 13%, var(--panel));
+  background: var(--panel);
+  color: #7a0000;
+  border-inline-start-color: #7a0000;
 }
 
 .status-toast__glyph {
@@ -1280,17 +1447,17 @@ async function confirmDeleteDay() {
 
 .confirm-delete-dialog {
   inline-size: min(30rem, calc(100vw - 2rem));
-  border: 1px solid var(--border-strong);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--panel) 94%, black 6%);
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  border-radius: 0;
+  background: var(--panel);
   color: var(--text-primary);
-  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.35), var(--bevel-raised);
+  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.25);
   padding: 0;
 }
 
 .confirm-delete-dialog::backdrop {
-  background: rgba(7, 10, 14, 0.62);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .confirm-delete-dialog__form {
@@ -1324,18 +1491,19 @@ async function confirmDeleteDay() {
 }
 
 .confirm-delete-dialog__confirm {
-  border: 1px solid color-mix(in srgb, #b91c1c 60%, var(--border));
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(185, 28, 28, 0.96), rgba(127, 29, 29, 0.96));
-  color: #fff;
+  border: 2px solid #000;
+  border-color: #fff #808080 #808080 #fff;
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--text-primary);
   font: inherit;
   font-weight: 700;
-  padding: 0.72rem 1.12rem;
+  padding: 0.55rem 0.9rem;
   cursor: pointer;
 }
 
 .confirm-delete-dialog__confirm:hover {
-  filter: brightness(1.05);
+  filter: none;
 }
 
 .custom-tdee-success-dialog__form {

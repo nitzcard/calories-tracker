@@ -51,7 +51,6 @@ const DEFAULT_PROFILE: Profile = {
   foodInstructions: "",
   aiModel: DEFAULT_GEMINI_MODEL,
   locale: "en",
-  themeMode: "system",
   updatedAt: new Date().toISOString(),
 };
 
@@ -73,10 +72,7 @@ function serializeForCompare(value: unknown): string {
   return JSON.stringify(toPlain(value));
 }
 
-export async function ensureDefaultProfile(
-  locale: Profile["locale"],
-  themeMode: Profile["themeMode"],
-): Promise<Profile> {
+export async function ensureDefaultProfile(locale: Profile["locale"]): Promise<Profile> {
   const existing = await db.profile.get("default");
   if (existing) {
     const legacyExisting = existing as Profile & {
@@ -116,7 +112,7 @@ export async function ensureDefaultProfile(
     return merged as Profile;
   }
 
-  const profile = { ...DEFAULT_PROFILE, locale, themeMode, updatedAt: new Date().toISOString() };
+  const profile = { ...DEFAULT_PROFILE, locale, updatedAt: new Date().toISOString() };
   await db.profile.put(profile);
   return profile;
 }

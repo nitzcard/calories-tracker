@@ -148,15 +148,12 @@ function onToggle(event: Event) {
   gap: 12px;
   inline-size: min(100%, 42rem);
   justify-self: center;
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-strong));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-1) 90%, var(--accent) 10%) 0%,
-      color-mix(in srgb, var(--surface-2) 94%, var(--accent) 6%) 100%
-    );
+  border: 2px solid #000;
+  border-color: #808080 #fff #fff #808080;
+  background: var(--surface-2);
+  color: var(--text-primary);
   padding: 22px 18px;
-  box-shadow: var(--bevel-raised);
+  box-shadow: none;
 }
 
 .panel-loading-spinner {

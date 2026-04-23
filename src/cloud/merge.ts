@@ -63,7 +63,6 @@ function mergeProfilePreservingData(
     activityFactor: "sedentary" as const,
     aiModel: DEFAULT_GEMINI_MODEL,
     locale: "en" as const,
-    themeMode: "system" as const,
     goalMode: "maingain" as const,
   };
 
@@ -110,10 +109,6 @@ function mergeProfilePreservingData(
     DEFAULT.tdeeEquation,
   );
   const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
-  // Theme should respect user's explicit choice, including "system".
-  // Use preferred theme (most recent by updatedAt), falling back to other, then default.
-  // This ensures "system" theme is preserved when explicitly chosen by the user.
-  const mergedTheme = preferred.themeMode ?? other.themeMode ?? DEFAULT.themeMode;
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
   const mergedGoalMode = pickEnumWithWeakDefault(
     preferred.goalMode ?? DEFAULT.goalMode,
@@ -134,7 +129,6 @@ function mergeProfilePreservingData(
       preferredLegacy.activityPrompt,
     ),
     locale: mergedLocale,
-    themeMode: mergedTheme,
     aiModel: mergedModel,
     goalMode: mergedGoalMode,
     age: pickNullableNumber(preferred.age, other.age),

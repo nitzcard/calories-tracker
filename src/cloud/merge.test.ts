@@ -126,7 +126,6 @@ describe("mergeExportedAppData", () => {
           estimatedWeight: null,
           targetWeight: null,
           bodyFat: null,
-          themeMode: "system",
           updatedAt: "2026-04-21T10:00:00.000Z",
         }),
       ],
@@ -137,7 +136,6 @@ describe("mergeExportedAppData", () => {
           age: 30,
           height: 175,
           activityFactor: "moderate",
-          themeMode: "dark",
           updatedAt: "2026-04-20T10:00:00.000Z",
         }),
       ],
@@ -148,7 +146,6 @@ describe("mergeExportedAppData", () => {
     expect(merged.profile[0]?.age).toBe(30);
     expect(merged.profile[0]?.height).toBe(175);
     expect(merged.profile[0]?.activityFactor).toBe("moderate");
-    expect(merged.profile[0]?.themeMode).toBe("dark");
   });
 
   it("keeps a newer male sex choice instead of treating it like a weak default", () => {

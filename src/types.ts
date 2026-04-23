@@ -1,12 +1,3 @@
-export type ThemeMode =
-  | "system"
-  | "light"
-  | "dark"
-  | "purple-dark"
-  | "jasmine"
-  | "cs16"
-  | "steam"
-  | "cyberpunk-2077";
 export type AppLocale = "en" | "he";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
@@ -41,7 +32,6 @@ export interface Profile {
   foodInstructions: string;
   aiModel: string;
   locale: AppLocale;
-  themeMode: ThemeMode;
   updatedAt?: string;
 }
 

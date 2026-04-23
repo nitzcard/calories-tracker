@@ -1,10 +1,9 @@
 import { isSupportedProviderOption } from "../ai/registry";
 import { DEFAULT_GEMINI_MODEL, isGeminiModelId } from "../ai/gemini-config";
-import type { AppLocale, AiStatus, ThemeMode } from "../types";
+import type { AppLocale, AiStatus } from "../types";
 
 export const DASHBOARD_STORAGE_KEYS = {
   locale: "calorie-tracker.locale",
-  themeMode: "calorie-tracker.theme-mode",
   aiModel: "calorie-tracker.ai-model",
   aiModelUserSet: "calorie-tracker.ai-model-user-set",
   geminiLatestModel: "calorie-tracker.gemini-latest-model",
@@ -64,20 +63,6 @@ export function statusLabel(labelFor: (key: string) => string, status: AiStatus 
 export function readStoredLocale(): AppLocale | null {
   const value = localStorage.getItem(DASHBOARD_STORAGE_KEYS.locale);
   return value === "he" || value === "en" ? value : null;
-}
-
-export function readStoredThemeMode(): ThemeMode | null {
-  const value = localStorage.getItem(DASHBOARD_STORAGE_KEYS.themeMode);
-  return value === "system" ||
-    value === "light" ||
-    value === "dark" ||
-    value === "purple-dark" ||
-    value === "jasmine" ||
-    value === "cs16" ||
-    value === "steam" ||
-    value === "cyberpunk-2077"
-    ? value
-    : null;
 }
 
 export function readStoredProvider(): string | null {

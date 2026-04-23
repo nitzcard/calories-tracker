@@ -17,7 +17,6 @@ export function makeProfile(overrides: Partial<Profile> = {}): Profile {
     foodInstructions: "",
     aiModel: "gemini-2.5-flash",
     locale: "en",
-    themeMode: "light",
     updatedAt: "2026-04-21T10:00:00.000Z",
     ...overrides,
   };

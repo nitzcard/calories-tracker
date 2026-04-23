@@ -27,12 +27,12 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Typecheck
         id: typecheck
         run: npm run typecheck
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Unit tests
         id: unit_tests

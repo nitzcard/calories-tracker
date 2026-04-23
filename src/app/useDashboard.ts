@@ -6,7 +6,6 @@ import {
   normalizeProvider,
   readStoredLocale,
   readStoredProvider,
-  readStoredThemeMode,
   statusLabel,
 } from "./dashboard-helpers";
 import { useAutoSaveState } from "./useAutoSaveState";
@@ -37,8 +36,8 @@ import {
 } from "../domain/entries";
 import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
-import { applyTheme, detectThemeMode } from "../theme";
-import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation, ThemeMode } from "../types";
+import { applyTheme } from "../theme";
+import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation } from "../types";
 import {
   decryptJsonWithPassphrase,
   encryptJsonWithPassphrase,
@@ -64,7 +63,6 @@ export function useDashboard() {
 
   const today = localIsoDate();
   const locale = ref<AppLocale>(readStoredLocale() ?? detectLocale());
-  const themeMode = ref<ThemeMode>(readStoredThemeMode() ?? detectThemeMode());
   const profile = ref<Profile | null>(null);
   const entries = ref<DailyEntry[]>([]);
   const selectedDate = ref(today);
@@ -93,7 +91,6 @@ export function useDashboard() {
   let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
   let cloudPushPending = false;
   let cloudPushInFlight = false;
-
   let cachedCloudBlobModule:
     | Promise<{
         createUserBlob: (username: string, raw: unknown) => Promise<any>;
@@ -242,33 +239,6 @@ export function useDashboard() {
 
   function isUsernameValid(value: string) {
     return normalizeUsername(value).length >= 3;
-  }
-
-  function applyUsernameThemeDefault(username: string, payload: ExportedAppData): ExportedAppData {
-    if (normalizeUsername(username) !== "jasmine") {
-      return payload;
-    }
-
-    if (!payload.profile.length) {
-      return payload;
-    }
-
-    const activeProfile = payload.profile[0];
-    if (activeProfile.themeMode !== "system") {
-      return payload;
-    }
-
-    return {
-      ...payload,
-      profile: payload.profile.map((item, index) =>
-        index === 0
-          ? {
-              ...item,
-              themeMode: "jasmine" as const,
-            }
-          : item,
-      ),
-    };
   }
 
   const cloudPassword = ref("");
@@ -491,13 +461,13 @@ export function useDashboard() {
     document.documentElement.dir = direction;
     document.body.dir = direction;
     document.body.style.direction = direction;
-    applyTheme(themeMode.value);
+    applyTheme();
   }
 
   async function refreshState(opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) {
     entries.value = await listEntries();
     const savedProfile = await getProfile();
-    profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value, themeMode.value));
+    profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value));
     loadSelectedEntry({
       skipFoodLog: opts?.skipReloadFoodLog,
       preserveDirtyFields: opts?.preserveDirtyFields ?? true,
@@ -640,12 +610,6 @@ export function useDashboard() {
     ensureProviderOption(provider.value, nextLocale);
     refreshVisibleProviderOptions(nextLocale);
     await runQueuedProfileSave("settings.locale", "settings.locale", profile.value ? { ...profile.value, locale: locale.value } : null);
-  }
-
-  async function onThemeChange(nextTheme: ThemeMode) {
-    themeMode.value = nextTheme;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, nextTheme);
-    await runQueuedProfileSave("settings.theme", "settings.theme", profile.value ? { ...profile.value, themeMode: themeMode.value } : null);
   }
 
   async function onProviderChange(nextProvider: string) {
@@ -1126,7 +1090,7 @@ export function useDashboard() {
       }
 
       // Two-way merge: keep newer daily entries on either side.
-      const merged = applyUsernameThemeDefault(username, mergeExportedAppData(localBefore, remotePayload));
+      const merged = mergeExportedAppData(localBefore, remotePayload);
       // Manual sync should never surprise-revert a field the user just edited and saved.
       if (hadFoodDraftAtSync || hadWeightDraftAtSync) {
         const localSelectedEntry = localBefore.dailyEntries.find((entry) => entry.date === selectedDateAtSync);
@@ -1163,8 +1127,6 @@ export function useDashboard() {
         if (profile.value) {
           locale.value = profile.value.locale;
           localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
-          themeMode.value = profile.value.themeMode;
-          localStorage.setItem(DASHBOARD_STORAGE_KEYS.themeMode, themeMode.value);
           provider.value = normalizeProvider(profile.value.aiModel);
           localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
           ensureProviderOption(provider.value, locale.value);
@@ -1282,7 +1244,7 @@ export function useDashboard() {
         saveStoredAiKeys(aiKeys.value);
         await saveStoredAiKeysToDb(aiKeys.value);
       }
-      const merged = applyUsernameThemeDefault(normalized, mergeExportedAppData(local, remotePayload));
+      const merged = mergeExportedAppData(local, remotePayload);
       const mergedFingerprint = canonicalCloudFingerprint(merged);
 
       if (mergedFingerprint !== remoteFingerprint) {
@@ -1379,7 +1341,6 @@ export function useDashboard() {
     { flush: "sync" },
   );
   watch(locale, syncChrome);
-  watch(themeMode, syncChrome);
 
   watch(
     () => aiKeys.value.gemini,
@@ -1448,17 +1409,15 @@ export function useDashboard() {
   }
 
   onMounted(async () => {
-    profile.value = await ensureDefaultProfile(locale.value, themeMode.value);
+    profile.value = await ensureDefaultProfile(locale.value);
     provider.value = normalizeProvider(readStoredProvider() ?? profile.value.aiModel);
     locale.value = readStoredLocale() ?? profile.value.locale;
     ensureProviderOption(provider.value, locale.value);
     refreshVisibleProviderOptions();
-    themeMode.value = readStoredThemeMode() ?? profile.value.themeMode;
     profile.value = {
       ...profile.value,
       aiModel: provider.value,
       locale: locale.value,
-      themeMode: themeMode.value,
     };
     // If localStorage was cleared but IndexedDB still has keys, restore them.
     if (!aiKeys.value.gemini.trim()) {
@@ -1516,7 +1475,6 @@ export function useDashboard() {
 
   return {
     locale,
-    themeMode,
     profile,
     entries: displayEntries,
     selectedDate,
@@ -1536,7 +1494,6 @@ export function useDashboard() {
     isSavingFoodInstructions: autoSave.isSavingFoodInstructions,
     isSavingTdeeEquation: autoSave.isSavingTdeeEquation,
     isSavingLocale: autoSave.isSavingLocale,
-    isSavingTheme: autoSave.isSavingTheme,
     isSavingProvider: autoSave.isSavingProvider,
     savingAiKeyField: autoSave.savingAiKeyField,
     analyzeIssue: analysis.analyzeIssue,
@@ -1561,7 +1518,6 @@ export function useDashboard() {
     statusLabel,
     loadSelectedEntry,
     onLocaleChange,
-    onThemeChange,
     onProviderChange,
     saveWeightDraft,
     saveFoodDraft,

@@ -19,7 +19,6 @@ const baseInput: AiAnalysisInput = {
     aiModel: "gemini-2.5-flash",
     locale: "he",
     foodInstructions: "",
-    themeMode: "system",
   },
   foodRules: [],
 };
