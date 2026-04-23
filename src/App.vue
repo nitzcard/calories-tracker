@@ -300,7 +300,6 @@ const activeToasts = computed(() => {
     id: string;
     kind: "local" | "cloud" | "error";
     message: string;
-    spinning: boolean;
     action?: { label: string; href: string; onClick?: () => void };
   }> = [];
 
@@ -314,21 +313,18 @@ const activeToasts = computed(() => {
           id: "sync-active",
           kind: "cloud" as const,
           message: `💾☁️ ${t("toastLocalCloudSyncing")}`,
-          spinning: true,
         }
       : cloudActive
         ? {
             id: "cloud-active",
             kind: "cloud" as const,
             message: `☁️ ${t("toastCloudSyncing")}`,
-            spinning: true,
           }
         : localActive
           ? {
               id: "local-active",
               kind: "local" as const,
               message: `💾 ${t("toastLocalSaving")}`,
-              spinning: true,
             }
           : null;
 
@@ -338,7 +334,6 @@ const activeToasts = computed(() => {
       id: "transient",
       kind: "error",
       message: transientToast.value.message,
-      spinning: false,
       action: transientToast.value.action,
     });
     return items;
@@ -357,7 +352,6 @@ const activeToasts = computed(() => {
       id: "transient",
       kind: transientToast.value.kind,
       message: transientToast.value.message,
-      spinning: false,
       action: transientToast.value.action,
     });
   }
@@ -797,14 +791,13 @@ async function confirmDeleteDay() {
     </p>
 
     <div v-if="primaryToast" class="status-toast-stack" aria-live="polite" aria-atomic="true">
-      <transition name="status-toast" mode="out-in">
+      <Transition name="status-toast" mode="out-in">
         <div
           :key="primaryToast.id"
           class="status-toast"
-          :class="`status-toast--${primaryToast.kind}`"
           role="status"
         >
-          <span class="status-toast__glyph" :class="{ 'is-spinning': primaryToast.spinning }" aria-hidden="true"></span>
+          <span class="status-toast__glyph spinning" aria-hidden="true"></span>
           <span class="status-toast__message">{{ primaryToast.message }}</span>
           <a
             v-if="primaryToast.action"
@@ -1364,14 +1357,6 @@ async function confirmDeleteDay() {
   pointer-events: auto;
 }
 
-.status-toast--local {
-  background: #dff0d8;
-}
-
-.status-toast--cloud {
-  background: #d9edf7;
-}
-
 .status-toast--error {
   background: var(--panel);
   color: #7a0000;
@@ -1398,7 +1383,7 @@ async function confirmDeleteDay() {
     linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%);
 }
 
-.status-toast__glyph.is-spinning {
+.status-toast__glyph.spinning {
   animation: status-toast-spin 0.85s linear infinite;
 }
 
