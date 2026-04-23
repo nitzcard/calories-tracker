@@ -40,11 +40,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Create .env file
-        run: |
-        echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env
-        echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
-
       - name: Deploy to Cloudflare Pages
         id: deploy
         uses: cloudflare/wrangler-action@v3
@@ -53,6 +48,12 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=min-cal-tracker
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          secrets: |
+            VITE_SUPABASE_URL
+            VITE_SUPABASE_ANON_KEY
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Publish deployment URL
         if: always()
