@@ -2819,7 +2819,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   gap: 6px;
   margin-block-start: 10px;
   padding: 8px;
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #808080 #fff #fff #808080;
   border-inline-start-color: #7a0000;
   border-inline-start-width: 6px;

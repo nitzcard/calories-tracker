@@ -36,7 +36,6 @@ import {
 } from "../domain/entries";
 import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
-import { applyTheme } from "../theme";
 import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation } from "../types";
 import {
   decryptJsonWithPassphrase,
@@ -461,7 +460,6 @@ export function useDashboard() {
     document.documentElement.dir = direction;
     document.body.dir = direction;
     document.body.style.direction = direction;
-    applyTheme();
   }
 
   async function refreshState(opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) {

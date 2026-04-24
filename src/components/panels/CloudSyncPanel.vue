@@ -334,8 +334,8 @@ function onSubmit() {
   display: inline-flex;
   align-items: center;
   padding: 0.1rem 0.35rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--surface-1);
   color: var(--text-muted);
   font-size: 0.78rem;
@@ -354,7 +354,7 @@ function onSubmit() {
 .status-pill {
   margin: 8px 0 0;
   padding: 0.28rem 0.45rem;
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #808080 #fff #fff #808080;
   background: var(--surface-2);
   box-shadow: none;
@@ -375,7 +375,7 @@ function onSubmit() {
 .button-feedback {
   inline-size: 0.9rem;
   block-size: 0.9rem;
-  border: 2px solid currentColor;
+  border: 1px solid currentColor;
   border-inline-end-color: transparent;
   border-radius: 50%;
   display: inline-block;

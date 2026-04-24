@@ -443,7 +443,7 @@ const localizedSelectedDate = computed(() =>
 .button-feedback {
   inline-size: 0.9rem;
   block-size: 0.9rem;
-  border: 2px solid currentColor;
+  border: 1px solid currentColor;
   border-inline-end-color: transparent;
   border-radius: 50%;
   display: inline-block;
@@ -474,7 +474,7 @@ const localizedSelectedDate = computed(() =>
   display: inline-block;
   padding: 0.35rem 0.55rem;
   background: var(--panel);
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #808080 #fff #fff #808080;
   border-inline-start-color: #7a0000;
   border-inline-start-width: 6px;
@@ -534,7 +534,7 @@ const localizedSelectedDate = computed(() =>
 .analysis-notice__spinner {
   inline-size: 1.15rem;
   block-size: 1.15rem;
-  border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-inline-end-color: var(--accent);
   border-radius: 50%;
   animation: spin 850ms linear infinite;

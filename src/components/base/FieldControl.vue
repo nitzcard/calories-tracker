@@ -70,7 +70,7 @@ withDefaults(
   inset-inline-end: 10px;
   inline-size: 0.8rem;
   block-size: 0.8rem;
-  border: 2px solid currentColor;
+  border: 1px solid currentColor;
   border-inline-end-color: transparent;
   border-radius: 50%;
   opacity: 0.8;

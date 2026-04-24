@@ -148,7 +148,7 @@ function onToggle(event: Event) {
   gap: 12px;
   inline-size: min(100%, 42rem);
   justify-self: center;
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #808080 #fff #fff #808080;
   background: var(--surface-2);
   color: var(--text-primary);

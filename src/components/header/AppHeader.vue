@@ -162,8 +162,8 @@ const confirmedUserTag = computed(() => {
 
 .beta-pill {
   padding: 0.1rem 0.38rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--chip-bg);
   box-shadow: none;
   color: var(--chip-text);
@@ -175,8 +175,8 @@ const confirmedUserTag = computed(() => {
 
 .feedback-pill {
   padding: 0.18rem 0.45rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--chip-bg);
   box-shadow: none;
   color: var(--chip-text);
@@ -189,8 +189,8 @@ const confirmedUserTag = computed(() => {
 .logout-pill {
   padding: 0.18rem 0.52rem;
   min-block-size: 0;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--chip-bg);
   box-shadow: none;
   color: var(--chip-text);
@@ -205,8 +205,8 @@ const confirmedUserTag = computed(() => {
 
 .sync-pill {
   padding: 0.18rem 0.48rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--chip-bg);
   box-shadow: none;
   color: var(--chip-text);

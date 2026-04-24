@@ -1023,8 +1023,8 @@ async function confirmDeleteDay() {
   justify-items: center;
   gap: 0.7rem;
   padding: 1rem 1.15rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--panel);
   color: var(--text-primary);
   border-radius: 0;
@@ -1036,7 +1036,7 @@ async function confirmDeleteDay() {
 .global-analyzing-spinner {
   inline-size: 1.35rem;
   block-size: 1.35rem;
-  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
   border-inline-end-color: var(--accent);
   border-radius: 50%;
   flex: 0 0 auto;
@@ -1088,8 +1088,8 @@ async function confirmDeleteDay() {
 
 .login-desktop__window {
   inline-size: min(100%, 980px);
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--panel);
   box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.22);
 }
@@ -1116,7 +1116,7 @@ async function confirmDeleteDay() {
   min-inline-size: 18px;
   display: inline-grid;
   place-items: center;
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #dfdfdf #3f3f3f #3f3f3f #dfdfdf;
   background: var(--surface-1);
   color: var(--text-primary);
@@ -1131,8 +1131,8 @@ async function confirmDeleteDay() {
   max-inline-size: none;
   margin: 0 0 12px;
   padding: 12px;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--panel);
   box-shadow: none;
 }
@@ -1155,8 +1155,8 @@ async function confirmDeleteDay() {
 .login-desktop :deep(.cloud-panel--auth) {
   max-inline-size: none;
   margin: 0;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--panel);
 }
 
@@ -1177,7 +1177,7 @@ async function confirmDeleteDay() {
 
 .login-desktop :deep(.cloud-panel--auth input),
 .login-desktop :deep(.cloud-panel--auth select) {
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #808080 #fff #fff #808080;
   background: var(--input-bg);
   color: var(--text-primary);
@@ -1190,7 +1190,7 @@ async function confirmDeleteDay() {
 
 .login-desktop :deep(.cloud-panel--auth button) {
   min-inline-size: 110px;
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #fff #3f3f3f #3f3f3f #fff;
   background: var(--surface-1);
   color: var(--text-primary);
@@ -1201,7 +1201,7 @@ async function confirmDeleteDay() {
 }
 
 .login-desktop :deep(.cloud-panel--auth .status-pill) {
-  border: 2px solid #000;
+  border: 1px solid #000;
   border-color: #808080 #fff #fff #808080;
   background: var(--surface-2);
   color: var(--text-primary);
@@ -1277,8 +1277,8 @@ async function confirmDeleteDay() {
   margin-inline-start: 0.45rem;
   display: inline-block;
   padding: 0.12rem 0.42rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   background: var(--panel);
   color: #7a0000;
   font-size: 0.88rem;
@@ -1317,8 +1317,8 @@ async function confirmDeleteDay() {
   margin: 0 0 var(--space-3);
   padding: 0.55rem 0.75rem;
   background: var(--panel);
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   border-radius: var(--radius);
   box-shadow: none;
   display: flex;
@@ -1348,8 +1348,8 @@ async function confirmDeleteDay() {
   gap: 0.7rem;
   max-inline-size: min(32rem, calc(100vw - 2rem));
   padding: 0.6rem 0.8rem;
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   border-radius: 0;
   background: var(--panel);
   box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.22);
@@ -1367,7 +1367,7 @@ async function confirmDeleteDay() {
   inline-size: 1rem;
   block-size: 1rem;
   border-radius: 999px;
-  border: 2px solid currentColor;
+  border: 1px solid currentColor;
   border-inline-end-color: transparent;
   flex: 0 0 auto;
   opacity: 0.92;
@@ -1432,8 +1432,8 @@ async function confirmDeleteDay() {
 
 .confirm-delete-dialog {
   inline-size: min(30rem, calc(100vw - 2rem));
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   border-radius: 0;
   background: var(--panel);
   color: var(--text-primary);
@@ -1476,8 +1476,8 @@ async function confirmDeleteDay() {
 }
 
 .confirm-delete-dialog__confirm {
-  border: 2px solid #000;
-  border-color: #fff #808080 #808080 #fff;
+  border: 1px solid #000;
+  border-color: var(--border-color);
   border-radius: 0;
   background: var(--panel);
   color: var(--text-primary);

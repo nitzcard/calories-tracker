@@ -98,7 +98,7 @@ const { t } = useI18n();
 .button-feedback {
   inline-size: 0.9rem;
   block-size: 0.9rem;
-  border: 2px solid currentColor;
+  border: 1px solid currentColor;
   border-inline-end-color: transparent;
   border-radius: 50%;
   display: inline-block;

@@ -445,7 +445,7 @@ function observedTdeeExplainHref() {
   content: "";
   position: absolute;
   inset: 0;
-  border: 2px solid rgba(191, 162, 70, 0.9);
+  border: 1px solid rgba(191, 162, 70, 0.9);
   pointer-events: none;
 }
 
