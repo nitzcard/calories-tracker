@@ -139,12 +139,9 @@ function observedTdeeExplainHref() {
 }
 </script>
 
-	<template>
-	  <BasePanel
-	    :class="isHighlighted ? 'tdee-panel--highlighted' : ''"
-	    :title="t('tdeeSummary')"
-	    :helper="t('tdeeHelper')"
-	  >
+<template>
+  <BasePanel :class="isHighlighted ? 'tdee-panel--highlighted' : ''" :title="t('tdeeSummary')"
+    :helper="t('tdeeHelper')">
     <details class="tdee-explainer">
       <summary class="tdee-explainer__summary">
         <strong>{{ t("tdeePartsTitle") }}</strong>
@@ -167,137 +164,100 @@ function observedTdeeExplainHref() {
     <div class="table-container">
       <div class="table-wrap" :class="{ 'is-updating': isUpdating }">
         <table class="tdee-table" :class="{ 'is-updating': isUpdating }">
-        <thead>
-          <tr>
-            <th class="pick-col"></th>
-            <th>{{ t("tdeeSource") }}</th>
-            <th>{{ t("tdeeCalories") }}</th>
-            <th>{{ t("tdeeFrom") }}</th>
-          </tr>
-        </thead>
-	        <tbody>
-          <tr>
-            <td class="pick-col">
-              <input
-                type="radio"
-                name="tdeeEquation"
-                :checked="selectedEquation === 'observedTdee'"
-                @change="onPick('observedTdee')"
-              />
-            </td>
-	            <td>
-              <a
-                class="formula-link observed-tdee-source-link"
-                :href="observedTdeeExplainHref()"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {{ t("observedTdee") }}
-              </a>
-              <div
-                v-if="tdee.observedFromDate && tdee.observedToDate"
-                class="helper-text observed-tdee-range"
-                dir="ltr"
-              >
-                {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
-                {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
-              </div>
-            </td>
-            <td class="calorie-cell">{{ tdee.observedTdee ?? "-" }}</td>
-            <td>
-              <div
-                class="tdee-source-helper"
-                dir="ltr"
-              >
-                <math
-                  class="math-equation"
-                  xmlns="http://www.w3.org/1998/Math/MathML"
-                  :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
-                >
-                  <mrow>
-                    <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
-                    <mo>=</mo>
-                    <mtext>{{ t("observedTdeeFormulaAverage") }}</mtext>
-                    <mo>−</mo>
-                    <mfrac>
-                      <mrow>
-                        <mo>(</mo>
-                        <mtext>{{ t("observedTdeeFormulaLastWeight") }}</mtext>
-                        <mo>−</mo>
-                        <mtext>{{ t("observedTdeeFormulaFirstWeight") }}</mtext>
-                        <mo>)</mo>
-                        <mo>×</mo>
-                        <mn>7700</mn>
-                      </mrow>
-                      <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
-                    </mfrac>
-                  </mrow>
-                </math>
-              </div>
-              <span v-if="tdee.observedTdee == null">
-                <br />
-                <em class="muted">{{ observedEmptyText() }}</em>
-              </span>
-            </td>
-          </tr>
-          <tr v-for="(value, name) in tdee.formulaBreakdown" :key="name">
-            <td class="pick-col">
-              <input
-                type="radio"
-                name="tdeeEquation"
-                :checked="selectedEquation === (name as TdeeEquation)"
-                @change="onPick(name as TdeeEquation)"
-              />
-            </td>
-            <td>
-              <a class="formula-link" :href="formulaHref(name)" target="_blank" rel="noreferrer">
-                {{ formulaLabel(name) }}
-              </a>
-            </td>
-            <td class="calorie-cell">{{ value ?? "-" }}</td>
-            <td>
-              {{ formulaExplain(name) }}
-              <span
-                v-if="selectedEquation === (name as TdeeEquation) && tdee.formulaWeight !== null"
-                class="tdee-formula-meta"
-                dir="ltr"
-              >
-                <br />
-                {{ t("formulaWeightUsed") }}:
-                {{ tdee.formulaWeight }} {{ t("unitKg") }}
-                ({{ weightSourceText(tdee.formulaWeightSource) }})
-              </span>
-              <span
-                v-if="selectedEquation === (name as TdeeEquation) && tdee.activityMultiplier !== null"
-                class="tdee-formula-meta"
-                dir="ltr"
-              >
-                <br />
-                {{ t("activityMultiplierLabel") }}: {{ tdee.activityMultiplier }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+          <thead>
+            <tr>
+              <th class="pick-col"></th>
+              <th>{{ t("tdeeSource") }}</th>
+              <th>{{ t("tdeeCalories") }}</th>
+              <th>{{ t("tdeeFrom") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="pick-col">
+                <input type="radio" name="tdeeEquation" :checked="selectedEquation === 'observedTdee'"
+                  @change="onPick('observedTdee')" />
+              </td>
+              <td>
+                <a class="formula-link observed-tdee-source-link" :href="observedTdeeExplainHref()" target="_blank"
+                  rel="noreferrer">
+                  {{ t("observedTdee") }}
+                </a>
+                <div v-if="tdee.observedFromDate && tdee.observedToDate" class="helper-text observed-tdee-range"
+                  dir="ltr">
+                  {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
+                  {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
+                </div>
+              </td>
+              <td class="calorie-cell">{{ tdee.observedTdee ?? "-" }}</td>
+              <td>
+                <div class="tdee-source-helper" dir="ltr">
+                  <math class="math-equation" xmlns="http://www.w3.org/1998/Math/MathML"
+                    :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`">
+                    <mrow>
+                      <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
+                      <mo>=</mo>
+                      <mtext>{{ t("observedTdeeFormulaAverage") }}</mtext>
+                      <mo>−</mo>
+                      <mfrac>
+                        <mrow>
+                          <mo>(</mo>
+                          <mtext>{{ t("observedTdeeFormulaLastWeight") }}</mtext>
+                          <mo>−</mo>
+                          <mtext>{{ t("observedTdeeFormulaFirstWeight") }}</mtext>
+                          <mo>)</mo>
+                          <mo>×</mo>
+                          <mn>7700</mn>
+                        </mrow>
+                        <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
+                      </mfrac>
+                    </mrow>
+                  </math>
+                </div>
+                <span v-if="tdee.observedTdee == null">
+                  <br />
+                  <em class="muted">{{ observedEmptyText() }}</em>
+                </span>
+              </td>
+            </tr>
+            <tr v-for="(value, name) in tdee.formulaBreakdown" :key="name">
+              <td class="pick-col">
+                <input type="radio" name="tdeeEquation" :checked="selectedEquation === (name as TdeeEquation)"
+                  @change="onPick(name as TdeeEquation)" />
+              </td>
+              <td>
+                <a class="formula-link" :href="formulaHref(name)" target="_blank" rel="noreferrer">
+                  {{ formulaLabel(name) }}
+                </a>
+              </td>
+              <td class="calorie-cell">{{ value ?? "-" }}</td>
+              <td>
+                {{ formulaExplain(name) }}
+                <span v-if="selectedEquation === (name as TdeeEquation) && tdee.formulaWeight !== null"
+                  class="tdee-formula-meta" dir="ltr">
+                  <br />
+                  {{ t("formulaWeightUsed") }}:
+                  {{ tdee.formulaWeight }} {{ t("unitKg") }}
+                  ({{ weightSourceText(tdee.formulaWeightSource) }})
+                </span>
+                <span v-if="selectedEquation === (name as TdeeEquation) && tdee.activityMultiplier !== null"
+                  class="tdee-formula-meta" dir="ltr">
+                  <br />
+                  {{ t("activityMultiplierLabel") }}: {{ tdee.activityMultiplier }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
     <div class="tdee-cards">
       <div class="tdee-card">
         <div class="tdee-card__header">
-          <input
-            type="radio"
-            name="tdeeEquationMobile"
-            :checked="selectedEquation === 'observedTdee'"
-            @change="onPick('observedTdee')"
-            class="tdee-card__radio"
-          />
-          <a
-            class="formula-link tdee-card__title"
-            :href="observedTdeeExplainHref()"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <input type="radio" name="tdeeEquationMobile" :checked="selectedEquation === 'observedTdee'"
+            @change="onPick('observedTdee')" class="tdee-card__radio" />
+          <a class="formula-link tdee-card__title" :href="observedTdeeExplainHref()" target="_blank" rel="noreferrer">
             {{ t("observedTdee") }}
           </a>
         </div>
@@ -307,15 +267,9 @@ function observedTdeeExplainHref() {
             <div class="tdee-card__value">{{ tdee.observedTdee ?? "-" }}</div>
           </div>
           <div class="tdee-card__helper">
-            <div
-              class="tdee-source-helper"
-              dir="ltr"
-            >
-              <math
-                class="math-equation"
-                xmlns="http://www.w3.org/1998/Math/MathML"
-                :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
-              >
+            <div class="tdee-source-helper" dir="ltr">
+              <math class="math-equation" xmlns="http://www.w3.org/1998/Math/MathML"
+                :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`">
                 <mrow>
                   <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
                   <mo>=</mo>
@@ -333,18 +287,14 @@ function observedTdeeExplainHref() {
                     </mrow>
                     <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
                   </mfrac>
-                  </mrow>
-                </math>
+                </mrow>
+              </math>
             </div>
             <span v-if="tdee.observedTdee == null">
               <br />
               <em class="muted">{{ observedEmptyText() }}</em>
             </span>
-            <div
-              v-if="tdee.observedFromDate && tdee.observedToDate"
-              class="helper-text observed-tdee-range"
-              dir="ltr"
-            >
+            <div v-if="tdee.observedFromDate && tdee.observedToDate" class="helper-text observed-tdee-range" dir="ltr">
               {{ formatObservedRangeDate(tdee.observedFromDate, locale) }} -
               {{ formatObservedRangeDate(tdee.observedToDate, locale) }}
             </div>
@@ -354,13 +304,8 @@ function observedTdeeExplainHref() {
 
       <div v-for="(value, name) in tdee.formulaBreakdown" :key="`card-${name}`" class="tdee-card">
         <div class="tdee-card__header">
-          <input
-            type="radio"
-            name="tdeeEquationMobile"
-            :checked="selectedEquation === (name as TdeeEquation)"
-            @change="onPick(name as TdeeEquation)"
-            class="tdee-card__radio"
-          />
+          <input type="radio" name="tdeeEquationMobile" :checked="selectedEquation === (name as TdeeEquation)"
+            @change="onPick(name as TdeeEquation)" class="tdee-card__radio" />
           <a class="formula-link tdee-card__title" :href="formulaHref(name)" target="_blank" rel="noreferrer">
             {{ formulaLabel(name) }}
           </a>
@@ -372,21 +317,15 @@ function observedTdeeExplainHref() {
           </div>
           <div class="tdee-card__helper">
             {{ formulaExplain(name) }}
-            <span
-              v-if="selectedEquation === (name as TdeeEquation) && tdee.formulaWeight !== null"
-              class="tdee-formula-meta"
-              dir="ltr"
-            >
+            <span v-if="selectedEquation === (name as TdeeEquation) && tdee.formulaWeight !== null"
+              class="tdee-formula-meta" dir="ltr">
               <br />
               {{ t("formulaWeightUsed") }}:
               {{ tdee.formulaWeight }} {{ t("unitKg") }}
               ({{ weightSourceText(tdee.formulaWeightSource) }})
             </span>
-            <span
-              v-if="selectedEquation === (name as TdeeEquation) && tdee.activityMultiplier !== null"
-              class="tdee-formula-meta"
-              dir="ltr"
-            >
+            <span v-if="selectedEquation === (name as TdeeEquation) && tdee.activityMultiplier !== null"
+              class="tdee-formula-meta" dir="ltr">
               <br />
               {{ t("activityMultiplierLabel") }}: {{ tdee.activityMultiplier }}
             </span>
@@ -415,27 +354,25 @@ function observedTdeeExplainHref() {
   gap: 0.55rem;
 }
 
-	.tdee-part-row {
+.tdee-part-row {
   display: grid;
   gap: 0.15rem;
   padding-inline-start: 0.2rem;
-	}
+}
 
 .tdee-actions {
-    margin-block-start: 8px;
-    display: flex;
-    justify-content: flex-start;
-  }
+  margin-block-start: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
 
 .math-equation {
   display: inline-block;
-  max-inline-size: 100%;
+  padding: 10px;
   font-family: "Times New Roman", Georgia, serif;
   font-size: 1.12em;
   font-weight: 400;
-  line-height: 1.1;
   color: var(--text-primary);
-  vertical-align: middle;
 }
 
 .tdee-part-heading {
@@ -514,8 +451,7 @@ function observedTdeeExplainHref() {
 
 .tdee-table {
   inline-size: 100%;
-  table-layout: fixed;
-  min-inline-size: 600px;
+  table-layout: auto;
 }
 
 .tdee-table.is-updating {
@@ -523,32 +459,7 @@ function observedTdeeExplainHref() {
 }
 
 .pick-col {
-  inline-size: 3.25rem;
   text-align: center;
-}
-
-.tdee-table th:nth-child(2),
-.tdee-table td:nth-child(2) {
-  inline-size: 20%;
-}
-
-.tdee-table th:nth-child(3),
-.tdee-table td:nth-child(3) {
-  inline-size: 16%;
-}
-
-.tdee-table th:nth-child(4),
-.tdee-table td:nth-child(4) {
-  inline-size: 64%;
-}
-
-.calorie-cell {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.calorie-cell--custom {
-  white-space: normal;
 }
 
 .tdee-custom-input {
@@ -601,27 +512,18 @@ function observedTdeeExplainHref() {
   min-inline-size: 1.05rem;
 }
 
-.tdee-loading-dots > span {
+.tdee-loading-dots>span {
   display: inline-block;
   opacity: 0.28;
   animation: tdee-loading-dot 1.1s steps(1, end) infinite;
 }
 
-.tdee-loading-dots > span:nth-child(2) {
+.tdee-loading-dots>span:nth-child(2) {
   animation-delay: 0.18s;
 }
 
-.tdee-loading-dots > span:nth-child(3) {
+.tdee-loading-dots>span:nth-child(3) {
   animation-delay: 0.36s;
-}
-
-.tdee-table td {
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-
-.tdee-table td:nth-child(4) {
-  line-height: 1.35;
 }
 
 .tdee-formula-meta {
@@ -675,6 +577,7 @@ function observedTdeeExplainHref() {
 }
 
 @keyframes tdee-loading-dot {
+
   0%,
   100% {
     opacity: 0.28;
@@ -746,47 +649,47 @@ function observedTdeeExplainHref() {
     text-align: end;
   }
 
-.tdee-card__helper {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
+  .tdee-card__helper {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
 
-.helper-text {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
+  .helper-text {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
 
-.tdee-source-helper {
-  color: var(--text-muted);
-  font-size: inherit;
-  line-height: 1.4;
-  display: grid;
-  gap: 0.2rem;
-  min-inline-size: 0;
-  overflow-wrap: anywhere;
-}
+  .tdee-source-helper {
+    color: var(--text-muted);
+    font-size: inherit;
+    line-height: 1.4;
+    display: grid;
+    gap: 0.2rem;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
 
-.observed-tdee-source-link {
-  display: inline-block;
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 1em;
-  text-decoration: none;
-  width: fit-content;
-}
+  .observed-tdee-source-link {
+    display: inline-block;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 1em;
+    text-decoration: none;
+    width: fit-content;
+  }
 
-.observed-tdee-source-link:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
-}
+  .observed-tdee-source-link:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+  }
 
-.observed-tdee-range {
-  font-size: 0.8rem;
-  margin-block-start: 0.2rem;
-}
+  .observed-tdee-range {
+    font-size: 0.8rem;
+    margin-block-start: 0.2rem;
+  }
 
   .math-equation {
     display: block;

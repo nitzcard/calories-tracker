@@ -2923,7 +2923,11 @@ const proteinPerLeanBodyWeight = computed(() => {
 .meal-table {
   min-inline-size: 920px;
   inline-size: 100%;
-  table-layout: fixed;
+  table-layout: auto;
+
+  input {
+    padding-inline-end: unset;
+  }
 }
 
 .meal-col-food {
