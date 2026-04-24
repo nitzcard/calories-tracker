@@ -1,13 +1,13 @@
 name: deploy-cloudflare
 
-on:
-  workflow_run:
-    workflows:
-      - testing
-    branches:
-      - main
-    types:
-      - completed
+on: [push]
+  # workflow_run:
+  #   workflows:
+  #     - testing
+  #   branches:
+  #     - main
+  #   types:
+  #     - completed
 
 concurrency:
   group: deploy-cloudflare-${{ github.event.workflow_run.head_branch }}
@@ -48,6 +48,6 @@ jobs:
           secrets: |
             VITE_SUPABASE_URL
             VITE_SUPABASE_ANON_KEY
-          env:
-            VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-            VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
