@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import DraftNumberInput from "../base/DraftNumberInput.vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import FormField from "../base/FormField.vue";
@@ -69,12 +70,11 @@ function scheduleProfileSave(nextProfile: Profile) {
   }, PROFILE_SAVE_DEBOUNCE_MS);
 }
 
-function saveNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(
+function commitNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(
   key: K,
-  event: Event,
+  value: number | null,
 ) {
-  const raw = (event.target as HTMLInputElement).value;
-  const nextProfile = { ...props.profile, [key]: raw ? Number(raw) : null };
+  const nextProfile = { ...props.profile, [key]: value };
   emit("update:profile", nextProfile);
   scheduleProfileSave(nextProfile);
 }
@@ -116,42 +116,42 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
         </select>
       </FormField>
       <FormField :label="t('age')">
-        <input
+        <DraftNumberInput
           :class="{ 'is-missing': profile.age == null }"
-          :value="profile.age ?? ''"
-          type="number"
-          @input="saveNullableNumber('age', $event)"
+          :value="profile.age"
+          parse-mode="positive"
+          @commit="commitNullableNumber('age', $event)"
         />
       </FormField>
       <FormField :label="t('height')">
         <div class="unit-field">
-          <input
+          <DraftNumberInput
             :class="{ 'is-missing': profile.height == null }"
-            :value="profile.height ?? ''"
-            type="number"
-            @input="saveNullableNumber('height', $event)"
+            :value="profile.height"
+            parse-mode="positive"
+            @commit="commitNullableNumber('height', $event)"
           />
           <span class="field-unit">{{ t("unitCm") }}</span>
         </div>
       </FormField>
       <FormField :label="t('estimatedWeight')">
         <div class="unit-field">
-          <input
-            :value="profile.estimatedWeight ?? ''"
-            type="number"
+          <DraftNumberInput
+            :value="profile.estimatedWeight"
+            parse-mode="positive"
             step="0.1"
-            @input="saveNullableNumber('estimatedWeight', $event)"
+            @commit="commitNullableNumber('estimatedWeight', $event)"
           />
           <span class="field-unit">{{ t("unitKg") }}</span>
         </div>
       </FormField>
       <FormField :label="t('targetWeight')" :helper="t('targetWeightHelper')">
         <div class="unit-field">
-          <input
-            :value="profile.targetWeight ?? ''"
-            type="number"
+          <DraftNumberInput
+            :value="profile.targetWeight"
+            parse-mode="positive"
             step="0.1"
-            @input="saveNullableNumber('targetWeight', $event)"
+            @commit="commitNullableNumber('targetWeight', $event)"
           />
           <span class="field-unit">{{ t("unitKg") }}</span>
         </div>
@@ -163,13 +163,13 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
             <span class="optional-pill">{{ t("optionalLabel") }}</span>
           </span>
         </template>
-        <input
-          :value="profile.bodyFat ?? ''"
-          type="number"
+        <DraftNumberInput
+          :value="profile.bodyFat"
+          parse-mode="nonnegative"
           step="0.1"
           min="0"
           max="60"
-          @input="saveNullableNumber('bodyFat', $event)"
+          @commit="commitNullableNumber('bodyFat', $event)"
         />
         <template #helper>
           <small class="helper-text helper-slot">

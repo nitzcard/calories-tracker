@@ -15,7 +15,7 @@ test("@history last 7 days summary excludes older logged entries", async ({ page
     })),
   );
 
-  await page.reload({ waitUntil: "networkidle" });
+  await page.goto("/progress", { waitUntil: "networkidle" });
   await page.locator("#historyPanel").scrollIntoViewIfNeeded();
 
   await expect(page.getByTestId("history-all-time-delta")).toHaveText("2240");

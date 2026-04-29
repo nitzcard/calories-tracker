@@ -8,12 +8,27 @@ export const router = createRouter({
   routes: [
     {
       path: "/",
-      name: "dashboard",
+      name: "root",
       component: EmptyRouteView,
     },
     {
       path: "/login",
       name: "login",
+      component: EmptyRouteView,
+    },
+    {
+      path: "/today",
+      name: "today",
+      component: EmptyRouteView,
+    },
+    {
+      path: "/progress",
+      name: "progress",
+      component: EmptyRouteView,
+    },
+    {
+      path: "/settings",
+      name: "settings",
       component: EmptyRouteView,
     },
   ],

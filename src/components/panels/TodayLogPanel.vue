@@ -2,10 +2,12 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
+import DraftNumberInput from "../base/DraftNumberInput.vue";
 import FieldControl from "../base/FieldControl.vue";
 import FormField from "../base/FormField.vue";
 import AnalysisSwitchSuggestion from "../shared/AnalysisSwitchSuggestion.vue";
 import { formatEntryDate } from "../../domain/entries";
+import { compareIsoDates, localIsoDate } from "../../domain/dates";
 import type { AiProviderOption, AppLocale } from "../../types";
 
 const props = defineProps<{
@@ -82,6 +84,14 @@ const localizedSelectedDate = computed(() =>
     day: "numeric",
   }),
 );
+const todayIsoDate = computed(() => localIsoDate());
+const isNextDayDisabled = computed(() => compareIsoDates(props.selectedDate, todayIsoDate.value) >= 0);
+
+function shiftSelectedDate(days: number) {
+  const next = new Date(`${props.selectedDate}T12:00:00`);
+  next.setDate(next.getDate() + days);
+  emit("update:selected-date", localIsoDate(next));
+}
 </script>
 
 <template>
@@ -97,25 +107,50 @@ const localizedSelectedDate = computed(() =>
         <p class="controls-meta">{{ t('todayLogMeta') }}</p>
         <div class="controls-grid">
           <FormField :label="t('date')">
-            <input
-              type="date"
-              :value="selectedDate"
-              @input="emit('update:selected-date', ($event.target as HTMLInputElement).value)"
-            />
+            <div class="date-stepper">
+              <button
+                type="button"
+                class="date-stepper__button"
+                :aria-label="t('previousDay')"
+                @click="shiftSelectedDate(-1)"
+              >
+                <svg viewBox="0 0 20 20" class="date-stepper__icon" aria-hidden="true">
+                  <path d="M11.75 4.5 6.25 10l5.5 5.5" />
+                </svg>
+              </button>
+              <input
+                class="date-stepper__input"
+                type="date"
+                dir="ltr"
+                :value="selectedDate"
+                @input="emit('update:selected-date', ($event.target as HTMLInputElement).value)"
+              />
+              <button
+                type="button"
+                class="date-stepper__button"
+                :aria-label="t('nextDay')"
+                :disabled="isNextDayDisabled"
+                @click="shiftSelectedDate(1)"
+              >
+                <svg viewBox="0 0 20 20" class="date-stepper__icon" aria-hidden="true">
+                  <path d="M8.25 4.5 13.75 10l-5.5 5.5" />
+                </svg>
+              </button>
+            </div>
             <p class="localized-date">{{ localizedSelectedDate }}</p>
-	          </FormField>
+          </FormField>
           <FormField :label="t('todayWeight')" :helper="t('weightHelper')">
 	            <div class="unit-field">
 		              <FieldControl class="weight-control" :is-saving="isSavingWeight">
-		                <input
+		                <DraftNumberInput
 		                  class="weight-input"
-		                  type="number"
+		                  :value="currentWeight.trim() ? Number(currentWeight) : null"
+		                  parse-mode="positive"
 		                  step="0.1"
 		                  min="0"
-		                  dir="ltr"
-		                  :value="currentWeight"
-		                  @input="emit('update:current-weight', ($event.target as HTMLInputElement).value)"
-		                  @blur="emit('save-weight', ($event.target as HTMLInputElement).value)"
+                      :commit-on-idle-ms="2000"
+                      @update:draft="emit('update:current-weight', $event)"
+		                  @commit="emit('save-weight', $event == null ? '' : String($event))"
 		                />
 	              </FieldControl>
 	              <span class="field-unit">{{ t("unitKg") }}</span>
@@ -213,25 +248,50 @@ const localizedSelectedDate = computed(() =>
       <p class="controls-meta">{{ t('todayLogMeta') }}</p>
       <div class="controls-grid">
         <FormField :label="t('date')">
-          <input
-            type="date"
-            :value="selectedDate"
-            @input="emit('update:selected-date', ($event.target as HTMLInputElement).value)"
-          />
+          <div class="date-stepper">
+            <button
+              type="button"
+              class="date-stepper__button"
+              :aria-label="t('previousDay')"
+              @click="shiftSelectedDate(-1)"
+            >
+              <svg viewBox="0 0 20 20" class="date-stepper__icon" aria-hidden="true">
+                <path d="M11.75 4.5 6.25 10l5.5 5.5" />
+              </svg>
+            </button>
+            <input
+              class="date-stepper__input"
+              type="date"
+              dir="ltr"
+              :value="selectedDate"
+              @input="emit('update:selected-date', ($event.target as HTMLInputElement).value)"
+            />
+            <button
+              type="button"
+              class="date-stepper__button"
+              :aria-label="t('nextDay')"
+              :disabled="isNextDayDisabled"
+              @click="shiftSelectedDate(1)"
+            >
+              <svg viewBox="0 0 20 20" class="date-stepper__icon" aria-hidden="true">
+                <path d="M8.25 4.5 13.75 10l-5.5 5.5" />
+              </svg>
+            </button>
+          </div>
           <p class="localized-date">{{ localizedSelectedDate }}</p>
-	        </FormField>
+        </FormField>
 	        <FormField :label="t('todayWeight')" :helper="t('weightHelper')">
 	          <div class="unit-field">
 	            <FieldControl class="weight-control" :is-saving="isSavingWeight">
-	                <input
+	                <DraftNumberInput
 	                  class="weight-input"
-	                  type="number"
+	                  :value="currentWeight.trim() ? Number(currentWeight) : null"
+	                  parse-mode="positive"
 	                  step="0.1"
 	                  min="0"
-	                  dir="ltr"
-	                  :value="currentWeight"
-	                  @input="emit('update:current-weight', ($event.target as HTMLInputElement).value)"
-	                  @blur="emit('save-weight', ($event.target as HTMLInputElement).value)"
+                    :commit-on-idle-ms="2000"
+                    @update:draft="emit('update:current-weight', $event)"
+	                  @commit="emit('save-weight', $event == null ? '' : String($event))"
 	                />
 	            </FieldControl>
 	            <span class="field-unit">{{ t("unitKg") }}</span>
@@ -340,6 +400,57 @@ const localizedSelectedDate = computed(() =>
   color: var(--text-muted);
   font-size: 0.82rem;
   line-height: 1.35;
+}
+
+.date-stepper {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  direction: ltr;
+}
+
+.date-stepper__input {
+  min-inline-size: 0;
+  text-align: start;
+}
+
+.date-stepper__button {
+  inline-size: 2.2rem;
+  min-inline-size: 2.2rem;
+  block-size: 2.2rem;
+  min-block-size: 2.2rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  box-shadow: var(--bevel-raised);
+}
+
+.date-stepper__button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-2) 84%, var(--accent) 16%);
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+}
+
+.date-stepper__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.date-stepper__icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.date-stepper__icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .today-log-content {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
 import HistoryCaloriesCell from "./HistoryCaloriesCell.vue";
@@ -19,6 +19,7 @@ const props = defineProps<{
   savingWeight: Record<string, boolean>;
   tdeeReference: number | null;
   targetWeightReference?: number | null;
+  baselineDate?: string | null;
 }>();
 
 const { t } = useI18n();
@@ -27,13 +28,35 @@ const emit = defineEmits<{
   "save-calories": [date: string, calories: number | null];
   "save-weight": [date: string, weight: number | null];
   "delete-day": [date: string];
+  "save-baseline": [date: string];
+  "clear-baseline": [];
 }>();
+
+const baselineDraft = ref(props.baselineDate ?? "");
+
+watch(
+  () => props.baselineDate,
+  (next) => {
+    baselineDraft.value = next ?? "";
+  },
+  { immediate: true },
+);
 
 const sortedEntries = computed(() =>
   [...props.entries].sort((a, b) => b.date.localeCompare(a.date)),
 );
 const entriesWithCalories = computed(() =>
-  sortedEntries.value.filter((entry) => resolvedDailyCalories(entry) != null),
+  sortedEntries.value.filter((entry) => {
+    if (resolvedDailyCalories(entry) == null) {
+      return false;
+    }
+
+    if (!props.baselineDate) {
+      return true;
+    }
+
+    return entry.date >= props.baselineDate;
+  }),
 );
 const cumulativeDelta = computed(() =>
   entriesWithCalories.value.reduce((sum, entry) => {
@@ -113,10 +136,41 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   return "-";
 }
 
+const hasBaseline = computed(() => Boolean(props.baselineDate));
+const baselineLabel = computed(() =>
+  props.baselineDate ? formatEntryDate(props.baselineDate, props.locale) : "",
+);
+
+function updateBaseline(value: string) {
+  baselineDraft.value = value;
+  if (!value.trim()) {
+    emit("clear-baseline");
+    return;
+  }
+
+  emit("save-baseline", value);
+}
+
 </script>
 
 <template>
   <BasePanel id="historyPanel" class="history-panel" :title="t('history')" :helper="t('historyHelper')" collapsible>
+    <div class="history-toolbar">
+      <label class="history-toolbar__field">
+        <span>{{ t("historyResetFromDate") }}</span>
+        <input
+          type="date"
+          :value="baselineDraft"
+          data-testid="history-baseline-date"
+          @input="updateBaseline(($event.target as HTMLInputElement).value)"
+        />
+        <small class="history-toolbar__helper">{{ t("historyResetHelper") }}</small>
+      </label>
+      <span v-if="hasBaseline" class="history-baseline-pill">
+        {{ t("historyBaselineActive", { date: baselineLabel }) }}
+      </span>
+    </div>
+
     <div class="history-table-wrap">
       <table>
         <thead>
@@ -228,7 +282,16 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
                 :aria-label="`${t('deleteDay')} ${formatEntryDate(entry.date, locale)}`"
                 @click="emit('delete-day', entry.date)"
               >
-                <span aria-hidden="true">🗑️</span>
+                <svg viewBox="0 0 24 24" class="history-delete-button__icon" aria-hidden="true">
+                  <path
+                    d="M9.75 3.75h4.5m-7.5 3h10.5m-9.75 0 .6 10.05c.05.84.746 1.5 1.588 1.5h4.624c.842 0 1.538-.66 1.588-1.5l.6-10.05m-6 2.55v6m3-6v6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.7"
+                  />
+                </svg>
               </button>
 	          </td>
 	        </tr>
@@ -271,10 +334,29 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 	      </div>
 
       <div v-for="entry in sortedEntries" :key="`card-${entry.date}`" class="history-card">
-        <div class="history-card__row">
-          <div class="v">{{ formatEntryDate(entry.date, locale) }}</div>
+        <div class="history-card__header">
+          <div class="history-card__date">{{ formatEntryDate(entry.date, locale) }}</div>
+          <button
+            class="history-delete-button"
+            type="button"
+            :data-delete-date="entry.date"
+            :aria-label="`${t('deleteDay')} ${formatEntryDate(entry.date, locale)}`"
+            @click="emit('delete-day', entry.date)"
+          >
+            <svg viewBox="0 0 24 24" class="history-delete-button__icon" aria-hidden="true">
+              <path
+                d="M9.75 3.75h4.5m-7.5 3h10.5m-9.75 0 .6 10.05c.05.84.746 1.5 1.588 1.5h4.624c.842 0 1.538-.66 1.588-1.5l.6-10.05m-6 2.55v6m3-6v6"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.7"
+              />
+            </svg>
+          </button>
         </div>
         <div class="history-card__row">
+          <div class="k">{{ t("weightWithUnit") }}</div>
           <div class="v">
             <HistoryWeightCell
               :value="entry.weight"
@@ -323,17 +405,6 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 	            <template v-else>-</template>
 	          </div>
 	        </div>
-          <div class="history-card__actions">
-            <button
-              class="history-delete-button"
-              type="button"
-              :data-delete-date="entry.date"
-              :aria-label="`${t('deleteDay')} ${formatEntryDate(entry.date, locale)}`"
-              @click="emit('delete-day', entry.date)"
-            >
-              <span aria-hidden="true">🗑️</span>
-            </button>
-          </div>
 	      </div>
     </div>
   </BasePanel>
@@ -348,6 +419,38 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   overflow-x: auto;
 }
 
+.history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.85rem;
+  margin-block-end: 1rem;
+}
+
+.history-toolbar__field {
+  display: grid;
+  gap: 0.35rem;
+  min-inline-size: min(100%, 12rem);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.history-toolbar__helper {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.history-baseline-pill {
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .history-weight-strategy {
   display: flex;
   flex-wrap: wrap;
@@ -356,6 +459,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   margin: 0;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   box-shadow: var(--bevel-sunken);
 }
@@ -363,6 +467,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 .history-weight-strategy__legend {
   padding: 0 0.45rem;
   background: var(--panel);
+  border-radius: 0.4rem;
   color: var(--text-muted);
   font-weight: 700;
 }
@@ -395,17 +500,26 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-inline-size: 2.1rem;
-  border-color: color-mix(in srgb, var(--required-outline) 72%, var(--border-strong));
-  background: color-mix(in srgb, var(--required-pane-bg) 52%, var(--surface-2));
-  color: var(--text-primary);
-  padding-inline: 0.45rem;
+  inline-size: 2rem;
+  block-size: 2rem;
+  min-inline-size: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+  box-shadow: none;
 }
 
-.history-card__actions {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 0.35rem;
+.history-delete-button:hover,
+.history-delete-button:focus-visible {
+  background: color-mix(in srgb, var(--required-outline) 10%, var(--surface-2));
+  color: color-mix(in srgb, var(--required-outline) 72%, var(--text-primary));
+}
+
+.history-delete-button__icon {
+  inline-size: 1rem;
+  block-size: 1rem;
 }
 
 .numeric-pair {
@@ -457,6 +571,16 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   unicode-bidi: isolate;
 }
 
+.calories-inline :deep(.field-control) {
+  flex: 0 1 8.5rem;
+  min-inline-size: 7.5rem;
+}
+
+.calories-inline :deep(input[type="number"]) {
+  inline-size: 100%;
+  max-inline-size: none;
+}
+
 .tdee-footnote {
   color: var(--text-muted);
   font-size: 1rem;
@@ -479,6 +603,15 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
 }
 
 @media (max-width: 640px) {
+  .history-toolbar {
+    align-items: stretch;
+  }
+
+  .history-toolbar__field,
+  .history-toolbar__actions {
+    inline-size: 100%;
+  }
+
   .history-table-wrap {
     display: none;
   }
@@ -489,28 +622,50 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
   }
 
   .history-card {
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    box-shadow: var(--bevel-raised);
-    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 68%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, transparent), color-mix(in srgb, var(--surface-2) 94%, transparent));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 10px 24px rgba(8, 24, 24, 0.08);
+    border-radius: calc(var(--radius) + 0.08rem);
+    padding: 0.9rem 0.95rem;
     display: grid;
-    gap: 6px;
+    gap: 0.72rem;
   }
 
   .summary-card {
-    background: color-mix(in srgb, #6e5b28 16%, var(--surface));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, #6e5b28 15%, var(--surface-1)), color-mix(in srgb, #6e5b28 11%, var(--surface-2)));
     font-weight: 700;
   }
 
   .summary-card--recent {
-    background: color-mix(in srgb, #3a5f7a 14%, var(--surface));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, #3a5f7a 14%, var(--surface-1)), color-mix(in srgb, #3a5f7a 10%, var(--surface-2)));
+  }
+
+  .history-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    padding-block-end: 0.15rem;
+    border-block-end: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  }
+
+  .history-card__date {
+    font-weight: 760;
+    font-size: 0.98rem;
+    letter-spacing: -0.01em;
   }
 
   .history-card__row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
+    padding-block: 0.08rem;
   }
 
   .history-card__title {
@@ -525,6 +680,7 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
     color: var(--text-muted);
     font-size: 0.85rem;
     flex: 0 0 auto;
+    font-weight: 600;
   }
 
   .v {
@@ -554,11 +710,18 @@ function deltaLabel(kind: "deficit" | "surplus" | "maintenance" | "unknown") {
     flex-wrap: nowrap;
     white-space: nowrap;
     unicode-bidi: isolate;
+    min-inline-size: 0;
   }
 
   .v--calories :deep(.field-control) {
-    flex: 0 0 auto;
-    max-inline-size: 6rem;
+    flex: 1 1 8.5rem;
+    min-inline-size: 7.5rem;
+    max-inline-size: none;
+  }
+
+  .v--calories :deep(input[type="number"]) {
+    inline-size: 100%;
+    max-inline-size: none;
   }
 
   .v--calories .tdee-footnote {

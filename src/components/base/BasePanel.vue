@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PanelHeader from "./PanelHeader.vue";
-import { computed, ref } from "vue";
+import { ref } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -27,31 +27,9 @@ const props = withDefaults(
 );
 
 const isOpen = ref(props.defaultOpen);
-const storageKey = computed(() =>
-  props.collapsible && props.id ? `panel.open.${props.id}` : null,
-);
-
-// Initialize from persisted state (if available).
-if (storageKey.value) {
-  try {
-    const raw = localStorage.getItem(storageKey.value);
-    if (raw === "0" || raw === "1") {
-      isOpen.value = raw === "1";
-    }
-  } catch {
-    // Ignore environments where localStorage is unavailable.
-  }
-}
 
 function onToggle(event: Event) {
   isOpen.value = (event.target as HTMLDetailsElement).open;
-  if (storageKey.value) {
-    try {
-      localStorage.setItem(storageKey.value, isOpen.value ? "1" : "0");
-    } catch {
-      // Ignore write errors.
-    }
-  }
 }
 </script>
 
@@ -117,6 +95,7 @@ function onToggle(event: Event) {
   list-style: none;
   position: relative;
   padding-inline-end: 2.45rem;
+  padding-block-end: 0.15rem;
 }
 
 .base-panel-summary::-webkit-details-marker {
@@ -126,18 +105,18 @@ function onToggle(event: Event) {
 .base-panel-summary::before {
   content: "";
   position: absolute;
-  inset-inline-end: 0.95rem;
-  inset-block-start: 0.35rem;
-  inline-size: 0;
-  block-size: 0;
-  border-style: solid;
-  border-width: 6px 0 6px 9px;
-  border-color: transparent transparent transparent var(--text-muted);
+  inset-inline-end: 0.98rem;
+  inset-block-start: 0.58rem;
+  inline-size: 0.56rem;
+  block-size: 0.56rem;
+  border-inline-end: 2px solid var(--text-muted);
+  border-block-end: 2px solid var(--text-muted);
+  transform: rotate(45deg);
+  transition: transform 160ms ease, border-color 160ms ease;
 }
 
 .base-panel--collapsible[open] .base-panel-summary::before {
-  transform: rotate(90deg);
-  transform-origin: 35% 50%;
+  transform: rotate(135deg);
 }
 
 .panel-loading {
@@ -148,12 +127,12 @@ function onToggle(event: Event) {
   gap: 12px;
   inline-size: min(100%, 42rem);
   justify-self: center;
-  border: 1px solid #000;
-  border-color: #808080 #fff #fff #808080;
+  border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-primary);
   padding: 22px 18px;
-  box-shadow: none;
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .panel-loading-spinner {

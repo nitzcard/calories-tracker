@@ -3,62 +3,92 @@ a[attr*="freeplan"] {
 }
 
 :root {
-  /* Common Layout Defaults */
-  --font-ui: "Segoe UI", "Verdana", sans-serif;
-  --radius: 3px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --bevel-raised: none;
-  --bevel-sunken: none;
-  --shadow: none; /* Old school websites used borders, not shadows */
+  --font-ui: "Manrope", "Inter", "Segoe UI", sans-serif;
+  --radius: 0.72rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 0.96rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.875rem;
+  --space-4: 1.25rem;
+  --space-5: 1.75rem;
+  --panel-gap: 1rem;
+  --group-gap: 0.875rem;
+  --controls-gap: 0.875rem;
+  --field-gap: 0.5rem;
+  --compact-control-inline-size: 15rem;
+  --text-control-inline-size: 20rem;
+  --select-control-inline-size: 15rem;
+  --bevel-raised: 0 6px 16px rgba(8, 24, 24, 0.05);
+  --bevel-sunken: inset 0 1px 0 rgba(255, 255, 255, 0.36);
+  --shadow: 0 16px 34px rgba(8, 24, 24, 0.08);
 }
 
-/* Soft Classic Light Theme */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #fdfaf6;           /* Soft parchment/cream background */
-    --panel: #f4f1ec;        /* Slightly darker muted panel */
-    --surface-1: #ffffff;    /* Clean white for content areas */
-    --surface-2: #efede8;
-    --surface-3: #e5e2dd;
-    --border: #d1cdc7;       /* Simple grey border */
-    --border-strong: #a6a29d;
-    --text-primary: #2d2d2d; /* Soft black/dark grey */
-    --text-muted: #6b665f;
-    --accent: #3b5998;       /* Classic "Link" blue */
-    --accent-soft: #e7ebf3;
-    --input-bg: #ffffff;
-    --input-border: #b0aca5;
-    --input-focus: #3b5998;
-    --pill: #52668d;
-    --pill-text: #ffffff;
-    background: var(--bg);
-  }
+:root,
+:root[data-theme="light"] {
+  --bg: #eef8f5;
+  --panel: rgba(255, 255, 255, 0.92);
+  --surface: #ffffff;
+  --surface-1: #fbfffe;
+  --surface-2: #eef8f4;
+  --surface-3: #dcefe9;
+  --border: #c8ded8;
+  --border-strong: #aacbc2;
+  --border-color: var(--border);
+  --text-primary: #17302e;
+  --text-muted: #55716c;
+  --accent: #14b8a6;
+  --accent-strong: #0f8f83;
+  --accent-soft: rgba(20, 184, 166, 0.12);
+  --input-bg: rgba(255, 255, 255, 0.94);
+  --input-border: #b7d1ca;
+  --input-focus: #14b8a6;
+  --pill: #0f766e;
+  --pill-text: #f7fffd;
+  --chip-bg: #eaf7f3;
+  --chip-text: #28554d;
+  --chip-cloud-bg: #e2f8f2;
+  --chip-cloud-text: #0f766e;
+  --chip-pending-bg: #f2fbf8;
+  --chip-pending-text: #2c7a68;
+  --required-outline: #d14545;
+  --required-pane-bg: #fff6f6;
+  --required-pane-border: #efc3c3;
+  --protein-infinite-accent: #84d7cf;
+  background: var(--bg);
 }
 
-/* Classic Dark Theme */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1a1a;           /* Deep charcoal */
-    --panel: #242424;        /* Slightly lighter panel */
-    --surface-1: #2d2d2d;
-    --surface-2: #333333;
-    --surface-3: #121212;
-    --border: #404040;
-    --border-strong: #666666;
-    --text-primary: #e0e0e0; /* Off-white text for less glow */
-    --text-muted: #999999;
-    --accent: #4a9eff;       /* Bright blue accent */
-    --accent-soft: rgba(74, 158, 255, 0.1);
-    --input-bg: #121212;
-    --input-border: #444444;
-    --input-focus: #4a9eff;
-    --pill: #333333;
-    --pill-text: #e0e0e0;
-    background: var(--bg);
-  }
+:root[data-theme="dark"] {
+  --bg: #071919;
+  --panel: rgba(10, 27, 26, 0.92);
+  --surface: #0d2423;
+  --surface-1: #0c2322;
+  --surface-2: #122f2e;
+  --surface-3: #1a403d;
+  --border: #2b5450;
+  --border-strong: #3c6d67;
+  --border-color: var(--border);
+  --text-primary: #e7f5f1;
+  --text-muted: #98b8b2;
+  --accent: #39d0be;
+  --accent-strong: #7ce6d9;
+  --accent-soft: rgba(57, 208, 190, 0.2);
+  --input-bg: rgba(8, 24, 24, 0.92);
+  --input-border: #32605b;
+  --input-focus: #4dd7c7;
+  --pill: #115e59;
+  --pill-text: #eafffb;
+  --chip-bg: #14302d;
+  --chip-text: #bfe5dd;
+  --chip-cloud-bg: #103732;
+  --chip-cloud-text: #88eadb;
+  --chip-pending-bg: #173b37;
+  --chip-pending-text: #8be3d3;
+  --required-outline: #ff8b8b;
+  --required-pane-bg: #2b1820;
+  --required-pane-border: #71404d;
+  --protein-infinite-accent: #2b7b73;
+  background: var(--bg);
 }
 
 * {
@@ -95,11 +125,16 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-ui);
-  line-height: 1.25;
+  line-height: 1.45;
 }
 
 body {
   min-inline-size: 320px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 13%, transparent), transparent 30%),
+    radial-gradient(circle at top right, color-mix(in srgb, #34d399 9%, transparent), transparent 24%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, #22c55e 6%, transparent), transparent 26%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 86%, transparent), var(--bg));
 }
 
 button,
@@ -118,11 +153,10 @@ textarea {
   color: inherit;
   direction: inherit;
   text-align: start;
-  padding-block: 0.42rem;
-  padding-inline-start: 0.55rem;
-  /* Reserve consistent space for decorations (spinner, native arrows) */
-  padding-inline-end: 2rem;
-  min-block-size: 2.25rem;
+  padding-block: 0.72rem;
+  padding-inline-start: 0.82rem;
+  padding-inline-end: 2.2rem;
+  min-block-size: 2.8rem;
 }
 
 /* Keep radios/checkboxes native-sized (do not inherit "text control" paddings). */
@@ -150,13 +184,23 @@ button {
   cursor: pointer;
   border: 1px solid var(--border-strong);
   border-color: var(--border-color);
-  border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow: none;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
+  box-shadow: var(--bevel-raised);
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 button:active {
-  border-color: var(--border-color)
+  border-color: var(--border-color);
+  transform: translateY(1px);
+}
+
+button:hover {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border-strong));
 }
 
 textarea {
@@ -185,10 +229,10 @@ input[type="url"] {
   max-inline-size: var(--text-control-inline-size);
   background: var(--input-bg);
   color: var(--text-primary);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input-border);
   border-color: var(--border-color);
-  border-radius: var(--radius);
-  box-shadow: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 input:-webkit-autofill,
@@ -212,19 +256,30 @@ select {
   inline-size: min(100%, var(--select-control-inline-size, clamp(8.5rem, 50%, var(--compact-control-inline-size))));
   min-inline-size: 0;
   max-inline-size: var(--select-control-inline-size, clamp(8.5rem, 50%, var(--compact-control-inline-size)));
+  appearance: none;
+  -webkit-appearance: none;
   background: var(--input-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M3.5 6 8 10.5 12.5 6' stroke='%2398b8b2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 1rem 1rem;
+  background-position: right 0.9rem center;
   color: var(--text-primary);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input-border);
   border-color: var(--border-color);
-  border-radius: var(--radius);
-  box-shadow: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+:root[dir="rtl"] select,
+body[dir="rtl"] select {
+  background-position: left 0.9rem center;
 }
 
 textarea {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input-border);
   border-color: var(--border-color);
-  border-radius: var(--radius);
-  box-shadow: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 input[type="date"]:focus,
@@ -241,6 +296,9 @@ textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--input-focus) 55%, transparent);
   outline-offset: -2px;
   border-color: var(--input-focus);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--input-focus) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 input:disabled,
@@ -261,15 +319,14 @@ textarea.is-missing {
 
 .required-pill {
   display: inline-block;
-  padding: 0.12rem 0.42rem;
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  background: var(--panel);
-  color: #7a0000;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--required-outline) 45%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--required-pane-bg) 82%, var(--surface-1));
+  color: var(--required-outline);
   font-size: 0.88rem;
   font-weight: 800;
   letter-spacing: 0.01em;
-  box-shadow: none;
   white-space: nowrap;
 }
 
@@ -279,7 +336,7 @@ textarea.is-missing {
 }
 
 button:disabled {
-  filter: grayscale(1);
+  filter: saturate(0.7);
   opacity: 0.65;
   cursor: not-allowed;
   background: var(--surface-1);
@@ -321,12 +378,15 @@ td {
 }
 
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-color: var(--border-color);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  box-shadow: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, transparent), color-mix(in srgb, var(--surface-1) 98%, transparent));
+  backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 76%, transparent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    var(--shadow);
 }
 
 .panel.is-required-pane {
@@ -342,12 +402,13 @@ small,
 .compact-stat {
   border: 1px solid var(--border-strong);
   border-color: var(--border-color);
-  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
   background: var(--surface-2);
   color: var(--text-primary);
   display: grid;
   gap: 2px;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 /* Isolate numeric metrics for proper RTL/LTR handling */
@@ -361,21 +422,22 @@ small,
   border: 1px solid var(--border-strong);
   border-color: var(--border-color);
   padding: 0.36rem 0.45rem;
-  box-shadow: none;
+  border-radius: 0.45rem;
 }
 
 .secondary-action {
-  padding: 0.36rem 0.56rem;
-  background: var(--panel);
+  padding: 0.62rem 0.9rem;
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
   color: var(--text-primary);
   border: 1px solid var(--border-strong);
   border-color: var(--border-color);
-  border-radius: var(--radius);
-  box-shadow: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--bevel-raised);
 }
 
 .secondary-action:hover {
-  background: var(--surface-1);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-1));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
 }
 
 ul {

@@ -111,13 +111,13 @@ describe("calculateObservedTdee", () => {
     expect(calculateObservedTdee(makeObservedTdeeEntries())).toBe(3252);
   });
 
-  it("ignores today's incomplete entry", () => {
+  it("includes today's edited history entry in observed TDEE", () => {
     const entries = [
       ...makeObservedTdeeEntries(),
-      makeEntry({ date: "2026-04-22", weight: 79.5, manualCalories: 900 }),
+      makeEntry({ date: "2026-04-22", weight: 79.5, manualCalories: 2400 }),
     ];
 
-    expect(calculateObservedTdee(entries)).toBe(3252);
+    expect(calculateObservedTdee(entries)).toBe(3295);
   });
 });
 
@@ -178,19 +178,20 @@ describe("buildTdeeSnapshot", () => {
     expect(snapshot.selectedEquation).toBe("mifflinStJeor");
     expect(snapshot.selectedValue).toBe(snapshot.formulaBreakdown.mifflinStJeor);
     expect(snapshot.formulaBreakdown.mifflinStJeor).toBeTypeOf("number");
-    expect(snapshot.formulaWeight).toBe(80);
+    expect(snapshot.formulaWeight).toBe(81.2);
+    expect(snapshot.formulaWeightSource).toBe("logged");
   });
 
-  it("ends observed TDEE at yesterday when today has a partial log", () => {
+  it("extends observed TDEE through today when history is edited today", () => {
     const entries = [
       ...makeObservedTdeeEntries(),
-      makeEntry({ date: "2026-04-22", weight: 79.5, manualCalories: 900 }),
+      makeEntry({ date: "2026-04-22", weight: 79.5, manualCalories: 2400 }),
     ];
 
     const snapshot = buildTdeeSnapshot(entries, makeProfile({ tdeeEquation: "observedTdee" }));
 
-    expect(snapshot.observedTdee).toBe(3252);
-    expect(snapshot.observedToDate).toBe("2026-04-08");
-    expect(snapshot.observedValidEntryCount).toBe(4);
+    expect(snapshot.observedTdee).toBe(3295);
+    expect(snapshot.observedToDate).toBe("2026-04-22");
+    expect(snapshot.observedValidEntryCount).toBe(5);
   });
 });

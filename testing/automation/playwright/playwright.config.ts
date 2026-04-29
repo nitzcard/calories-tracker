@@ -11,6 +11,7 @@ declare const process: {
 
 const baseURL = process.env.APP_URL || "http://127.0.0.1:7001";
 const isCI = Boolean(process.env.CI);
+const shouldManageWebServer = !process.env.APP_URL;
 const fakeSupabaseUrl = process.env.VITE_SUPABASE_URL || "https://playwright-supabase.test";
 const fakeSupabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "playwright-anon-key";
 
@@ -35,10 +36,12 @@ export default defineConfig({
     video: "on",
     screenshot: "only-on-failure",
   },
-  webServer: {
-    command: `VITE_SUPABASE_URL='${fakeSupabaseUrl}' VITE_SUPABASE_ANON_KEY='${fakeSupabaseAnonKey}' npm run dev:fixed`,
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: shouldManageWebServer
+    ? {
+        command: `VITE_SUPABASE_URL='${fakeSupabaseUrl}' VITE_SUPABASE_ANON_KEY='${fakeSupabaseAnonKey}' npm run dev:fixed`,
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      }
+    : undefined,
 });

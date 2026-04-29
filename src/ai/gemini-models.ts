@@ -58,7 +58,7 @@ function compareModelPreference(a: string, b: string) {
   const rank = (id: string) => {
     const isLatest = id.includes("latest") ? 0 : 1;
     const isFlash = id.includes("-flash") ? 0 : 1;
-    const isLite = id.includes("lite") ? 1 : 0;
+    const isLite = id.includes("lite") ? 0 : 1;
     const isPreview = id.includes("preview") || id.includes("experimental") ? 1 : 0;
     return [isLatest, isFlash, isLite, isPreview, id];
   };

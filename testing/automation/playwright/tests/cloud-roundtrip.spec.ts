@@ -54,15 +54,16 @@ test("@cloud mocked Supabase roundtrip persists and reloads remote data", async 
   });
 
   await page.goto("/login", { waitUntil: "networkidle" });
-  const cloudPanel = page.locator("main.app-shell--blocked");
+  const cloudPanel = page.locator(".login-card");
+  await expect(cloudPanel.locator('input[autocomplete="username"]')).toBeVisible();
   await cloudPanel.locator('input[autocomplete="username"]').fill("playwright-user");
   await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
 
   await cloudPanel.getByRole("button", { name: "Login" }).click();
 
   await expect.poll(() => writeCount).toBeGreaterThan(0);
-  await expect(page.locator("main.app-shell--blocked")).toHaveCount(0);
-  await expect(page.locator("header .sync-pill")).toContainText("Cloud");
+  await expect(page.locator(".login-card")).toHaveCount(0);
+  await expect(page.locator("header .sync-status")).toContainText("playwright-user");
 
   await page.locator("#dailyDeskPanel .weight-input").first().fill("81.3");
   await page.locator("#dailyDeskPanel .weight-input").first().blur();

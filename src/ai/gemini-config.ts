@@ -1,4 +1,4 @@
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-latest";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite-latest";
 export const FALLBACK_GEMINI_MODEL = "gemini-2.5-flash";
 export const LIGHTWEIGHT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 export const LIGHTWEIGHT_GEMINI_LATEST_MODEL = "gemini-2.5-flash-lite-latest";

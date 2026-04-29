@@ -1,52 +1,23 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import BasePanel from "./components/base/BasePanel.vue";
 import AppHeader from "./components/header/AppHeader.vue";
 import AnalysisSwitchSuggestion from "./components/shared/AnalysisSwitchSuggestion.vue";
-import PaneScrubber from "./components/shared/PaneScrubber.vue";
-import NutritionSummaryPanel from "./components/panels/NutritionSummaryPanel.vue";
 import { buildAnalysisErrorPresentation } from "./app/analysis-errors";
+import { useThemePreference } from "./app/useThemePreference";
 import { useDashboard } from "./app/useDashboard";
 import { formatEntryDate } from "./domain/entries";
-
-const MetricChart = defineAsyncComponent(() => import("./components/charts/MetricChart.vue"));
-const ApiKeysPanel = defineAsyncComponent(() => import("./components/panels/ApiKeysPanel.vue"));
-const CloudSyncPanel = defineAsyncComponent(() => import("./components/panels/CloudSyncPanel.vue"));
-const HistoryPanel = defineAsyncComponent(() => import("./components/panels/HistoryPanel.vue"));
-const InsightsPanel = defineAsyncComponent(() => import("./components/panels/InsightsPanel.vue"));
-const ProfilePanel = defineAsyncComponent(() => import("./components/panels/ProfilePanel.vue"));
-const TdeeSummaryPanel = defineAsyncComponent(() => import("./components/panels/TdeeSummaryPanel.vue"));
-const DailyDeskPanel = defineAsyncComponent(() => import("./components/panels/DailyDeskPanel.vue"));
+import type { ThemePreference } from "./types";
+import LoginView from "./views/LoginView.vue";
+import ProgressView from "./views/ProgressView.vue";
+import SettingsView from "./views/SettingsView.vue";
+import TodayView from "./views/TodayView.vue";
 
 const dashboard = useDashboard();
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
-
-function readStoredOpen(key: string): boolean | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === "0" || raw === "1") return raw === "1";
-  } catch {
-    // ignore and del
-  }
-  return null;
-}
-
-function writeStoredOpen(key: string, value: boolean) {
-  try {
-    localStorage.setItem(key, value ? "1" : "0");
-  } catch {
-    // ignore
-  }
-}
-
-const PANEL_OPEN_KEYS = {
-  appSetup: "panel.open.appSetup",
-  constantData: "panel.open.constantData",
-} as const;
 
 const {
   locale,
@@ -74,7 +45,6 @@ const {
   analyzeIssue,
   currentEntry,
   tdee,
-  nutritionInsights,
   estimatedLeanWeight,
   weightPoints,
   caloriePoints,
@@ -115,11 +85,10 @@ const {
   clearNotice,
 } = dashboard;
 
-const appSetupOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.appSetup) ?? false);
-const constantDataOpen = ref(readStoredOpen(PANEL_OPEN_KEYS.constantData) ?? false);
-const didInitializePanels = ref(false);
 const tdeeHighlightToken = ref(0);
 const correctionNoticeToken = ref(0);
+const deleteDayDialogRef = ref<HTMLDialogElement | null>(null);
+const deleteDayPendingDate = ref<string | null>(null);
 const transientToast = ref<{
   kind: "local" | "cloud" | "error";
   message: string;
@@ -131,36 +100,85 @@ const localToastVisibleUntil = ref(0);
 const cloudToastVisibleUntil = ref(0);
 let localToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
 let cloudToastHideTimeout: ReturnType<typeof setTimeout> | null = null;
-const deleteDayDialogRef = ref<HTMLDialogElement | null>(null);
-const deleteDayPendingDate = ref<string | null>(null);
-const isProfileReady = computed(
-  () =>
-    Boolean(
-      profile.value?.age &&
-      profile.value?.height &&
-        profile.value?.activityFactor,
-    ),
+const lastAnalyzingState = ref(false);
+
+const isProfileReady = computed(() =>
+  Boolean(profile.value?.age && profile.value?.height && profile.value?.activityFactor),
 );
-const hasConfiguredGeminiKey = computed(() => Boolean(aiKeys.value.gemini.trim()));
 const hasEffectiveGeminiKey = computed(() =>
   Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim()),
 );
-const appSetupEffectiveOpen = computed(() => (hasConfiguredGeminiKey.value ? appSetupOpen.value : true));
-const constantDataEffectiveOpen = computed(() => (isProfileReady.value ? constantDataOpen.value : true));
 const hasConfirmedCloudLogin = computed(() => Boolean(cloudConfirmedUsername.value.trim()));
 const showCloudLoginGate = computed(() => supabaseConfigured.value && !hasConfirmedCloudLogin.value);
 const isLoginRoute = computed(() => route.name === "login");
+const themePreference = computed<ThemePreference>(() => profile.value?.themePreference ?? "system");
+useThemePreference(themePreference);
+const navItems = computed(() => [
+  {
+    name: "today" as const,
+    label: t("navToday"),
+    iconPaths: [
+      "M3.75 11.25 12 4.5l8.25 6.75",
+      "M5.25 10.5v7.125c0 .621.504 1.125 1.125 1.125H9.75V13.5h4.5v5.25h3.375c.621 0 1.125-.504 1.125-1.125V10.5",
+    ],
+  },
+  {
+    name: "progress" as const,
+    label: t("navProgress"),
+    iconPaths: [
+      "M4.5 18V9.75",
+      "M9 18V6.75",
+      "M13.5 18v-4.5",
+      "M18 18V4.5",
+    ],
+  },
+  {
+    name: "settings" as const,
+    label: t("navSettings"),
+    iconPaths: [
+      "M10.5 3.75h3",
+      "M10.5 20.25h3",
+      "M3.75 10.5v3",
+      "M20.25 10.5v3",
+      "m5.303 5.303 2.121 2.121",
+      "m16.576 16.576 2.121 2.121",
+      "m5.303 18.697 2.121-2.121",
+      "m16.576 7.424 2.121-2.121",
+      "M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z",
+    ],
+  },
+]);
+const currentNavItem = computed(() =>
+  navItems.value.find((item) => item.name === route.name) ?? navItems.value[0],
+);
+const currentPageTitle = computed(() => {
+  if (route.name === "progress") return t("progressTitle");
+  if (route.name === "settings") return t("settingsTitle");
+  return t("todayTitle");
+});
+const currentPageHelper = computed(() => {
+  if (route.name === "progress") return t("progressHelper");
+  if (route.name === "settings") return t("settingsHelper");
+  return t("todayHelper");
+});
+const analysisErrorPresentation = computed(() =>
+  buildAnalysisErrorPresentation(currentEntry.value?.aiError, locale.value, provider.value, providerOptions.value),
+);
+const analysisErrorRetryModelId = computed(() => analysisErrorPresentation.value.retryModelId);
+const analysisErrorRetryModelLabel = computed(() => analysisErrorPresentation.value.retryModelLabel);
+const formattedAnalysisError = computed(() => analysisErrorPresentation.value.message);
+const deleteDayPendingLabel = computed(() =>
+  deleteDayPendingDate.value ? formatEntryDate(deleteDayPendingDate.value, locale.value) : "",
+);
 const weightTrendlineLabel = computed(() => {
   const slope = computeTrendlineSlopePerDay(weightPoints.value);
   if (slope === null || !Number.isFinite(slope)) {
     return t("averageWeightChangePerDay");
   }
 
-  // Convert kg/day to g/day and avoid `-0` display while keeping small-but-real slopes visible.
   const slopeGrams = slope * 1000;
   const rounded = Math.round(slopeGrams);
   const normalized = Object.is(rounded, -0) ? 0 : rounded;
-
   const formatter = new Intl.NumberFormat(locale.value === "he" ? "he-IL" : "en-US", {
     maximumFractionDigits: 0,
   });
@@ -175,7 +193,7 @@ const calorieTrendlineLabel = computed(() => {
     return base;
   }
 
-  const ys = (caloriePoints.value ?? [])
+  const ys = caloriePoints.value
     .map((point) => point.y)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   if (!ys.length) {
@@ -189,42 +207,13 @@ const calorieTrendlineLabel = computed(() => {
     maximumFractionDigits: 0,
   });
   const signedDelta = `${normalizedDelta > 0 ? "+" : ""}${formatter.format(normalizedDelta)}`;
-  const suffix = locale.value === "he"
-    ? `${signedDelta} ${t("unitKcal")} מול TDEE`
-    : `${signedDelta} ${t("unitKcal")} vs TDEE`;
+  const suffix =
+    locale.value === "he"
+      ? `${signedDelta} ${t("unitKcal")} מול TDEE`
+      : `${signedDelta} ${t("unitKcal")} vs TDEE`;
 
   return `${base} (${suffix})`;
 });
-const analysisErrorPresentation = computed(() =>
-  buildAnalysisErrorPresentation(currentEntry.value?.aiError, locale.value, provider.value, providerOptions.value),
-);
-const analysisErrorRetryModelId = computed(() => analysisErrorPresentation.value.retryModelId);
-const analysisErrorRetryModelLabel = computed(() => analysisErrorPresentation.value.retryModelLabel);
-const formattedAnalysisError = computed(() => analysisErrorPresentation.value.message);
-const mobilePanes = computed(() => [
-  { id: "dailyDeskPanel", label: t("dailyDesk"), icon: "diary" as const },
-  { id: "nutritionSummaryPanel", label: t("nutritionSummary"), icon: "summary" as const },
-  { id: "graphCaloriesPanel", label: t("graphCalories"), icon: "graphs" as const },
-  { id: "historyPanel", label: t("history"), icon: "history" as const },
-]);
-const deleteDayPendingLabel = computed(() =>
-  deleteDayPendingDate.value ? formatEntryDate(deleteDayPendingDate.value, locale.value) : "",
-);
-
-function openFoodRulesFromToast() {
-  const panel = document.getElementById("dailyDeskPanel");
-  if (panel instanceof HTMLDetailsElement) {
-    panel.open = true;
-  }
-
-  requestAnimationFrame(() => {
-    const textarea = document.getElementById("food-rules-textarea");
-    if (textarea instanceof HTMLTextAreaElement) {
-      textarea.focus();
-      textarea.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
-  });
-}
 
 function computeTrendlineSlopePerDay(points: Array<{ x: number; y: number | null }>) {
   const numeric = points.filter(
@@ -235,7 +224,6 @@ function computeTrendlineSlopePerDay(points: Array<{ x: number; y: number | null
     return null;
   }
 
-  // `chartDayTimestamp()` stores ms; normalize to seconds before converting to day offsets.
   const originSec = numeric[0].x > 1e12 ? numeric[0].x / 1000 : numeric[0].x;
   const xs = numeric.map((point) => {
     const xSec = point.x > 1e12 ? point.x / 1000 : point.x;
@@ -246,17 +234,45 @@ function computeTrendlineSlopePerDay(points: Array<{ x: number; y: number | null
   const meanY = ys.reduce((sum, value) => sum + value, 0) / ys.length;
   const numerator = xs.reduce((sum, value, index) => sum + (value - meanX) * (ys[index] - meanY), 0);
   const denominator = xs.reduce((sum, value) => sum + (value - meanX) ** 2, 0);
+  return denominator === 0 ? null : numerator / denominator;
+}
 
-  if (denominator === 0) {
-    return null;
+function openFoodRulesFromToast() {
+  void router.replace({ name: "settings" }).then(() => {
+    requestAnimationFrame(() => {
+      const textarea = document.getElementById("food-rules-textarea");
+      if (textarea instanceof HTMLTextAreaElement) {
+        textarea.focus();
+        textarea.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
+  });
+}
+
+function openResultsFromToast() {
+  void router.replace({ name: "today" }).then(() => {
+    requestAnimationFrame(() => {
+      const resultsPanel = document.getElementById("nutritionSummaryPanel");
+      if (!(resultsPanel instanceof HTMLElement)) {
+        return;
+      }
+
+      resultsPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+      resultsPanel.focus?.({ preventScroll: true });
+    });
+  });
+}
+
+function goToToday() {
+  if (route.name === "today") {
+    return;
   }
 
-  return numerator / denominator;
+  void router.replace({ name: "today" });
 }
 
 function bumpToastVisibility(kind: "local" | "cloud") {
   const nextVisibleUntil = Date.now() + ACTIVE_TOAST_MIN_MS;
-
   if (kind === "local") {
     localToastVisibleUntil.value = Math.max(localToastVisibleUntil.value, nextVisibleUntil);
     return;
@@ -271,28 +287,24 @@ function scheduleActiveToastHide(kind: "local" | "cloud") {
     (kind === "local" ? localToastVisibleUntil.value : cloudToastVisibleUntil.value) - Date.now(),
   );
 
-  const clear = () => {
-    if (kind === "local") {
-      if (localToastHideTimeout) {
-        clearTimeout(localToastHideTimeout);
-      }
-      localToastHideTimeout = setTimeout(() => {
-        localToastVisibleUntil.value = 0;
-        localToastHideTimeout = null;
-      }, delay);
-      return;
+  if (kind === "local") {
+    if (localToastHideTimeout) {
+      clearTimeout(localToastHideTimeout);
     }
-
-    if (cloudToastHideTimeout) {
-      clearTimeout(cloudToastHideTimeout);
-    }
-    cloudToastHideTimeout = setTimeout(() => {
-      cloudToastVisibleUntil.value = 0;
-      cloudToastHideTimeout = null;
+    localToastHideTimeout = setTimeout(() => {
+      localToastVisibleUntil.value = 0;
+      localToastHideTimeout = null;
     }, delay);
-  };
+    return;
+  }
 
-  clear();
+  if (cloudToastHideTimeout) {
+    clearTimeout(cloudToastHideTimeout);
+  }
+  cloudToastHideTimeout = setTimeout(() => {
+    cloudToastVisibleUntil.value = 0;
+    cloudToastHideTimeout = null;
+  }, delay);
 }
 
 const activeToasts = computed(() => {
@@ -309,26 +321,13 @@ const activeToasts = computed(() => {
 
   const activeToast =
     shouldCombine
-      ? {
-          id: "sync-active",
-          kind: "cloud" as const,
-          message: `💾☁️ ${t("toastLocalCloudSyncing")}`,
-        }
+      ? { id: "sync-active", kind: "cloud" as const, message: `💾☁️ ${t("toastLocalCloudSyncing")}` }
       : cloudActive
-        ? {
-            id: "cloud-active",
-            kind: "cloud" as const,
-            message: `☁️ ${t("toastCloudSyncing")}`,
-          }
+        ? { id: "cloud-active", kind: "cloud" as const, message: `☁️ ${t("toastCloudSyncing")}` }
         : localActive
-          ? {
-              id: "local-active",
-              kind: "local" as const,
-              message: `💾 ${t("toastLocalSaving")}`,
-            }
+          ? { id: "local-active", kind: "local" as const, message: `💾 ${t("toastLocalSaving")}` }
           : null;
 
-  // Keep the UI to a single toast: fold transient info into the active toast when present.
   if (transientToast.value?.kind === "error") {
     items.push({
       id: "transient",
@@ -340,10 +339,11 @@ const activeToasts = computed(() => {
   }
 
   if (activeToast) {
-    const mergedMessage = transientToast.value?.message
-      ? `${activeToast.message} • ${transientToast.value.message}`
-      : activeToast.message;
-    items.push({ ...activeToast, message: mergedMessage, action: transientToast.value?.action });
+    items.push({
+      ...activeToast,
+      message: transientToast.value?.message ? `${activeToast.message} • ${transientToast.value.message}` : activeToast.message,
+      action: transientToast.value?.action,
+    });
     return items;
   }
 
@@ -380,7 +380,7 @@ function showTransientToast(
 watch(
   locale,
   () => {
-    document.title = `${t("appTitle")} (${t("beta")})`;
+    document.title = t("appTitle");
   },
   { immediate: true },
 );
@@ -393,18 +393,8 @@ watch(
       return;
     }
 
-    if (!shouldShowLogin && routeName === "login") {
-      await router.replace({ name: "dashboard" });
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  [hasConfirmedCloudLogin, () => route.name],
-  async ([isLoggedIn, routeName]) => {
-    if (isLoggedIn && routeName === "login") {
-      await router.replace({ name: "dashboard" });
+    if (!shouldShowLogin && (routeName === "login" || routeName === "root")) {
+      await router.replace({ name: "today" });
     }
   },
   { immediate: true },
@@ -451,12 +441,10 @@ watch(
       showTransientToast("local", `💾 ${t("resultsUpdated")}`);
       return;
     }
-
     if (next === "queued") {
       showTransientToast("local", `💾 ${t("resultsQueued")}`, { duration: 5000 });
       return;
     }
-
     if (next === "instruction-pending") {
       showTransientToast("local", `💾 ${t("instructionSavedNeedsReanalysis")}`, {
         duration: 5000,
@@ -468,7 +456,6 @@ watch(
       });
       return;
     }
-
     if (next === "instruction-saved") {
       showTransientToast("local", `💾 ${t("instructionSavedOnly")}`, {
         duration: 5000,
@@ -480,11 +467,34 @@ watch(
       });
       return;
     }
-
     if (next === "day-deleted") {
       showTransientToast("local", t("dayDeleted"), { duration: 4500 });
     }
   },
+);
+
+watch(
+  [isAnalyzing, () => currentEntry.value?.aiStatus, () => currentEntry.value?.nutritionSnapshot],
+  ([analyzing, status, snapshot]) => {
+    const wasAnalyzing = lastAnalyzingState.value;
+    lastAnalyzingState.value = analyzing;
+
+    if (analyzing || !wasAnalyzing) {
+      return;
+    }
+
+    if (status === "done" && snapshot) {
+      showTransientToast("local", t("resultsUpdated"), {
+        duration: 7000,
+        action: {
+          label: t("jumpToResults"),
+          href: "#nutritionSummaryPanel",
+          onClick: openResultsFromToast,
+        },
+      });
+    }
+  },
+  { immediate: true },
 );
 
 watch(
@@ -499,46 +509,6 @@ watch(
     }
   },
 );
-
-watch(
-  [isProfileReady, hasConfiguredGeminiKey],
-  ([profileReady, geminiReady]) => {
-    if (didInitializePanels.value) {
-      return;
-    }
-
-    const savedAppSetup = readStoredOpen(PANEL_OPEN_KEYS.appSetup);
-    const savedConstant = readStoredOpen(PANEL_OPEN_KEYS.constantData);
-    appSetupOpen.value = savedAppSetup ?? !geminiReady;
-    constantDataOpen.value = savedConstant ?? !profileReady;
-    didInitializePanels.value = true;
-  },
-  { immediate: true },
-);
-
-function onAppSetupToggle(event: Event) {
-  const details = event.target as HTMLDetailsElement;
-  // If required, keep it open (no collapsing).
-  if (!hasConfiguredGeminiKey.value) {
-    appSetupOpen.value = true;
-    writeStoredOpen(PANEL_OPEN_KEYS.appSetup, true);
-    return;
-  }
-  appSetupOpen.value = details.open;
-  writeStoredOpen(PANEL_OPEN_KEYS.appSetup, appSetupOpen.value);
-}
-
-function onConstantDataToggle(event: Event) {
-  const details = event.target as HTMLDetailsElement;
-  // If required, keep it open (no collapsing).
-  if (!isProfileReady.value) {
-    constantDataOpen.value = true;
-    writeStoredOpen(PANEL_OPEN_KEYS.constantData, true);
-    return;
-  }
-  constantDataOpen.value = details.open;
-  writeStoredOpen(PANEL_OPEN_KEYS.constantData, constantDataOpen.value);
-}
 
 async function saveFoodCorrectionInstructionAndRefresh(
   foodId: string,
@@ -651,6 +621,24 @@ async function saveProfileAndHighlight(nextProfile?: typeof profile.value) {
   tdeeHighlightToken.value += 1;
 }
 
+async function saveThemePreference(nextTheme: ThemePreference) {
+  if (!profile.value) return;
+  profile.value = { ...profile.value, themePreference: nextTheme };
+  await saveProfileDraft(profile.value);
+}
+
+async function saveHistorySummaryBaseline(date: string) {
+  if (!profile.value) return;
+  profile.value = { ...profile.value, historySummaryBaselineDate: date || null };
+  await saveProfileDraft(profile.value);
+}
+
+async function clearHistorySummaryBaseline() {
+  if (!profile.value) return;
+  profile.value = { ...profile.value, historySummaryBaselineDate: null };
+  await saveProfileDraft(profile.value);
+}
+
 function closeDeleteDayDialog() {
   deleteDayDialogRef.value?.close();
   deleteDayPendingDate.value = null;
@@ -662,11 +650,9 @@ function openDeleteDayDialog(date: string) {
   if (!dialog) {
     return;
   }
-
   if (dialog.open) {
     dialog.close();
   }
-
   dialog.showModal();
 }
 
@@ -676,10 +662,8 @@ async function confirmDeleteDay() {
   if (!date) {
     return;
   }
-
   await deleteDay(date);
 }
-
 </script>
 
 <template>
@@ -722,81 +706,31 @@ async function confirmDeleteDay() {
     </form>
   </dialog>
 
-  <main v-if="isLoginRoute" class="app-shell app-shell--blocked login-desktop">
-    <section class="login-desktop__canvas">
-      <div class="login-desktop__window" role="presentation">
-        <div class="login-desktop__titlebar">
-          <strong>{{ t("cloudSyncTitle") }}</strong>
-          <span class="login-desktop__titlebar-buttons" aria-hidden="true">
-            <span>_</span>
-            <span>□</span>
-            <span>x</span>
-          </span>
-        </div>
+  <LoginView
+    v-if="isLoginRoute && profile"
+    :locale="locale"
+    :is-saving-locale="isSavingLocale"
+    :cloud-confirmed-username="cloudConfirmedUsername"
+    :is-cloud-busy="isCloudSyncing"
+    :profile="profile"
+    :cloud-username="cloudUsername"
+    :has-saved-cloud-password="hasSavedCloudPassword"
+    :cloud-status="cloudStatus"
+    :cloud-last-synced-at="cloudLastSyncedAt"
+    :cloud-error="cloudError"
+    :supabase-configured="supabaseConfigured"
+    @locale-change="onLocaleChange"
+    @update:profile="profile = $event"
+    @save-profile="saveProfileAndHighlight"
+    @update:cloud-username="setCloudUsername"
+    @sync="cloudSyncNow($event)"
+    @logout="cloudLogout"
+  />
 
-        <div class="login-desktop__body">
-          <AppHeader
-            :locale="locale"
-            :is-saving-locale="isSavingLocale"
-            :cloud-confirmed-username="cloudConfirmedUsername"
-            :is-cloud-busy="isCloudSyncing"
-            :show-logout="false"
-            :auth-view="true"
-            @locale-change="onLocaleChange"
-          />
-
-          <section v-if="profile" class="content-grid">
-            <div class="grid-cell span-12">
-              <CloudSyncPanel
-                :locale="locale"
-                :profile="profile"
-                :cloud-username="cloudUsername"
-                :cloud-confirmed-username="cloudConfirmedUsername"
-                :has-saved-cloud-password="hasSavedCloudPassword"
-                :is-cloud-busy="isCloudBusy"
-                :cloud-status="cloudStatus"
-                :cloud-last-synced-at="cloudLastSyncedAt"
-                :cloud-error="cloudError"
-                :supabase-configured="supabaseConfigured"
-                :auth-view="true"
-                @update:profile="profile = $event"
-                @save="saveProfileAndHighlight"
-                @update:cloud-username="setCloudUsername"
-                @sync="cloudSyncNow($event)"
-                @logout="cloudLogout"
-              />
-            </div>
-          </section>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <main v-else class="app-shell">
-    <PaneScrubber :panes="mobilePanes" :aria-label="t('paneNavigation')" />
-
-    <AppHeader
-      :locale="locale"
-      :is-saving-locale="isSavingLocale"
-      :cloud-confirmed-username="cloudConfirmedUsername"
-      :is-cloud-busy="isCloudSyncing"
-      :show-logout="hasConfirmedCloudLogin"
-      @locale-change="onLocaleChange"
-      @logout="cloudLogout"
-    />
-
-    <p v-if="notice === 'queued'" class="notice-banner">
-      {{ t("resultsQueued") }}
-      <button class="notice-dismiss" @click="clearNotice">x</button>
-    </p>
-
+  <main v-else-if="profile" class="app-shell">
     <div v-if="primaryToast" class="status-toast-stack" aria-live="polite" aria-atomic="true">
       <Transition name="status-toast" mode="out-in">
-        <div
-          :key="primaryToast.id"
-          class="status-toast"
-          role="status"
-        >
+        <div :key="primaryToast.id" class="status-toast" role="status">
           <span class="status-toast__glyph spinning" aria-hidden="true"></span>
           <span class="status-toast__message">{{ primaryToast.message }}</span>
           <a
@@ -808,122 +742,105 @@ async function confirmDeleteDay() {
             {{ primaryToast.action.label }}
           </a>
         </div>
-      </transition>
+      </Transition>
     </div>
 
-    <details
-      v-if="profile"
-      id="appSetupPanel"
-      class="panel constant-data-panel"
-      :open="appSetupEffectiveOpen"
-      :class="{ 'is-locked-open': !hasConfiguredGeminiKey, 'is-required-pane': !hasConfiguredGeminiKey }"
-      @toggle="onAppSetupToggle"
-    >
-      <summary class="constant-data-summary">
-        <span class="summary-title">
-          {{ t("appSetup") }}
-          <span v-if="!hasConfiguredGeminiKey" class="summary-required">{{ t("requiredNow") }}</span>
-        </span>
-        <span class="summary-helper">
-          {{ hasConfiguredGeminiKey ? t("appSetupHelper") : t("appSetupRequiredHelper") }}
-        </span>
-      </summary>
+    <AppHeader
+      :locale="locale"
+      :is-saving-locale="isSavingLocale"
+      :cloud-confirmed-username="cloudConfirmedUsername"
+      :is-cloud-busy="isCloudSyncing"
+      :show-logout="hasConfirmedCloudLogin"
+      @locale-change="onLocaleChange"
+      @go-today="goToToday"
+      @logout="cloudLogout"
+    />
 
-      <div class="constant-data-grid">
-        <CloudSyncPanel
-          v-if="!hasConfirmedCloudLogin"
-          :locale="locale"
-          :profile="profile"
-          :cloud-username="cloudUsername"
-          :cloud-confirmed-username="cloudConfirmedUsername"
-          :has-saved-cloud-password="hasSavedCloudPassword"
-	          :is-cloud-busy="isCloudBusy"
-	          :cloud-status="cloudStatus"
-          :cloud-last-synced-at="cloudLastSyncedAt"
-          :cloud-error="cloudError"
-          :supabase-configured="supabaseConfigured"
-          @update:profile="profile = $event"
-          @save="saveProfileAndHighlight"
-          @update:cloud-username="setCloudUsername"
-          @sync="cloudSyncNow($event)"
-          @logout="cloudLogout"
-        />
+    <div class="app-chrome">
+      <div class="workspace-header">
+        <nav class="shell-nav shell-nav--desktop" :aria-label="t('appSections')">
+          <button
+            v-for="item in navItems"
+            :key="item.name"
+            type="button"
+            class="shell-nav__item"
+            :data-active="route.name === item.name ? 'true' : 'false'"
+            @click="router.replace({ name: item.name })"
+          >
+            <span class="shell-nav__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" class="shell-nav__icon-svg">
+                <path
+                  v-for="segment in item.iconPaths"
+                  :key="segment"
+                  :d="segment"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                />
+              </svg>
+            </span>
+            <span class="shell-nav__label">{{ item.label }}</span>
+          </button>
+        </nav>
 
-        <ApiKeysPanel
-          :locale="locale"
-          :keys="aiKeys"
-          :saving-field="savingAiKeyField"
-          @save="saveAiKey"
-        />
+        <section class="page-hero">
+          <div class="page-hero__copy">
+            <div class="page-hero__headline">
+              <div class="page-hero__badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="page-hero__badge-icon">
+                  <path
+                    v-for="segment in currentNavItem.iconPaths"
+                    :key="segment"
+                    :d="segment"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.85"
+                  />
+                </svg>
+              </div>
+
+              <h2 class="page-hero__title">{{ currentPageTitle }}</h2>
+            </div>
+            <p class="page-hero__helper">{{ currentPageHelper }}</p>
+          </div>
+        </section>
       </div>
-    </details>
 
-    <details
-      v-if="profile"
-      id="constantDataPanel"
-      class="panel constant-data-panel"
-      :open="constantDataEffectiveOpen"
-      :class="{ 'is-locked-open': !isProfileReady, 'is-required-pane': !isProfileReady }"
-      @toggle="onConstantDataToggle"
-    >
-      <summary class="constant-data-summary">
-        <span class="summary-title">
-          {{ t("constantData") }}
-          <span v-if="!isProfileReady" class="summary-required">{{ t("requiredNow") }}</span>
-        </span>
-        <span class="summary-helper">
-          {{ isProfileReady ? t("constantDataHelper") : t("constantDataRequiredHelper") }}
-        </span>
-      </summary>
+      <p v-if="notice === 'queued'" class="notice-banner">
+        <span>{{ t("resultsQueued") }}</span>
+        <button class="notice-dismiss" @click="clearNotice">×</button>
+      </p>
 
-      <div class="constant-data-grid">
-        <ProfilePanel
-          :locale="locale"
-          :profile="profile"
-          :estimated-lean-weight="estimatedLeanWeight"
-          @update:profile="profile = $event"
-          @save="saveProfileAndHighlight"
-        />
+      <div class="app-main">
 
-	        <TdeeSummaryPanel
-	          :locale="locale"
-	          :tdee="tdee"
-	          :selected-equation="profile.tdeeEquation"
-	          :highlight-token="tdeeHighlightToken"
-	          :is-updating="isSavingTdeeEquation"
-	          @select-equation="
-            saveTdeeEquation($event);
-            tdeeHighlightToken += 1;
-          "
-        />
-
-      </div>
-    </details>
-
-    <section v-if="profile" class="content-grid">
-      <div class="grid-cell span-12">
-        <DailyDeskPanel
+        <TodayView
+          v-if="route.name !== 'progress' && route.name !== 'settings'"
           :locale="locale"
           :selected-date="selectedDate"
           :current-weight="currentWeight"
-          :food-log="currentFoodLog"
+          :current-food-log="currentFoodLog"
           :is-analyzing="isAnalyzing"
           :show-model-switch-prompt="showModelSwitchPrompt"
           :suggested-model-label="suggestedModelLabel"
-          :has-results="Boolean(currentEntry?.nutritionSnapshot)"
           :is-profile-ready="isProfileReady"
           :provider="provider"
           :provider-options="providerOptions"
           :is-saving-provider="isSavingProvider"
           :can-select-provider="hasEffectiveGeminiKey"
           :analyze-issue="analyzeIssue"
-          :analysis-error="formattedAnalysisError"
-          :analysis-retry-model-label="analysisErrorRetryModelLabel"
-          :analysis-retry-model-id="analysisErrorRetryModelId"
+          :status-text="statusLabel((key: string) => t(key), currentEntry?.aiStatus ?? 'idle')"
+          :formatted-analysis-error="formattedAnalysisError"
+          :analysis-error-retry-model-label="analysisErrorRetryModelLabel"
+          :analysis-error-retry-model-id="analysisErrorRetryModelId"
           :is-saving-weight="isSavingWeight"
           :is-saving-food-log="isSavingFoodLog"
-          :food-instructions="profile.foodInstructions"
-          :is-saving-food-instructions="isSavingFoodInstructions"
+          :current-entry="currentEntry"
+          :profile="profile"
+          :correction-notice-token="correctionNoticeToken"
           @update:selected-date="selectedDate = $event"
           @update:current-weight="updateCurrentWeight"
           @update:food-log="updateCurrentFoodLog"
@@ -934,73 +851,96 @@ async function confirmDeleteDay() {
           @dismiss-model-switch="dismissSuggestedModelSwitch"
           @retry-analysis-with-model="retryAnalysisWithModel"
           @provider-change="onProviderChange"
-          @save-instructions="saveFoodInstructions"
-        />
-      </div>
-
-      <div class="grid-cell span-12">
-        <NutritionSummaryPanel
-          :locale="locale"
-          :entry="currentEntry"
-          :profile="profile"
-          :provider-id="provider"
-          :provider-options="providerOptions"
-          :is-analyzing="isAnalyzing"
-          :is-stale="Boolean(currentEntry?.analysisStale)"
-          :status-text="statusLabel((key: string) => t(key), currentEntry?.aiStatus ?? 'idle')"
-          :correction-token="correctionNoticeToken"
-          :analysis-error="formattedAnalysisError"
-          :analysis-retry-model-label="analysisErrorRetryModelLabel"
-          :analysis-retry-model-id="analysisErrorRetryModelId"
           @save-correction="saveFoodCorrectionInstructionAndRefresh"
           @save-correction-only="saveFoodCorrectionInstructionOnlyAndRefresh"
           @apply-correction="applyFoodCorrectionForCurrentEntry"
           @apply-meal-total="applyMealTotalCorrectionForCurrentEntry"
-          @retry-analysis-with-model="retryAnalysisWithModel"
         />
-      </div>
 
-      <div class="grid-cell span-12">
-        <InsightsPanel :locale="locale" :insights="nutritionInsights" />
-      </div>
-
-      <BasePanel id="graphCaloriesPanel" class="grid-cell span-6" :title="t('graphCalories')" collapsible>
-        <MetricChart
+        <ProgressView
+          v-else-if="route.name === 'progress'"
           :locale="locale"
-          :points="caloriePoints"
-          :label="t('graphCalories')"
-          :y-unit="t('unitKcal')"
-          :trendline="{ label: calorieTrendlineLabel, color: '#7a5ec8' }"
-          :reference-lines="[
-            { label: t('tdeeSummary'), value: tdee.selectedValue, color: '#9a7b24' },
-          ]"
-        />
-      </BasePanel>
-
-      <BasePanel id="graphWeightPanel" class="grid-cell span-6" :title="t('graphWeight')" collapsible>
-        <MetricChart
-          :locale="locale"
-          :points="weightPoints"
-          :label="t('graphWeight')"
-          :y-unit="t('unitKg')"
-          :trendline="{ label: weightTrendlineLabel, color: '#7a5ec8' }"
-        />
-      </BasePanel>
-
-      <div class="grid-cell span-12">
-        <HistoryPanel
-          :locale="locale"
-          :entries="entries"
-          :saving-calories="savingHistoryCalories"
-          :saving-weight="savingHistoryWeight"
+          :calorie-points="caloriePoints"
+          :weight-points="weightPoints"
+          :calorie-trendline-label="calorieTrendlineLabel"
+          :weight-trendline-label="weightTrendlineLabel"
           :tdee-reference="tdee.selectedValue"
           :target-weight-reference="tdee.targetWeight"
+          :entries="entries"
+          :saving-history-calories="savingHistoryCalories"
+          :saving-history-weight="savingHistoryWeight"
+          :history-summary-baseline-date="profile.historySummaryBaselineDate"
           @save-calories="saveHistoryCalories"
           @save-weight="saveHistoryWeight"
           @delete-day="openDeleteDayDialog"
+          @save-history-baseline="saveHistorySummaryBaseline"
+          @clear-history-baseline="clearHistorySummaryBaseline"
+        />
+
+        <SettingsView
+          v-else
+          :locale="locale"
+          :theme-preference="themePreference"
+          :profile="profile"
+          :estimated-lean-weight="estimatedLeanWeight"
+          :tdee="tdee"
+          :is-saving-locale="isSavingLocale"
+          :is-saving-tdee-equation="isSavingTdeeEquation"
+          :is-saving-food-instructions="isSavingFoodInstructions"
+          :keys="aiKeys"
+          :saving-ai-key-field="savingAiKeyField"
+          :cloud-username="cloudUsername"
+          :cloud-confirmed-username="cloudConfirmedUsername"
+          :has-saved-cloud-password="hasSavedCloudPassword"
+          :is-cloud-busy="isCloudBusy"
+          :cloud-status="cloudStatus"
+          :cloud-last-synced-at="cloudLastSyncedAt"
+          :cloud-error="cloudError"
+          :supabase-configured="supabaseConfigured"
+          :tdee-highlight-token="tdeeHighlightToken"
+          @locale-change="onLocaleChange"
+          @theme-change="saveThemePreference"
+          @update:profile="profile = $event"
+          @save-profile="saveProfileAndHighlight"
+          @select-equation="
+            saveTdeeEquation($event);
+            tdeeHighlightToken += 1;
+          "
+          @save-instructions="saveFoodInstructions"
+          @save-ai-key="saveAiKey"
+          @update:cloud-username="setCloudUsername"
+          @sync="cloudSyncNow($event)"
+          @logout="cloudLogout"
         />
       </div>
-    </section>
+
+      <nav class="shell-nav shell-nav--mobile" :aria-label="t('appSections')">
+        <button
+          v-for="item in navItems"
+          :key="item.name"
+          type="button"
+          class="shell-nav__item"
+          :data-active="route.name === item.name ? 'true' : 'false'"
+          @click="router.replace({ name: item.name })"
+        >
+          <span class="shell-nav__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" class="shell-nav__icon-svg">
+              <path
+                v-for="segment in item.iconPaths"
+                :key="segment"
+                :d="segment"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.75"
+              />
+            </svg>
+          </span>
+          <span class="shell-nav__label">{{ item.label }}</span>
+        </button>
+      </nav>
+    </div>
   </main>
 </template>
 
@@ -1016,19 +956,15 @@ async function confirmDeleteDay() {
 }
 
 .global-analyzing-bar {
-  position: static;
-  transform: none;
   inline-size: min(32rem, calc(100vw - 2rem));
   display: grid;
   justify-items: center;
   gap: 0.7rem;
   padding: 1rem 1.15rem;
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  background: var(--panel);
-  color: var(--text-primary);
-  border-radius: 0;
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
   text-align: center;
   pointer-events: auto;
 }
@@ -1036,10 +972,9 @@ async function confirmDeleteDay() {
 .global-analyzing-spinner {
   inline-size: 1.35rem;
   block-size: 1.35rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-inline-end-color: var(--accent);
   border-radius: 50%;
-  flex: 0 0 auto;
   animation: global-spin 850ms linear infinite;
 }
 
@@ -1059,275 +994,185 @@ async function confirmDeleteDay() {
 }
 
 .app-shell {
-  padding: var(--space-4);
-  max-inline-size: 1400px;
+  max-inline-size: 82rem;
   margin: 0 auto;
-  min-block-size: 100vh;
-  background:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.06) 75%, transparent 75%, transparent) 0 0 / 4px 4px,
-    var(--bg);
-}
-
-.app-shell--blocked {
+  padding: clamp(0.8rem, 1.8vw, 1.5rem);
+  padding-block-end: calc(6rem + env(safe-area-inset-bottom));
   min-block-size: 100vh;
 }
 
-.login-desktop {
-  max-inline-size: none;
-  padding: 24px;
-  background:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.06) 75%, transparent 75%, transparent) 0 0 / 4px 4px,
-    var(--bg);
-}
-
-.login-desktop__canvas {
-  min-block-size: calc(100vh - 48px);
+.app-chrome {
   display: grid;
-  place-items: center;
+  gap: 0.9rem;
 }
 
-.login-desktop__window {
-  inline-size: min(100%, 980px);
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  background: var(--panel);
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.22);
+.workspace-header {
+  display: grid;
+  gap: 0.85rem;
 }
 
-.login-desktop__titlebar {
+.shell-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 5px 7px;
-  border-bottom: 2px solid #808080;
-  background: #000080;
-  color: #fff;
-  font-size: 0.95rem;
+  gap: 0.55rem;
 }
 
-.login-desktop__titlebar-buttons {
+.shell-nav__item {
   display: inline-flex;
-  gap: 4px;
-  font-size: 0.78rem;
-}
-
-.login-desktop__titlebar-buttons span {
-  min-inline-size: 18px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid #000;
-  border-color: #dfdfdf #3f3f3f #3f3f3f #dfdfdf;
-  background: var(--surface-1);
-  color: var(--text-primary);
-  line-height: 1;
-}
-
-.login-desktop__body {
-  padding: 14px;
-}
-
-.login-desktop :deep(.header-shell--auth) {
-  max-inline-size: none;
-  margin: 0 0 12px;
-  padding: 12px;
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  background: var(--panel);
-  box-shadow: none;
-}
-
-.login-desktop :deep(.header-shell--auth .title) {
-  font-size: 1.25rem;
-}
-
-.login-desktop :deep(.header-shell--auth .beta-pill),
-.login-desktop :deep(.header-shell--auth .field-control),
-.login-desktop :deep(.header-shell--auth select),
-.login-desktop :deep(.cloud-panel--auth),
-.login-desktop :deep(.cloud-panel--auth .status-pill),
-.login-desktop :deep(.cloud-panel--auth .optional-pill),
-.login-desktop :deep(.cloud-panel--auth button) {
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.login-desktop :deep(.cloud-panel--auth) {
-  max-inline-size: none;
-  margin: 0;
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  background: var(--panel);
-}
-
-.login-desktop :deep(.cloud-panel--auth .panel-body) {
-  padding: 12px;
-}
-
-.login-desktop :deep(.cloud-panel--auth .panel-header) {
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-.login-desktop :deep(.cloud-panel--auth .auth-block) {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-
-.login-desktop :deep(.cloud-panel--auth input),
-.login-desktop :deep(.cloud-panel--auth select) {
-  border: 1px solid #000;
-  border-color: #808080 #fff #fff #808080;
-  background: var(--input-bg);
-  color: var(--text-primary);
-}
-
-.login-desktop :deep(.cloud-panel--auth .cloud-actions) {
-  justify-content: flex-start;
-  padding-top: 2px;
-}
-
-.login-desktop :deep(.cloud-panel--auth button) {
-  min-inline-size: 110px;
-  border: 1px solid #000;
-  border-color: #fff #3f3f3f #3f3f3f #fff;
-  background: var(--surface-1);
-  color: var(--text-primary);
-}
-
-.login-desktop :deep(.cloud-panel--auth button:disabled) {
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.74rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
-}
-
-.login-desktop :deep(.cloud-panel--auth .status-pill) {
-  border: 1px solid #000;
-  border-color: #808080 #fff #fff #808080;
-  background: var(--surface-2);
-  color: var(--text-primary);
-}
-
-@media (max-width: 720px) {
-  .login-desktop {
-    padding: 10px;
-  }
-
-  .login-desktop__canvas {
-    min-block-size: calc(100vh - 20px);
-  }
-
-  .login-desktop__body {
-    padding: 10px;
-  }
-
-  .login-desktop :deep(.cloud-panel--auth .auth-block) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.constant-data-panel {
-  margin-block-end: var(--space-3);
-}
-
-.constant-data-panel.is-locked-open .constant-data-summary {
-  cursor: default;
-  pointer-events: none;
-}
-
-.constant-data-panel.is-locked-open .constant-data-summary::before {
-  display: none;
-}
-
-.constant-data-summary {
-  cursor: pointer;
-  list-style: none;
-  display: grid;
-  gap: 6px;
-  position: relative;
-  padding-inline-end: 1.5rem;
-  padding-block-end: 12px;
-  margin-block-end: 12px;
-  border-block-end: 2px solid #808080;
-  box-shadow: inset 0 -1px 0 #fff;
-}
-
-.constant-data-summary::-webkit-details-marker {
-  display: none;
-}
-
-.constant-data-summary::before {
-  content: "▸";
-  position: absolute;
-  inset-inline-end: 0;
-  inset-block-start: 0.15rem;
-  color: var(--text-muted);
-  transition: transform 160ms ease;
-}
-
-.constant-data-panel[open] .constant-data-summary::before {
-  transform: rotate(90deg);
-}
-
-.summary-title {
-  font-size: 1rem;
   font-weight: 700;
-}
-
-.summary-required {
-  margin-inline-start: 0.45rem;
-  display: inline-block;
-  padding: 0.12rem 0.42rem;
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  background: var(--panel);
-  color: #7a0000;
-  font-size: 0.88rem;
-  font-weight: 800;
   letter-spacing: 0.01em;
-  box-shadow: none;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+  box-shadow 180ms ease;
 }
 
-.summary-helper {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  line-height: 1.35;
+.shell-nav__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  color: currentColor;
+  flex: 0 0 auto;
 }
 
-.content-grid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--space-3);
-  align-items: start;
+.shell-nav__icon-svg {
+  inline-size: 100%;
+  block-size: 100%;
 }
 
-.grid-cell {
+.shell-nav__item:hover,
+.shell-nav__item:focus-visible {
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 90%, white 10%);
+  color: var(--text-primary);
+}
+
+.shell-nav__label {
+  color: inherit;
+  font-size: 0.92rem;
+}
+
+.shell-nav__item[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 14%, var(--surface-1)),
+    color-mix(in srgb, var(--accent) 6%, var(--surface-1))
+  );
+  color: var(--accent-strong);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent),
+    0 8px 18px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.app-main {
   min-inline-size: 0;
-  display: block;
 }
 
-.span-12 {
-  grid-column: span 12;
+.page-hero {
+  display: grid;
+  gap: 0.72rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 76%, transparent);
+  border-radius: calc(var(--radius-lg) + 0.04rem);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 92%, transparent), color-mix(in srgb, var(--surface-2) 94%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 18px 40px rgba(8, 24, 24, 0.08);
 }
 
-.span-6 {
-  grid-column: span 6;
+.page-hero__copy {
+  min-inline-size: 0;
+}
+
+.page-hero__headline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.85rem;
+}
+
+.page-hero__title {
+  margin: 0;
+  font-size: clamp(1.22rem, 1.9vw, 1.62rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.page-hero__helper {
+  margin: 0.42rem 0 0;
+  color: var(--text-muted);
+  max-inline-size: 40rem;
+  line-height: 1.55;
+}
+
+.page-hero__badge {
+  display: grid;
+  place-items: center;
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  border-radius: 0.82rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 90%, white 10%), color-mix(in srgb, var(--accent-strong) 86%, black 14%));
+  color: white;
+  box-shadow: 0 12px 22px color-mix(in srgb, var(--accent) 14%, transparent);
+  flex: 0 0 auto;
+}
+
+.page-hero__badge-icon {
+  inline-size: 1.18rem;
+  block-size: 1.18rem;
+}
+
+.shell-nav--desktop {
+  position: sticky;
+  inset-block-start: 0.8rem;
+  z-index: 30;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: calc(var(--radius) + 0.04rem);
+  background: color-mix(in srgb, var(--surface-1) 94%, transparent);
+  padding: 0.38rem;
+  box-shadow: 0 14px 30px rgba(8, 24, 24, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.shell-nav--desktop .shell-nav__icon {
+  display: none;
+}
+
+.shell-nav--mobile {
+  display: none;
 }
 
 .notice-banner {
-  margin: 0 0 var(--space-3);
-  padding: 0.55rem 0.75rem;
-  background: var(--panel);
-  border: 1px solid #000;
-  border-color: var(--border-color);
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
   border-radius: var(--radius);
-  box-shadow: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 0.7rem;
 }
 
 .notice-dismiss {
+  min-inline-size: 2rem;
   padding: 0.1rem 0.45rem;
 }
 
@@ -1347,40 +1192,22 @@ async function confirmDeleteDay() {
   align-items: center;
   gap: 0.7rem;
   max-inline-size: min(32rem, calc(100vw - 2rem));
-  padding: 0.6rem 0.8rem;
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  border-radius: 0;
-  background: var(--panel);
-  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.22);
-  color: var(--text-primary);
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-1) 94%, transparent);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
   pointer-events: auto;
-}
-
-.status-toast--error {
-  background: var(--panel);
-  color: #7a0000;
-  border-inline-start-color: #7a0000;
 }
 
 .status-toast__glyph {
   inline-size: 1rem;
   block-size: 1rem;
   border-radius: 999px;
-  border: 1px solid currentColor;
+  border: 2px solid currentColor;
   border-inline-end-color: transparent;
   flex: 0 0 auto;
   opacity: 0.92;
-}
-
-.status-toast--error .status-toast__glyph {
-  border-inline-end-color: currentColor;
-}
-
-.status-toast--error .status-toast__glyph {
-  background:
-    linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%),
-    linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%);
 }
 
 .status-toast__glyph.spinning {
@@ -1401,10 +1228,6 @@ async function confirmDeleteDay() {
   white-space: nowrap;
 }
 
-.status-toast__action:hover {
-  text-decoration-thickness: 2px;
-}
-
 .status-toast-enter-active,
 .status-toast-leave-active {
   transition: opacity 180ms ease, transform 180ms ease;
@@ -1417,32 +1240,21 @@ async function confirmDeleteDay() {
 }
 
 @keyframes status-toast-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.constant-data-grid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--space-3);
-  align-items: start;
-  padding: 2px 12px 12px 12px;
+  to { transform: rotate(360deg); }
 }
 
 .confirm-delete-dialog {
   inline-size: min(30rem, calc(100vw - 2rem));
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  border-radius: 0;
-  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
   color: var(--text-primary);
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.3);
   padding: 0;
 }
 
 .confirm-delete-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 .confirm-delete-dialog__form {
@@ -1459,7 +1271,7 @@ async function confirmDeleteDay() {
 
 .confirm-delete-dialog__copy {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   line-height: 1.55;
 }
 
@@ -1475,155 +1287,99 @@ async function confirmDeleteDay() {
   min-inline-size: 8.5rem;
 }
 
-.confirm-delete-dialog__confirm {
-  border: 1px solid #000;
-  border-color: var(--border-color);
-  border-radius: 0;
-  background: var(--panel);
-  color: var(--text-primary);
-  font: inherit;
-  font-weight: 700;
-  padding: 0.55rem 0.9rem;
-  cursor: pointer;
-}
-
-.confirm-delete-dialog__confirm:hover {
-  filter: none;
-}
-
-.custom-tdee-success-dialog__form {
-  gap: 1rem;
-}
-
-.custom-tdee-success-dialog__stats {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.custom-tdee-success-dialog__stat {
-  margin: 0;
-  color: var(--text-primary);
-  line-height: 1.45;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.custom-tdee-success-dialog__stat-label {
-  flex: 0 0 auto;
-}
-
-.custom-tdee-success-dialog__stat-value {
-  min-inline-size: 0;
-  unicode-bidi: isolate;
-}
-
-.custom-tdee-success-dialog__reasons {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.custom-tdee-success-dialog__reasons-list {
-  margin: 0;
-  padding-inline-start: 1.2rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.custom-tdee-success-dialog__reasons-list li {
-  overflow-wrap: anywhere;
-}
-
-.custom-tdee-success-dialog .confirm-delete-dialog__actions {
-  justify-content: center;
-}
-
-.constant-data-grid > :deep(.panel) {
-  grid-column: span 6;
-}
-
-.constant-data-full {
-  grid-column: span 12;
-  display: grid;
-}
-
-.constant-data-full > :deep(.panel) {
-}
-
-@media (min-width: 961px) {
-  .constant-data-grid > :deep(textarea) {
-    min-block-size: 12rem;
-    block-size: 12rem;
-  }
-}
-
 @media (max-width: 960px) {
   .status-toast-stack {
     inset-inline: 0.75rem;
-    /* Position toast above the pane scrubber (~5rem tall) plus safe area. */
-    inset-block-end: calc(5.5rem + env(safe-area-inset-bottom));
+    inset-block-end: calc(5.75rem + env(safe-area-inset-bottom));
     justify-items: stretch;
   }
 
   .status-toast {
     max-inline-size: none;
-    border-radius: 1rem;
   }
 
-  .app-shell {
-    padding: 10px;
-    /* Respect device safe areas (notch, home indicator, rounded corners). */
-    padding-block-start: max(10px, env(safe-area-inset-top));
-    padding-block-end: calc(5rem + env(safe-area-inset-bottom));
-    padding-inline-start: max(10px, env(safe-area-inset-left));
-    padding-inline-end: max(10px, env(safe-area-inset-right));
+  .page-hero {
+    gap: 0.8rem;
+    padding: 0.9rem 1rem;
   }
 
-  :is(
-      #dailyDeskPanel,
-      #nutritionSummaryPanel,
-      #graphCaloriesPanel,
-      #historyPanel
-    ) {
-    scroll-margin-block-end: calc(5.5rem + env(safe-area-inset-bottom));
+  .shell-nav--desktop {
+    display: none;
   }
 
-  .content-grid,
-  .constant-data-grid {
-    grid-template-columns: 1fr;
+  .shell-nav--mobile {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 35;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    padding:
+      0.35rem
+      max(0.45rem, env(safe-area-inset-left))
+      calc(0.45rem + env(safe-area-inset-bottom))
+      max(0.45rem, env(safe-area-inset-right));
+    border-top: 1px solid color-mix(in srgb, var(--border-strong) 76%, transparent);
+    background: color-mix(in srgb, var(--surface-1) 94%, transparent);
+    box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(24px);
   }
 
-  .span-6,
-  .span-12,
-  .constant-data-grid > :deep(.panel),
-  .constant-data-full {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 960px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .content-grid > :deep(.panel),
-  .content-grid > .panel,
-  .grid-cell {
-    grid-column: auto;
+  .shell-nav--mobile .shell-nav__item {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    position: relative;
+    gap: 0.24rem;
+    min-inline-size: 0;
+    min-block-size: 3.9rem;
+    padding: 0.62rem 0.25rem 0.48rem;
+    border: none;
+    border-radius: 0.95rem;
+    background: transparent;
+    box-shadow: none;
   }
 
-  .constant-data-grid {
-    grid-template-columns: 1fr;
+  .page-hero__badge {
+    inline-size: 2.45rem;
+    block-size: 2.45rem;
   }
 
-  .constant-data-grid > :deep(.panel) {
-    grid-column: auto;
+  .shell-nav--mobile .shell-nav__item::before {
+    content: "";
+    position: absolute;
+    inset-inline: 20%;
+    inset-block-start: 0.08rem;
+    block-size: 0.18rem;
+    border-radius: 999px;
+    background: transparent;
+    transition: background-color 180ms ease, transform 180ms ease;
   }
 
-  .constant-data-full {
-    grid-column: auto;
+  .shell-nav--mobile .shell-nav__icon {
+    inline-size: 1.22rem;
+    block-size: 1.22rem;
+  }
+
+  .shell-nav--mobile .shell-nav__item[data-active="true"] {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    color: var(--accent-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .shell-nav--mobile .shell-nav__item[data-active="true"] .shell-nav__icon {
+    transform: translateY(-0.5px);
+  }
+
+  .shell-nav--mobile .shell-nav__item[data-active="true"]::before {
+    background: currentColor;
+  }
+
+  .shell-nav--mobile .shell-nav__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.015em;
   }
 }
 </style>

@@ -1,5 +1,5 @@
 import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entries";
-import { compareIsoDates, diffIsoDays, localIsoDate } from "../domain/dates";
+import { diffIsoDays } from "../domain/dates";
 import type {
   ActivityFactor,
   DailyEntry,
@@ -86,18 +86,12 @@ function calculateObservedTdeeRange(entries: DailyEntry[]): {
   daySpanDays: number | null;
   reason: "insufficient_entries" | "insufficient_span" | "out_of_range" | null;
 } {
-  const today = localIsoDate();
   const valid = entries
     .map((entry) => ({
       ...entry,
       effectiveWeight: deducedWeightFromEntries(entries, entry.date),
     }))
-    .filter((entry) => {
-      if (compareIsoDates(entry.date, today) >= 0) {
-        return false;
-      }
-      return entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null;
-    })
+    .filter((entry) => entry.effectiveWeight !== null && resolvedDailyCalories(entry) !== null)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (valid.length < MIN_OBSERVED_TDEE_ENTRIES) {
@@ -173,10 +167,11 @@ function latestLoggedWeight(entries: DailyEntry[]): number | null {
 }
 
 function resolveFormulaWeight(entries: DailyEntry[], profile: Profile) {
-  if (profile.estimatedWeight != null && profile.estimatedWeight > 0) {
+  const latestWeight = latestLoggedWeight(entries);
+  if (latestWeight != null && latestWeight > 0) {
     return {
-      value: profile.estimatedWeight,
-      source: "estimated" as const,
+      value: latestWeight,
+      source: "logged" as const,
     };
   }
 
@@ -188,11 +183,10 @@ function resolveFormulaWeight(entries: DailyEntry[], profile: Profile) {
     };
   }
 
-  const latestWeight = latestLoggedWeight(entries);
-  if (latestWeight != null && latestWeight > 0) {
+  if (profile.estimatedWeight != null && profile.estimatedWeight > 0) {
     return {
-      value: latestWeight,
-      source: "logged" as const,
+      value: profile.estimatedWeight,
+      source: "estimated" as const,
     };
   }
 

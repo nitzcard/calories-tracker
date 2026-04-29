@@ -28,12 +28,12 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   ], { signedInUsername: null });
 
   await page.reload({ waitUntil: "networkidle" });
-  const cloudPanel = page.locator("main.app-shell--blocked");
-  await expect(cloudPanel).toBeVisible();
+  const cloudPanel = page.locator(".login-card");
+  await expect(cloudPanel.locator('input[autocomplete="username"]')).toBeVisible();
   await cloudPanel.locator('input[autocomplete="username"]').fill("persist-user");
   await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
   await cloudPanel.getByRole("button", { name: "Login" }).click();
-  await expect(page.locator("main.app-shell--blocked")).toHaveCount(0);
+  await expect(page.locator(".login-card")).toHaveCount(0);
 
   await forceOpenPanel(page, "#appSetupPanel");
   await forceOpenPanel(page, "#constantDataPanel");

@@ -11,7 +11,7 @@ test("@history history calories survive date switch and refresh", async ({ page 
     { date: yesterday, foodLogText: "chicken and rice", weight: 80.4, manualCalories: 1900 },
   ]);
 
-  await page.reload({ waitUntil: "networkidle" });
+  await page.goto("/progress", { waitUntil: "networkidle" });
   await page.locator("#historyPanel").scrollIntoViewIfNeeded();
 
   const todayCaloriesInput = page
@@ -21,6 +21,7 @@ test("@history history calories survive date switch and refresh", async ({ page 
   await todayCaloriesInput.blur();
   await page.waitForTimeout(900);
 
+  await page.goto("/today", { waitUntil: "networkidle" });
   const selectedDateInput = page.locator("#dailyDeskPanel input[type='date']").first();
   await selectedDateInput.fill(yesterday);
   await selectedDateInput.blur();
@@ -30,7 +31,7 @@ test("@history history calories survive date switch and refresh", async ({ page 
   await selectedDateInput.blur();
   await page.waitForTimeout(1200);
 
-  await page.reload({ waitUntil: "networkidle" });
+  await page.goto("/progress", { waitUntil: "networkidle" });
   await page.locator("#historyPanel").scrollIntoViewIfNeeded();
 
   await expect(

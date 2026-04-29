@@ -34,7 +34,6 @@ import {
   findEntryByDate,
   resolvedDailyCalories,
 } from "../domain/entries";
-import { buildNutritionInsights } from "../insights/nutrition-insights";
 import { buildTdeeSnapshot } from "../tdee/calculations";
 import type { AiProviderOption, AppLocale, DailyEntry, Profile, TdeeEquation } from "../types";
 import {
@@ -312,6 +311,8 @@ export function useDashboard() {
   let foodDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let weightDraftSaveTimer: ReturnType<typeof setTimeout> | null = null;
   const profileSaveQueue = createSerialTaskQueue();
+  const persistedSaveQueue = createSerialTaskQueue();
+  const pendingProfileSnapshot = ref<Profile | null>(null);
 
   function hasEffectiveGeminiKey() {
     return Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim());
@@ -414,36 +415,6 @@ export function useDashboard() {
         y: resolvedDailyCalories(entry),
       })),
   );
-  const nutritionInsights = computed(() =>
-    profile.value
-      ? buildNutritionInsights(
-          displayEntries.value,
-          profile.value,
-          selectedDate.value,
-          tdee.value.selectedValue,
-          locale.value,
-        )
-      : {
-          micronutrients: {
-            anchorDate: selectedDate.value,
-            analyzedDays7d: 0,
-            analyzedDays30d: 0,
-            likelyLowCount7d: 0,
-            likelyLowCount30d: 0,
-            items: [],
-          },
-          macros: [],
-          averageProteinPerKg7d: null,
-          averageProteinPerKg30d: null,
-          weightAvgChangeKgPerDay7d: null,
-          weightAvgChangeKgPerDay30d: null,
-          averageCaloriesVsTdee7d: null,
-          calorieConsistency7d: null,
-          averageMealCalories7d: null,
-          averageMealCalories30d: null,
-          topFoods30d: [],
-        },
-  );
   const estimatedLeanWeight = computed(() => {
     const weight = profile.value?.estimatedWeight;
     const bodyFat = profile.value?.bodyFat;
@@ -465,7 +436,10 @@ export function useDashboard() {
   async function refreshState(opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) {
     entries.value = await listEntries();
     const savedProfile = await getProfile();
-    profile.value = savedProfile ?? (await ensureDefaultProfile(locale.value));
+    const loadedProfile = savedProfile ?? (await ensureDefaultProfile(locale.value));
+    profile.value = pendingProfileSnapshot.value
+      ? { ...loadedProfile, ...pendingProfileSnapshot.value }
+      : loadedProfile;
     loadSelectedEntry({
       skipFoodLog: opts?.skipReloadFoodLog,
       preserveDirtyFields: opts?.preserveDirtyFields ?? true,
@@ -490,18 +464,20 @@ export function useDashboard() {
     onChanged?: () => Promise<void> | void,
   ) {
     let changed = false;
-    await autoSave.runAutoSave(async () => {
-      const result = await persist();
-      changed = result.changed;
-      if (!changed) {
-        return;
-      }
-      await onChanged?.();
-    }, fieldKey);
+    await persistedSaveQueue.enqueue(async () => {
+      await autoSave.runAutoSave(async () => {
+        const result = await persist();
+        changed = result.changed;
+        if (!changed) {
+          return;
+        }
+        await onChanged?.();
+      }, fieldKey);
 
-    if (changed) {
-      await notifyPersistedChange(scopes);
-    }
+      if (changed) {
+        await notifyPersistedChange(scopes);
+      }
+    });
 
     return changed;
   }
@@ -512,14 +488,43 @@ export function useDashboard() {
     nextProfile: Profile | null | undefined,
   ) {
     if (!nextProfile) return false;
-    profile.value = nextProfile;
+    const nextProfileToSave: Profile = { ...nextProfile };
+    profile.value = nextProfileToSave;
+    pendingProfileSnapshot.value = nextProfileToSave;
 
     let changed = false;
     await profileSaveQueue.enqueue(async () => {
-      changed = await runPersistedAutoSave(fieldKey, scopes, () => saveProfile(profile.value!));
+      changed = await runPersistedAutoSave(fieldKey, scopes, () => saveProfile(nextProfileToSave));
+      if (pendingProfileSnapshot.value === nextProfileToSave) {
+        pendingProfileSnapshot.value = null;
+      }
     });
 
     return changed;
+  }
+
+  function syncAppPreferencesFromProfile(nextProfile: Profile | null) {
+    if (!nextProfile) {
+      return;
+    }
+
+    locale.value = nextProfile.locale;
+    localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
+    provider.value = normalizeProvider(nextProfile.aiModel);
+    localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
+    ensureProviderOption(provider.value, locale.value);
+    refreshVisibleProviderOptions(locale.value);
+    syncChrome();
+  }
+
+  async function flushCloudBoundInputs() {
+    if (profile.value) {
+      await runQueuedProfileSave("constants.profile", "constants.profile", profile.value);
+    }
+
+    await persistedSaveQueue.enqueue(async () => {
+      // Drain any in-flight persisted writes before exporting a cloud snapshot.
+    });
   }
 
   async function persistDraftsForDate(date: string) {
@@ -1059,6 +1064,7 @@ export function useDashboard() {
       if (isCurrentWeightDirty.value) {
         await saveWeightDraft();
       }
+      await flushCloudBoundInputs();
 
       const localBefore = await exportAppData();
       const remote = await fetchUserBlob(username);
@@ -1120,17 +1126,7 @@ export function useDashboard() {
       if (!canonicalPayloadEquals(localBefore, merged)) {
         await importAppData(merged);
         await refreshState();
-
-        // Keep local storage aligned so reloads preserve cloud state after a real merge change.
-        if (profile.value) {
-          locale.value = profile.value.locale;
-          localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
-          provider.value = normalizeProvider(profile.value.aiModel);
-          localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
-          ensureProviderOption(provider.value, locale.value);
-          refreshVisibleProviderOptions(locale.value);
-          syncChrome();
-        }
+        syncAppPreferencesFromProfile(profile.value);
       }
 
       if (mergedFingerprint !== remoteFingerprint) {
@@ -1213,6 +1209,7 @@ export function useDashboard() {
       if (isCurrentWeightDirty.value) {
         await saveWeightDraft();
       }
+      await flushCloudBoundInputs();
 
       const { fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
       cloudPushPending = false;
@@ -1244,6 +1241,12 @@ export function useDashboard() {
       }
       const merged = mergeExportedAppData(local, remotePayload);
       const mergedFingerprint = canonicalCloudFingerprint(merged);
+
+      if (!canonicalPayloadEquals(local, merged)) {
+        await importAppData(merged);
+        await refreshState();
+        syncAppPreferencesFromProfile(profile.value);
+      }
 
       if (mergedFingerprint !== remoteFingerprint) {
         const pushed = await upsertUserBlob(normalized, await encodeCloudBlob(merged, secret));
@@ -1439,14 +1442,14 @@ export function useDashboard() {
   });
 
   function suggestLatestStableFlash(options: AiProviderOption[]) {
-    // Prefer the newest API-reported `latest` Flash, then Flash-Lite as fallback.
+    // Prefer the newest API-reported `latest` Flash Lite, then regular Flash as fallback.
     const candidates = options
       .map((o) => o.id)
       .filter((id) => id.includes("latest"));
-    const flash = candidates.find((id) => id.includes("-flash") && !id.includes("lite") && !id.includes("preview"));
-    if (flash) return flash;
     const flashLite = candidates.find((id) => id.includes("-flash-lite") && !id.includes("preview"));
     if (flashLite) return flashLite;
+    const flash = candidates.find((id) => id.includes("-flash") && !id.includes("lite") && !id.includes("preview"));
+    if (flash) return flash;
     if (!candidates.length) return null;
     return candidates[0] ?? null;
   }
@@ -1497,7 +1500,6 @@ export function useDashboard() {
     analyzeIssue: analysis.analyzeIssue,
     currentEntry,
     tdee,
-    nutritionInsights,
     estimatedLeanWeight,
     weightPoints,
     caloriePoints,

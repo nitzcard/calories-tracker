@@ -2,6 +2,8 @@
 import uPlot from "uplot";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+type ChartScope = "7d" | "30d" | "all";
+
 const props = defineProps<{
   locale?: "en" | "he";
   points: Array<{ x: number; y: number | null }>;
@@ -27,21 +29,10 @@ const chartRef = ref<HTMLDivElement | null>(null);
 const hoverIndex = ref<number | null>(null);
 const hoverPosition = ref({ x: 0, y: 0 });
 const hoverPointPosition = ref({ x: 0, y: 0 });
-const isPanning = ref(false);
-const isZooming = ref(false);
-const activePointerId = ref<number | null>(null);
-const isTouchInteraction = ref(false);
-const plottedXValues = ref<number[]>([]);
-const plottedYValues = ref<Array<number | null>>([]);
-const panStartX = ref(0);
-const panStartScale = ref<{ min: number; max: number } | null>(null);
-const zoomStartScale = ref<{ min: number; max: number } | null>(null);
-const zoomStartCenter = ref<number | null>(null);
-const zoomStartDistance = ref<number | null>(null);
+const selectedScope = ref<ChartScope>("all");
 const currentXScale = ref<{ min: number; max: number } | null>(null);
 let chart: uPlot | undefined;
 let resizeObserver: ResizeObserver | undefined;
-let touchHideTimer: number | undefined;
 
 const dateFormatter = computed(
   () =>
@@ -89,6 +80,24 @@ const weekBoundaryLegendLabel = computed(() => (props.locale === "he" ? "גבו�
 const hasWeekBoundaries = computed(() =>
   buildWeekBoundarySplits(uniqueSorted(normalizedPoints.value.map((point) => point.x))).length > 0,
 );
+const scopeOptions = computed(() =>
+  props.locale === "he"
+    ? [
+        { value: "7d" as const, label: "7 ימים" },
+        { value: "30d" as const, label: "30 ימים" },
+        { value: "all" as const, label: "הכל" },
+      ]
+    : [
+        { value: "7d" as const, label: "7 days" },
+        { value: "30d" as const, label: "30 days" },
+        { value: "all" as const, label: "All" },
+      ],
+);
+const scopeLabel = computed(() => (props.locale === "he" ? "טווח גרף" : "Chart scope"));
+const chartScopeName = computed(() => {
+  const normalized = props.label.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+  return `chart-scope-${normalized || "series"}`;
+});
 const primarySeriesColor = "#0a88a3";
 const chartAxisFont = "600 13px system-ui, sans-serif";
 
@@ -108,8 +117,6 @@ function renderChart() {
       .filter((point): point is { x: number; y: number } => typeof point.y === "number")
       .map((point) => point.x),
   );
-  plottedXValues.value = xValues;
-  plottedYValues.value = yValues;
   const trendValues = trendlineValues.value;
   const xSplits = uniqueSorted(xValues);
   const weekBoundarySplits = buildWeekBoundarySplits(xSplits);
@@ -122,11 +129,14 @@ function renderChart() {
   const chartWidth = chartRef.value?.clientWidth || 320;
   const domainMin = xSplits[0] ?? 0;
   const domainMax = xSplits[xSplits.length - 1] ?? domainMin;
-  const initialWindow = buildInitialXWindow(xSplits, chartWidth);
   const minimumXWindowSpan = getMinimumXWindowSpan(renderableXValues);
-  currentXScale.value = currentXScale.value
-    ? normalizeXWindow(currentXScale.value, renderableXValues, domainMin, domainMax, minimumXWindowSpan)
-    : normalizeXWindow(initialWindow, renderableXValues, domainMin, domainMax, minimumXWindowSpan);
+  currentXScale.value = normalizeXWindow(
+    buildScopedXWindow(xSplits, selectedScope.value),
+    renderableXValues,
+    domainMin,
+    domainMax,
+    minimumXWindowSpan,
+  );
 
   chart?.destroy();
   chart = new uPlot(
@@ -241,7 +251,7 @@ function renderChart() {
             const cursorX = cursorLeft + u.bbox.left;
             const cursorY = cursorTop + u.bbox.top;
             const distance = Math.hypot(pointX - cursorX, pointY - cursorY);
-            const distanceThreshold = isTouchInteraction.value ? 28 : 18;
+            const distanceThreshold = 18;
 
             if (distance > distanceThreshold) {
               hoverIndex.value = null;
@@ -304,57 +314,6 @@ function formatPointValue(value: number | null | undefined) {
   }
 
   return formatYAxisValue(value);
-}
-
-function updateHoverFromTouch(event: PointerEvent) {
-  if (!chartRef.value || !chart || !plottedXValues.value.length) {
-    hoverIndex.value = null;
-    return;
-  }
-
-  const rect = chartRef.value.getBoundingClientRect();
-  const cursorX = event.clientX - rect.left;
-  const cursorY = event.clientY - rect.top;
-  let bestIndex: number | null = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (let idx = 0; idx < plottedXValues.value.length; idx += 1) {
-    const yValue = plottedYValues.value[idx];
-    if (yValue === null || yValue === undefined) {
-      continue;
-    }
-
-    const pointX = chart.valToPos(plottedXValues.value[idx], "x", true);
-    const pointY = chart.valToPos(yValue, "y", true);
-    const distance = Math.hypot(pointX - cursorX, pointY - cursorY);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = idx;
-    }
-  }
-
-  if (bestIndex === null || bestDistance > 28) {
-    hoverIndex.value = null;
-    return;
-  }
-
-  const yValue = plottedYValues.value[bestIndex];
-  if (yValue === null || yValue === undefined) {
-    hoverIndex.value = null;
-    return;
-  }
-
-  const pointX = chart.valToPos(plottedXValues.value[bestIndex], "x", true);
-  const pointY = chart.valToPos(yValue, "y", true);
-  hoverIndex.value = bestIndex;
-  hoverPointPosition.value = {
-    x: Math.min(Math.max(pointX, chart.bbox.left + 22), chart.bbox.left + chart.bbox.width - 22),
-    y: Math.max(pointY - 26, 8),
-  };
-  hoverPosition.value = {
-    x: Math.min(Math.max(pointX + 10, 8), chart.bbox.left + chart.bbox.width - 150),
-    y: Math.max(pointY - 54, 8),
-  };
 }
 
 function uniqueSorted(values: number[]) {
@@ -482,265 +441,6 @@ function onVisibilityChange() {
   }
 }
 
-function onPanPointerDown(event: PointerEvent) {
-  if (!chartRef.value || !chart || event.button !== 0) {
-    return;
-  }
-
-  if (event.pointerType === "touch") {
-    if (touchHideTimer) {
-      window.clearTimeout(touchHideTimer);
-      touchHideTimer = undefined;
-    }
-    isTouchInteraction.value = true;
-    trackTouchPointer(event);
-    if (activeTouchPointers.size >= 2) {
-      startTouchZoom();
-    } else {
-      updateHoverFromTouch(event);
-    }
-    return;
-  }
-
-  isTouchInteraction.value = false;
-  const domain = getXDomain();
-  const min = chart.scales.x.min;
-  const max = chart.scales.x.max;
-  if (min == null || max == null) {
-    return;
-  }
-
-  activePointerId.value = event.pointerId;
-  panStartX.value = event.clientX;
-  panStartScale.value = { min, max };
-  isPanning.value = true;
-  chartRef.value.setPointerCapture(event.pointerId);
-  chartRef.value.style.cursor = "grabbing";
-  currentXScale.value = normalizeXWindow(
-    panStartScale.value,
-    getRenderableXValues(),
-    domain.min,
-    domain.max,
-    getMinimumXWindowSpan(),
-  );
-}
-
-function onPanPointerMove(event: PointerEvent) {
-  if (event.pointerType === "touch") {
-    trackTouchPointer(event);
-    if (zoomStartScale.value && activeTouchPointers.size >= 2) {
-      updateTouchZoom();
-    } else {
-      updateHoverFromTouch(event);
-    }
-    return;
-  }
-
-  if (!chartRef.value || !chart || !isPanning.value || activePointerId.value !== event.pointerId || !panStartScale.value) {
-    return;
-  }
-
-  const domain = getXDomain();
-  const visibleSpan = panStartScale.value.max - panStartScale.value.min;
-  if (visibleSpan <= 0 || chart.bbox.width <= 0) {
-    return;
-  }
-
-  const deltaX = event.clientX - panStartX.value;
-  const secondsPerPx = visibleSpan / chart.bbox.width;
-  const shift = deltaX * secondsPerPx;
-  const nextRange = normalizeXWindow(
-    {
-      min: panStartScale.value.min - shift,
-      max: panStartScale.value.max - shift,
-    },
-    getRenderableXValues(),
-    domain.min,
-    domain.max,
-    getMinimumXWindowSpan(),
-  );
-
-  currentXScale.value = nextRange;
-  chart.setScale("x", nextRange);
-}
-
-function onPanPointerUp(event: PointerEvent) {
-  if (event.pointerType === "touch") {
-    releaseTouchPointer(event);
-    isTouchInteraction.value = false;
-    if (activeTouchPointers.size < 2) {
-      zoomStartScale.value = null;
-      zoomStartCenter.value = null;
-      zoomStartDistance.value = null;
-      isZooming.value = false;
-    }
-    if (touchHideTimer) {
-      window.clearTimeout(touchHideTimer);
-    }
-
-    touchHideTimer = window.setTimeout(() => {
-      hoverIndex.value = null;
-      touchHideTimer = undefined;
-    }, 1200);
-    return;
-  }
-
-  if (!chartRef.value || activePointerId.value !== event.pointerId) {
-    return;
-  }
-
-  if (chartRef.value.hasPointerCapture(event.pointerId)) {
-    chartRef.value.releasePointerCapture(event.pointerId);
-  }
-
-  activePointerId.value = null;
-  panStartScale.value = null;
-  isPanning.value = false;
-  chartRef.value.style.cursor = "grab";
-}
-
-function onWheel(event: WheelEvent) {
-  if (!chartRef.value || !chart || props.points.length < 2) {
-    return;
-  }
-
-  event.preventDefault();
-  const plotX = event.clientX - chartRef.value.getBoundingClientRect().left - chart.bbox.left;
-  const center = chart.posToVal(Math.min(Math.max(plotX, 0), chart.bbox.width), "x");
-  const horizontalDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : 0;
-
-  if (horizontalDelta !== 0) {
-    panXWindow(horizontalDelta);
-    return;
-  }
-
-  const delta = Math.max(-120, Math.min(120, event.deltaY));
-  const factor = delta > 0 ? 1.15 : 0.87;
-  zoomXWindow(factor, center);
-}
-
-function panXWindow(deltaPx: number) {
-  if (!chartRef.value || !chart || props.points.length < 2) {
-    return;
-  }
-
-  const current = currentXScale.value ?? getXDomain();
-  const visibleSpan = Math.max(1, current.max - current.min);
-  if (chart.bbox.width <= 0) {
-    return;
-  }
-
-  const secondsPerPx = visibleSpan / chart.bbox.width;
-  const shift = deltaPx * secondsPerPx;
-  applyXWindow({
-    min: current.min - shift,
-    max: current.max - shift,
-  });
-}
-
-function zoomXWindow(factor: number, centerValue?: number) {
-  if (!chartRef.value || !chart || props.points.length < 2) {
-    return;
-  }
-
-  const domain = getXDomain();
-  const current = currentXScale.value ?? buildInitialXWindow(normalizedPoints.value.map((point) => point.x), chartRef.value.clientWidth || 320);
-  const center = centerValue ?? (current.min + current.max) / 2;
-  const currentSpan = Math.max(1, current.max - current.min);
-  const nextSpan = Math.max(getMinimumXWindowSpan(), currentSpan * factor);
-  const nextRange = clampXWindow(
-    {
-      min: center - nextSpan / 2,
-      max: center + nextSpan / 2,
-    },
-    domain.min,
-    domain.max,
-    getMinimumXWindowSpan(),
-  );
-
-  applyXWindow(nextRange);
-}
-
-function applyXWindow(range: { min: number; max: number }) {
-  if (!chart) {
-    return;
-  }
-
-  const domain = getXDomain();
-  const next = normalizeXWindow(
-    range,
-    getRenderableXValues(),
-    domain.min,
-    domain.max,
-    getMinimumXWindowSpan(),
-  );
-  currentXScale.value = next;
-  chart.setScale("x", next);
-}
-
-const activeTouchPointers = new Map<number, { x: number; y: number }>();
-
-function trackTouchPointer(event: PointerEvent) {
-  activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-}
-
-function releaseTouchPointer(event: PointerEvent) {
-  activeTouchPointers.delete(event.pointerId);
-}
-
-function startTouchZoom() {
-  if (!chartRef.value || !chart || activeTouchPointers.size < 2) {
-    return;
-  }
-
-  const [first, second] = Array.from(activeTouchPointers.values());
-  const current = currentXScale.value ?? getXDomain();
-  zoomStartScale.value = { min: current.min, max: current.max };
-  zoomStartDistance.value = Math.max(8, Math.abs(first.x - second.x));
-  zoomStartCenter.value = touchCenterValue(first.x, second.x);
-  isZooming.value = true;
-}
-
-function updateTouchZoom() {
-  if (
-    !chartRef.value ||
-    !chart ||
-    !zoomStartScale.value ||
-    zoomStartCenter.value == null ||
-    zoomStartDistance.value == null ||
-    activeTouchPointers.size < 2
-  ) {
-    return;
-  }
-
-  const [first, second] = Array.from(activeTouchPointers.values());
-  const distance = Math.max(8, Math.abs(first.x - second.x));
-  const domain = getXDomain();
-  const startSpan = Math.max(1, zoomStartScale.value.max - zoomStartScale.value.min);
-  const currentSpan = Math.max(getMinimumXWindowSpan(), startSpan * (zoomStartDistance.value / distance));
-  const nextRange = clampXWindow(
-    {
-      min: zoomStartCenter.value - currentSpan / 2,
-      max: zoomStartCenter.value + currentSpan / 2,
-    },
-    domain.min,
-    domain.max,
-    getMinimumXWindowSpan(),
-  );
-
-  applyXWindow(nextRange);
-}
-
-function touchCenterValue(clientX1: number, clientX2: number) {
-  if (!chartRef.value || !chart) {
-    return (getXDomain().min + getXDomain().max) / 2;
-  }
-
-  const rect = chartRef.value.getBoundingClientRect();
-  const midpoint = (clientX1 + clientX2) / 2 - rect.left - chart.bbox.left;
-  return chart.posToVal(midpoint, "x");
-}
-
 function drawPointValueLabels(u: uPlot, xValues: number[], yValues: Array<number | null>) {
   const points = xValues
     .map((x, index) => ({ x, y: yValues[index] }))
@@ -852,23 +552,18 @@ function getRenderableXValues() {
   );
 }
 
-function buildInitialXWindow(xValues: number[], chartWidth: number) {
+function buildScopedXWindow(xValues: number[], scope: ChartScope) {
   const min = xValues[0] ?? 0;
   const max = xValues[xValues.length - 1] ?? min;
-  const domainSpan = Math.max(1, max - min);
-  // On narrow screens, show the full domain first so the chart doesn't feel blank.
-  if (chartWidth < 640) {
+  if (scope === "all") {
     return { min, max };
   }
 
-  const desiredWidth = Math.max(chartWidth, xValues.length * 46);
-  const visibleSpan = Math.max(domainSpan * (chartWidth / desiredWidth), 24 * 60 * 60);
-
-  if (domainSpan <= visibleSpan) {
-    return { min, max };
-  }
-
-  return { min: max - visibleSpan, max };
+  const days = scope === "7d" ? 7 : 30;
+  return {
+    min: Math.max(min, max - (days - 1) * 24 * 60 * 60 - 12 * 60 * 60),
+    max,
+  };
 }
 
 function buildVisibleXAxisSplits(u: uPlot, xValues: number[], chartWidth: number) {
@@ -1013,7 +708,6 @@ function clampNumber(value: number, min: number, max: number) {
 onMounted(renderChart);
 onMounted(() => {
   if (!chartRef.value) return;
-  chartRef.value.style.cursor = "grab";
   resizeObserver = new ResizeObserver(() => renderChart());
   resizeObserver.observe(chartRef.value);
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -1024,12 +718,8 @@ watch(() => props.locale, renderChart);
 watch(() => props.yUnit, renderChart);
 watch(() => props.referenceLine, renderChart, { deep: true });
 watch(() => props.referenceLines, renderChart, { deep: true });
+watch(selectedScope, renderChart);
 onBeforeUnmount(() => {
-  if (touchHideTimer) {
-    window.clearTimeout(touchHideTimer);
-    touchHideTimer = undefined;
-  }
-  activeTouchPointers.clear();
   resizeObserver?.disconnect();
   chart?.destroy();
   document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -1038,21 +728,21 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="chart-shell">
+    <div class="chart-toolbar">
+      <div class="chart-scope" role="radiogroup" :aria-label="scopeLabel">
+        <label v-for="option in scopeOptions" :key="option.value" class="chart-scope__option">
+          <input v-model="selectedScope" type="radio" :name="chartScopeName" :value="option.value" />
+          <span>{{ option.label }}</span>
+        </label>
+      </div>
+    </div>
+
     <div class="chart-stage" dir="ltr">
       <span
         v-if="yUnit"
         class="axis-unit"
       >{{ yUnit }}</span>
-      <div
-        ref="chartRef"
-        class="chart"
-        :class="{ 'is-panning': isPanning, 'is-zooming': isZooming }"
-        @pointerdown="onPanPointerDown"
-        @pointermove="onPanPointerMove"
-        @pointerup="onPanPointerUp"
-        @pointercancel="onPanPointerUp"
-        @wheel.prevent="onWheel"
-      ></div>
+      <div ref="chartRef" class="chart"></div>
       <div
         v-if="hoveredPoint"
         class="hover-point-value"
@@ -1116,6 +806,64 @@ onBeforeUnmount(() => {
 <style scoped>
 .chart-shell {
   min-inline-size: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.chart-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chart-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+}
+
+.chart-scope__option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 4rem;
+  cursor: pointer;
+}
+
+.chart-scope__option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chart-scope__option span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  min-block-size: 2rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.chart-scope__option input:checked + span {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.chart-scope__option input:focus-visible + span {
+  outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: 2px;
 }
 
 .chart-stage {
@@ -1142,12 +890,7 @@ onBeforeUnmount(() => {
 .chart {
   inline-size: 100%;
   min-block-size: 210px;
-  cursor: grab;
-  touch-action: pan-y;
-}
-
-.chart.is-panning {
-  cursor: grabbing;
+  touch-action: auto;
 }
 
 .hover-readout {
@@ -1245,6 +988,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+  .chart-toolbar {
+    justify-content: flex-start;
+  }
+
   .hover-readout {
     max-inline-size: min(160px, calc(100% - 12px));
   }

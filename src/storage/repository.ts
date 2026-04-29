@@ -51,6 +51,8 @@ const DEFAULT_PROFILE: Profile = {
   foodInstructions: "",
   aiModel: DEFAULT_GEMINI_MODEL,
   locale: "en",
+  themePreference: "system",
+  historySummaryBaselineDate: null,
   updatedAt: new Date().toISOString(),
 };
 
@@ -94,7 +96,7 @@ export async function ensureDefaultProfile(locale: Profile["locale"]): Promise<P
       legacyGoalMode === "cut" || legacyGoalMode === "leanMass" || legacyGoalMode === "maingain"
         ? legacyGoalMode
         : DEFAULT_PROFILE.goalMode;
-    const merged = {
+    const merged: Profile = {
       ...DEFAULT_PROFILE,
       ...existing,
       estimatedWeight:
@@ -104,6 +106,14 @@ export async function ensureDefaultProfile(locale: Profile["locale"]): Promise<P
       goalMode: normalizedGoalMode,
       tdeeEquation: normalizedEquation,
       activityFactor: normalizeStoredActivityFactor(existing.activityFactor, legacyExisting.activityPrompt),
+      themePreference:
+        existing.themePreference === "system" ||
+        existing.themePreference === "light" ||
+        existing.themePreference === "dark"
+          ? existing.themePreference
+          : "system",
+      historySummaryBaselineDate:
+        typeof existing.historySummaryBaselineDate === "string" ? existing.historySummaryBaselineDate : null,
       updatedAt: existing.updatedAt ?? DEFAULT_PROFILE.updatedAt,
     };
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {

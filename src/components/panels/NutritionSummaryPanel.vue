@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BasePanel from "../base/BasePanel.vue";
+import DraftNumberInput from "../base/DraftNumberInput.vue";
 import { lookupFoodMacrosPer100WithGemini } from "../../ai/gemini-macro-lookup";
 import { buildAnalysisErrorPresentation } from "../../app/analysis-errors";
 import type {
@@ -248,7 +249,10 @@ function updateFood(
     | "insolubleFiber",
   rawValue: string,
 ) {
-  const nextValue = rawValue.trim() ? Number(rawValue) : null;
+  const nextValue = parseInlineDraftNumber(rawValue);
+  if (nextValue === undefined) {
+    return;
+  }
   let updatedFood: FoodBreakdownItem | null = null;
 
   editableMeals.value = editableMeals.value.map((meal) => ({
@@ -290,9 +294,8 @@ function onFoodInput(
     | "fiber"
     | "solubleFiber"
     | "insolubleFiber",
-  event: Event,
+  rawValue: string,
 ) {
-  const rawValue = (event.target as HTMLInputElement).value;
   updateFood(foodId, key, rawValue);
 
   const editedFood = editableMeals.value
@@ -309,6 +312,20 @@ function onFoodInput(
         key === "insolubleFiber",
     });
   }
+}
+
+function parseInlineDraftNumber(rawValue: string) {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
 }
 
 function commitFoodEdit(foodId: string) {
@@ -776,7 +793,10 @@ function emitSaveCorrectionOnlyFromMenu(food: FoodBreakdownItem) {
 function updateMealTotal(mealId: string, key: keyof NutritionTotals, rawValue: string) {
   const current = editableMealTotals.value[mealId];
   if (!current) return;
-  const nextValue = rawValue.trim() ? Number(rawValue) : null;
+  const nextValue = parseInlineDraftNumber(rawValue);
+  if (nextValue === undefined) {
+    return;
+  }
   editableMealTotals.value = {
     ...editableMealTotals.value,
     [mealId]: { ...current, [key]: nextValue },
@@ -1716,76 +1736,76 @@ const proteinPerLeanBodyWeight = computed(() => {
                   </td>
                   <td class="amount-cell">{{ displayAmountText(food) }}</td>
                   <td>
-                    <input
+                    <DraftNumberInput
                       :class="{ 'is-estimated': food.gramsEstimated }"
-                      type="number"
-                      :value="food.grams ?? ''"
+                      :value="food.grams"
+                      parse-mode="nonnegative"
                       :data-testid="`food-input-${food.id}-grams`"
-                      @input="onFoodInput(food.id, 'grams', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'grams', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                     <small v-if="food.gramsEstimated" class="estimated-cue">
                       {{ t("estimatedValue") }}
                     </small>
                   </td>
                   <td>
-                    <input
+                    <DraftNumberInput
                       :class="{ 'is-estimated': food.caloriesEstimated }"
-                      type="number"
-                      :value="food.calories ?? ''"
+                      :value="food.calories"
+                      parse-mode="nonnegative"
                       :data-testid="`food-input-${food.id}-calories`"
-                      @input="onFoodInput(food.id, 'calories', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'calories', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                     <small v-if="food.caloriesEstimated" class="estimated-cue">
                       {{ t("estimatedValue") }}
                     </small>
                   </td>
                   <td>
-                    <input
+                    <DraftNumberInput
                       class="per100-input"
-                      type="number"
-                      :value="food.caloriesPer100g ?? ''"
+                      :value="food.caloriesPer100g"
+                      parse-mode="nonnegative"
                       :placeholder="t('usuallyDerived')"
                       :data-testid="`food-input-${food.id}-caloriesPer100g`"
-                      @input="onFoodInput(food.id, 'caloriesPer100g', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'caloriesPer100g', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="food.protein ?? ''"
+                    <DraftNumberInput
+                      :value="food.protein"
+                      parse-mode="nonnegative"
                       :data-testid="`food-input-${food.id}-protein`"
-                      @input="onFoodInput(food.id, 'protein', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'protein', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="food.carbs ?? ''"
+                    <DraftNumberInput
+                      :value="food.carbs"
+                      parse-mode="nonnegative"
                       :data-testid="`food-input-${food.id}-carbs`"
-                      @input="onFoodInput(food.id, 'carbs', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'carbs', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="food.fat ?? ''"
+                    <DraftNumberInput
+                      :value="food.fat"
+                      parse-mode="nonnegative"
                       :data-testid="`food-input-${food.id}-fat`"
-                      @input="onFoodInput(food.id, 'fat', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'fat', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="food.fiber ?? ''"
+                    <DraftNumberInput
+                      :value="food.fiber"
+                      parse-mode="nonnegative"
                       :data-testid="`food-input-${food.id}-fiber`"
-                      @input="onFoodInput(food.id, 'fiber', $event)"
-                      @blur="commitFoodEdit(food.id)"
+                      @update:draft="onFoodInput(food.id, 'fiber', $event)"
+                      @commit="commitFoodEdit(food.id)"
                     />
                   </td>
                   <td class="action-cell">
@@ -1808,49 +1828,49 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <td></td>
                   <td></td>
                   <td>
-                    <input
-                      type="number"
-                      :value="editableMealTotals[meal.id]?.calories ?? ''"
+                    <DraftNumberInput
+                      :value="editableMealTotals[meal.id]?.calories ?? null"
+                      parse-mode="nonnegative"
                       :data-testid="`meal-total-input-${meal.id}-calories`"
-                      @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
-                      @blur="commitMealTotalEdit(meal.id)"
+                      @update:draft="updateMealTotal(meal.id, 'calories', $event)"
+                      @commit="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td></td>
                   <td>
-                    <input
-                      type="number"
-                      :value="editableMealTotals[meal.id]?.protein ?? ''"
+                    <DraftNumberInput
+                      :value="editableMealTotals[meal.id]?.protein ?? null"
+                      parse-mode="nonnegative"
                       :data-testid="`meal-total-input-${meal.id}-protein`"
-                      @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
-                      @blur="commitMealTotalEdit(meal.id)"
+                      @update:draft="updateMealTotal(meal.id, 'protein', $event)"
+                      @commit="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="editableMealTotals[meal.id]?.carbs ?? ''"
+                    <DraftNumberInput
+                      :value="editableMealTotals[meal.id]?.carbs ?? null"
+                      parse-mode="nonnegative"
                       :data-testid="`meal-total-input-${meal.id}-carbs`"
-                      @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
-                      @blur="commitMealTotalEdit(meal.id)"
+                      @update:draft="updateMealTotal(meal.id, 'carbs', $event)"
+                      @commit="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="editableMealTotals[meal.id]?.fat ?? ''"
+                    <DraftNumberInput
+                      :value="editableMealTotals[meal.id]?.fat ?? null"
+                      parse-mode="nonnegative"
                       :data-testid="`meal-total-input-${meal.id}-fat`"
-                      @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
-                      @blur="commitMealTotalEdit(meal.id)"
+                      @update:draft="updateMealTotal(meal.id, 'fat', $event)"
+                      @commit="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      :value="editableMealTotals[meal.id]?.fiber ?? ''"
+                    <DraftNumberInput
+                      :value="editableMealTotals[meal.id]?.fiber ?? null"
+                      parse-mode="nonnegative"
                       :data-testid="`meal-total-input-${meal.id}-fiber`"
-                      @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
-                      @blur="commitMealTotalEdit(meal.id)"
+                      @update:draft="updateMealTotal(meal.id, 'fiber', $event)"
+                      @commit="commitMealTotalEdit(meal.id)"
                     />
                   </td>
                   <td class="action-cell"></td>
@@ -1879,12 +1899,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <label class="kv">
                     <div class="k">{{ t("grams") }}</div>
                     <div class="v">
-                      <input
+                      <DraftNumberInput
                         :class="{ 'is-estimated': food.gramsEstimated }"
-                        type="number"
-                        :value="food.grams ?? ''"
-                        @input="onFoodInput(food.id, 'grams', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                        :value="food.grams"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'grams', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                       <small v-if="food.gramsEstimated" class="estimated-cue">
                         {{ t("estimatedValue") }}
@@ -1895,12 +1915,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <label class="kv">
                     <div class="k">{{ t("calories") }}</div>
                     <div class="v">
-                      <input
+                      <DraftNumberInput
                         :class="{ 'is-estimated': food.caloriesEstimated }"
-                        type="number"
-                        :value="food.calories ?? ''"
-                        @input="onFoodInput(food.id, 'calories', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                        :value="food.calories"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'calories', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                       <small v-if="food.caloriesEstimated" class="estimated-cue">
                         {{ t("estimatedValue") }}
@@ -1911,12 +1931,12 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <label class="kv">
                     <div class="k">{{ t("kcalPer100gLabel") }}</div>
                     <div class="v">
-                      <input
+                      <DraftNumberInput
                         class="per100-input"
-                        type="number"
-                        :value="food.caloriesPer100g ?? ''"
-                        @input="onFoodInput(food.id, 'caloriesPer100g', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                        :value="food.caloriesPer100g"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'caloriesPer100g', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                     </div>
                   </label>
@@ -1929,11 +1949,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="food.protein ?? ''"
-                        @input="onFoodInput(food.id, 'protein', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                      <DraftNumberInput
+                        :value="food.protein"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'protein', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                     </div>
                   </label>
@@ -1945,11 +1965,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="food.carbs ?? ''"
-                        @input="onFoodInput(food.id, 'carbs', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                      <DraftNumberInput
+                        :value="food.carbs"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'carbs', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                     </div>
                   </label>
@@ -1961,11 +1981,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="food.fat ?? ''"
-                        @input="onFoodInput(food.id, 'fat', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                      <DraftNumberInput
+                        :value="food.fat"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'fat', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                     </div>
                   </label>
@@ -1977,11 +1997,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="food.fiber ?? ''"
-                        @input="onFoodInput(food.id, 'fiber', $event)"
-                        @blur="commitFoodEdit(food.id)"
+                      <DraftNumberInput
+                        :value="food.fiber"
+                        parse-mode="nonnegative"
+                        @update:draft="onFoodInput(food.id, 'fiber', $event)"
+                        @commit="commitFoodEdit(food.id)"
                       />
                     </div>
                   </label>
@@ -2003,11 +2023,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <label class="kv">
                     <div class="k">{{ t("calories") }}</div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="editableMealTotals[meal.id]?.calories ?? ''"
-                        @input="updateMealTotal(meal.id, 'calories', ($event.target as HTMLInputElement).value)"
-                        @blur="commitMealTotalEdit(meal.id)"
+                      <DraftNumberInput
+                        :value="editableMealTotals[meal.id]?.calories ?? null"
+                        parse-mode="nonnegative"
+                        @update:draft="updateMealTotal(meal.id, 'calories', $event)"
+                        @commit="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -2019,11 +2039,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="editableMealTotals[meal.id]?.protein ?? ''"
-                        @input="updateMealTotal(meal.id, 'protein', ($event.target as HTMLInputElement).value)"
-                        @blur="commitMealTotalEdit(meal.id)"
+                      <DraftNumberInput
+                        :value="editableMealTotals[meal.id]?.protein ?? null"
+                        parse-mode="nonnegative"
+                        @update:draft="updateMealTotal(meal.id, 'protein', $event)"
+                        @commit="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -2035,11 +2055,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="editableMealTotals[meal.id]?.carbs ?? ''"
-                        @input="updateMealTotal(meal.id, 'carbs', ($event.target as HTMLInputElement).value)"
-                        @blur="commitMealTotalEdit(meal.id)"
+                      <DraftNumberInput
+                        :value="editableMealTotals[meal.id]?.carbs ?? null"
+                        parse-mode="nonnegative"
+                        @update:draft="updateMealTotal(meal.id, 'carbs', $event)"
+                        @commit="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -2051,11 +2071,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="editableMealTotals[meal.id]?.fat ?? ''"
-                        @input="updateMealTotal(meal.id, 'fat', ($event.target as HTMLInputElement).value)"
-                        @blur="commitMealTotalEdit(meal.id)"
+                      <DraftNumberInput
+                        :value="editableMealTotals[meal.id]?.fat ?? null"
+                        parse-mode="nonnegative"
+                        @update:draft="updateMealTotal(meal.id, 'fat', $event)"
+                        @commit="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -2067,11 +2087,11 @@ const proteinPerLeanBodyWeight = computed(() => {
                       </span>
                     </div>
                     <div class="v">
-                      <input
-                        type="number"
-                        :value="editableMealTotals[meal.id]?.fiber ?? ''"
-                        @input="updateMealTotal(meal.id, 'fiber', ($event.target as HTMLInputElement).value)"
-                        @blur="commitMealTotalEdit(meal.id)"
+                      <DraftNumberInput
+                        :value="editableMealTotals[meal.id]?.fiber ?? null"
+                        parse-mode="nonnegative"
+                        @update:draft="updateMealTotal(meal.id, 'fiber', $event)"
+                        @commit="commitMealTotalEdit(meal.id)"
                       />
                     </div>
                   </label>
@@ -2392,9 +2412,9 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .status-pill--provider {
-  background: color-mix(in srgb, var(--surface-2) 84%, #2a5f7a 16%);
-  color: color-mix(in srgb, white 82%, #7fd3ff 18%);
-  border-color: color-mix(in srgb, var(--border-strong) 60%, #4f93b4 40%);
+  background: color-mix(in srgb, var(--surface-2) 82%, var(--accent) 18%);
+  color: color-mix(in srgb, white 74%, var(--accent-strong) 26%);
+  border-color: color-mix(in srgb, var(--border-strong) 64%, var(--accent) 36%);
   max-inline-size: min(48vw, 32rem);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3241,6 +3261,17 @@ const proteinPerLeanBodyWeight = computed(() => {
   .card-action-links {
     justify-content: flex-start;
     gap: 0.6rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .macro-pie-text {
+    font-size: 9px;
+    stroke-width: 1.6px;
+  }
+
+  .compact-stat--calories .macro-pie-inline {
+    min-block-size: 168px;
   }
 }
 

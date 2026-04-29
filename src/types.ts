@@ -1,4 +1,5 @@
 export type AppLocale = "en" | "he";
+export type ThemePreference = "system" | "light" | "dark";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type GoalMode = "cut" | "leanMass" | "maingain";
@@ -32,6 +33,8 @@ export interface Profile {
   foodInstructions: string;
   aiModel: string;
   locale: AppLocale;
+  themePreference?: ThemePreference;
+  historySummaryBaselineDate?: string | null;
   updatedAt?: string;
 }
 
@@ -210,62 +213,6 @@ export interface FormulaTdeeResult {
   average: number | null;
   breakdown: Record<string, number | null>;
   activityMultiplier: number | null;
-}
-
-export type InsightStatus = "likely_low" | "borderline" | "covered" | "insufficient_data";
-
-export interface MicronutrientInsightItem {
-  nutrientKey:
-    | "calciumMg"
-    | "ironMg"
-    | "magnesiumMg"
-    | "potassiumMg"
-    | "vitaminDMcg"
-    | "vitaminB12Mcg";
-  target: number;
-  unit: "mg" | "mcg";
-  average7d: number | null;
-  average30d: number | null;
-  validDays7d: number;
-  validDays30d: number;
-  status7d: InsightStatus;
-  status30d: InsightStatus;
-}
-
-export interface MicronutrientInsights {
-  anchorDate: string;
-  analyzedDays7d: number;
-  analyzedDays30d: number;
-  likelyLowCount7d: number;
-  likelyLowCount30d: number;
-  items: MicronutrientInsightItem[];
-}
-
-export interface MacroInsightStat {
-  key: "calories" | "protein" | "carbs" | "fat" | "fiber";
-  average7d: number | null;
-  average30d: number | null;
-  unit: "kcal" | "g";
-}
-
-export interface TopFoodInsightItem {
-  name: string;
-  daysSeen30d: number;
-  totalCalories30d: number | null;
-}
-
-export interface NutritionInsights {
-  micronutrients: MicronutrientInsights;
-  macros: MacroInsightStat[];
-  averageProteinPerKg7d: number | null;
-  averageProteinPerKg30d: number | null;
-  weightAvgChangeKgPerDay7d: number | null;
-  weightAvgChangeKgPerDay30d: number | null;
-  averageCaloriesVsTdee7d: number | null;
-  calorieConsistency7d: number | null;
-  averageMealCalories7d: number | null;
-  averageMealCalories30d: number | null;
-  topFoods30d: TopFoodInsightItem[];
 }
 
 export interface DailyEntryInput {
