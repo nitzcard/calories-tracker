@@ -32,9 +32,6 @@ const { t } = useI18n();
 const isOnline = ref(typeof navigator === "undefined" ? true : navigator.onLine);
 const draftUsername = ref(props.cloudUsername);
 const draftPassword = ref("");
-let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
-let latestProfileToSave: Profile | null = null;
-const PROFILE_SAVE_DEBOUNCE_MS = 2000;
 
 watch(
   () => props.cloudUsername,
@@ -99,21 +96,11 @@ const canSyncExistingUser = computed(
   () => !props.isCloudBusy && isLoggedIn.value && props.supabaseConfigured && isOnline.value,
 );
 
-function scheduleProfileSave(nextProfile: Profile) {
-  latestProfileToSave = nextProfile;
-  if (profileSaveTimeout) clearTimeout(profileSaveTimeout);
-  profileSaveTimeout = setTimeout(() => {
-    if (!latestProfileToSave) return;
-    emit("save", latestProfileToSave);
-    profileSaveTimeout = null;
-  }, PROFILE_SAVE_DEBOUNCE_MS);
-}
-
 function saveEmail(event: Event) {
   const email = (event.target as HTMLInputElement).value;
   const nextProfile = { ...props.profile, email };
   emit("update:profile", nextProfile);
-  scheduleProfileSave(nextProfile);
+  emit("save", nextProfile);
 }
 
 function syncNow() {
@@ -147,10 +134,14 @@ function onSubmit() {
 </script>
 
 <template>
-  <BasePanel :title="t('cloudSyncTitle')" :helper="t('cloudSyncHelper')" :class="{ 'cloud-panel--auth': authView }">
+  <BasePanel
+    :title="authView ? t('cloudLogin') : t('cloudSyncTitle')"
+    :helper="t('cloudSyncHelper')"
+    :class="{ 'cloud-panel--auth': authView }"
+  >
     <div class="cloud-controls" :class="{ 'cloud-controls--auth': authView }">
       <form class="auth-block" @submit.prevent="onSubmit">
-        <FormField :label="t('cloudUsername')" reserve-helper-space>
+        <FormField :label="t('cloudUsername')" :reserve-helper-space="!authView">
           <FieldControl>
             <input
               type="text"
@@ -178,7 +169,7 @@ function onSubmit() {
           </FieldControl>
         </FormField>
 
-        <FormField v-if="!authView" :helper="t('emailHelper')">
+        <FormField :helper="t('emailHelper')">
           <template #label>
             <span class="field-label-with-pill">
               <span>{{ t("email") }}</span>
@@ -235,7 +226,10 @@ function onSubmit() {
       {{ statusText }}
       <span v-if="cloudLastSyncedAt" class="muted">({{ cloudLastSyncedAt }})</span>
     </p>
-    <p v-if="cloudError" class="status-pill status-pill--error" dir="ltr">{{ cloudError }}</p>
+    <p v-if="cloudError" class="status-pill status-pill--error" dir="ltr">
+      <span class="status-pill__icon" aria-hidden="true">!</span>
+      <span>{{ cloudError }}</span>
+    </p>
     <p v-if="draftDiffersFromConfirmed" class="status-pill">{{ t("cloudUsernameNeedsSync") }}</p>
     <p v-if="!supabaseConfigured" class="status-pill">{{ t("cloudSupabaseMissing") }}</p>
   </BasePanel>
@@ -243,8 +237,29 @@ function onSubmit() {
 
 <style scoped>
 .cloud-panel--auth {
-  inline-size: min(100%, 46rem);
-  margin: 0 auto;
+  inline-size: 100%;
+  margin: 0;
+  padding: clamp(1.05rem, 2.4vw, 1.45rem);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border-strong));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 98%, transparent), color-mix(in srgb, var(--surface-2) 64%, var(--surface-1)));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 24px 70px rgba(8, 24, 24, 0.14);
+}
+
+.cloud-panel--auth :deep(.section-header) {
+  padding-block-end: 0.15rem;
+  border-block-end: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+}
+
+.cloud-panel--auth :deep(.section-header h2) {
+  font-size: 1.25rem;
+  letter-spacing: 0;
+}
+
+.cloud-panel--auth :deep(.helper-text) {
+  max-inline-size: 27rem;
 }
 
 .cloud-controls {
@@ -303,14 +318,44 @@ function onSubmit() {
 }
 
 .cloud-panel--auth .auth-block {
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: 1fr;
+  gap: 0.82rem;
+}
+
+.cloud-panel--auth .auth-block :deep(input) {
+  inline-size: 100%;
+  max-inline-size: none;
+}
+
+.cloud-panel--auth .auth-block :deep(.helper-slot) {
+  white-space: normal;
+  overflow: visible;
+  min-block-size: 0;
+  line-height: 1.35;
 }
 
 .cloud-panel--auth .cloud-actions {
-  grid-column: 1 / -1;
-  justify-content: flex-end;
+  grid-column: auto;
+  justify-content: stretch;
   padding-top: 0.25rem;
+}
+
+.cloud-panel--auth .cloud-actions > button {
+  flex: 1 1 100%;
+  inline-size: 100%;
+  max-inline-size: none;
+  justify-content: center;
+  min-block-size: 2.85rem;
+  font-weight: 800;
+}
+
+.cloud-panel--auth .cloud-actions > button[type="submit"] {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 20%, var(--surface-1)),
+    color-mix(in srgb, var(--accent) 12%, var(--surface-1))
+  );
 }
 
 .cloud-panel--auth .status-pill {
@@ -353,19 +398,38 @@ function onSubmit() {
 
 .status-pill {
   margin: 8px 0 0;
-  padding: 0.28rem 0.45rem;
-  border: 1px solid #000;
-  border-color: #808080 #fff #fff #808080;
-  background: var(--surface-2);
-  box-shadow: none;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.58rem 0.68rem;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .status-pill--error {
-  background: var(--panel);
-  color: #7a0000;
-  border-inline-start-color: #7a0000;
+  border-color: var(--status-toast-error-border);
+  background: var(--status-toast-error-bg);
+  color: var(--status-toast-error-text);
   font-weight: 700;
+}
+
+.status-pill__icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status-toast-error-text) 14%, var(--surface-1));
+  color: var(--status-toast-error-text);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .muted {

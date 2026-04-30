@@ -1,5 +1,6 @@
 export type AppLocale = "en" | "he";
 export type ThemePreference = "system" | "light" | "dark";
+export type ChartScope = "7d" | "30d" | "all";
 export type AiStatus = "idle" | "pending" | "processing" | "done" | "failed";
 export type BiologicalSex = "female" | "male" | "other";
 export type GoalMode = "cut" | "leanMass" | "maingain";
@@ -74,6 +75,8 @@ export interface FoodBreakdownItem {
   mealLabel: string;
   name: string;
   canonicalName: string | null;
+  sourceLabel?: string | null;
+  sourceUrl?: string | null;
   amountText: string;
   grams: number | null;
   gramsEstimated?: boolean;
@@ -104,6 +107,8 @@ export interface MealBreakdownItem {
 export interface AiFoodResult {
   foodName: string;
   canonicalName: string | null;
+  sourceLabel: string | null;
+  sourceUrl: string | null;
   amountText: string;
   servings: number | null;
   unit: string | null;

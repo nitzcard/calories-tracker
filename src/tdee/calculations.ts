@@ -2,6 +2,7 @@ import { deducedWeightFromEntries, resolvedDailyCalories } from "../domain/entri
 import { diffIsoDays } from "../domain/dates";
 import type {
   ActivityFactor,
+  ChartScope,
   DailyEntry,
   FormulaTdeeResult,
   Profile,
@@ -13,6 +14,21 @@ const MIN_OBSERVED_TDEE_DAYS = 7;
 const MIN_OBSERVED_TDEE_ENTRIES = 4;
 const OBSERVED_TDEE_MIN = 800;
 const OBSERVED_TDEE_MAX = 6000;
+
+export function scopeEntries(entries: DailyEntry[], scope: ChartScope): DailyEntry[] {
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  if (scope === "all") {
+    return sorted;
+  }
+
+  const anchorDate = sorted.at(-1)?.date;
+  if (!anchorDate) {
+    return [];
+  }
+
+  const days = scope === "7d" ? 7 : 30;
+  return sorted.filter((entry) => diffIsoDays(entry.date, anchorDate) <= 0 && diffIsoDays(entry.date, anchorDate) >= -(days - 1));
+}
 
 export function activityMultiplier(activityFactor: ActivityFactor): number {
   if (activityFactor === "extraActive") return 1.9;

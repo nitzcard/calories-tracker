@@ -28,8 +28,7 @@ test("@inputs unchanged saves do not rewrite persisted timestamps or sync revisi
   expect(beforeYesterday).toBeTruthy();
   expect(before.cloudSyncState?.revision).toBe(7);
 
-  const headerSelects = page.locator("header select");
-  await headerSelects.nth(0).selectOption("en");
+  await page.getByRole("button", { name: "English" }).click();
 
   await page.locator("#dailyDeskPanel .weight-input").first().fill("80.1");
   await page.locator("#dailyDeskPanel .weight-input").first().blur();
@@ -40,13 +39,10 @@ test("@inputs unchanged saves do not rewrite persisted timestamps or sync revisi
   await page.locator("#food-rules-textarea").fill("");
   await page.locator("#food-rules-textarea").blur();
 
-  await page.locator("#constantDataPanel .constant-data-grid > *").nth(1)
-    .locator("tr")
-    .filter({ hasText: "Mifflin-St Jeor" })
-    .locator('input[type="radio"]')
-    .first()
-    .check();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.locator("article").filter({ hasText: "Mifflin-St Jeor" }).locator('input[type="radio"]').check();
 
+  await page.getByRole("button", { name: "History" }).click();
   await page.locator("#historyPanel").scrollIntoViewIfNeeded();
   await page.getByTestId(`history-calories-${yesterday}`).fill("1900");
   await page.getByTestId(`history-calories-${yesterday}`).blur();

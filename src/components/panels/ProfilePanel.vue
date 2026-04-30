@@ -56,36 +56,33 @@ const activityFactorSearchUrl = computed(() =>
     : "https://www.google.com/search?q=how+to+choose+activity+factor+tdee",
 );
 
-let profileSaveTimeout: ReturnType<typeof setTimeout> | null = null;
-let latestProfileToSave: Profile | null = null;
-const PROFILE_SAVE_DEBOUNCE_MS = 2000;
-
-function scheduleProfileSave(nextProfile: Profile) {
-  latestProfileToSave = nextProfile;
-  if (profileSaveTimeout) clearTimeout(profileSaveTimeout);
-  profileSaveTimeout = setTimeout(() => {
-    if (!latestProfileToSave) return;
-    emit("save", latestProfileToSave);
-    profileSaveTimeout = null;
-  }, PROFILE_SAVE_DEBOUNCE_MS);
-}
-
 function commitNullableNumber<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(
   key: K,
   value: number | null,
 ) {
   const nextProfile = { ...props.profile, [key]: value };
   emit("update:profile", nextProfile);
-  scheduleProfileSave(nextProfile);
+  emit("save", nextProfile);
+}
+
+function updateNullableNumberDraft<K extends "age" | "height" | "estimatedWeight" | "targetWeight" | "bodyFat">(
+  key: K,
+  value: string,
+  parseMode: "positive" | "nonnegative",
+) {
+  const trimmed = value.trim();
+  const parsed = trimmed ? Number(trimmed) : null;
+  if (parsed !== null && (!Number.isFinite(parsed) || (parseMode === "positive" ? parsed <= 0 : parsed < 0))) {
+    return;
+  }
+
+  const nextProfile = { ...props.profile, [key]: parsed };
+  emit("update:profile", nextProfile);
+  emit("save", nextProfile);
 }
 
 function saveImmediateProfile(profile: Profile) {
   emit("update:profile", profile);
-  if (profileSaveTimeout) {
-    clearTimeout(profileSaveTimeout);
-    profileSaveTimeout = null;
-  }
-  latestProfileToSave = profile;
   emit("save", profile);
 }
 
@@ -116,12 +113,13 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
         </select>
       </FormField>
       <FormField :label="t('age')">
-        <DraftNumberInput
-          :class="{ 'is-missing': profile.age == null }"
-          :value="profile.age"
-          parse-mode="positive"
-          @commit="commitNullableNumber('age', $event)"
-        />
+          <DraftNumberInput
+            :class="{ 'is-missing': profile.age == null }"
+            :value="profile.age"
+            parse-mode="positive"
+            @update:draft="updateNullableNumberDraft('age', $event, 'positive')"
+            @commit="commitNullableNumber('age', $event)"
+          />
       </FormField>
       <FormField :label="t('height')">
         <div class="unit-field">
@@ -129,6 +127,7 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
             :class="{ 'is-missing': profile.height == null }"
             :value="profile.height"
             parse-mode="positive"
+            @update:draft="updateNullableNumberDraft('height', $event, 'positive')"
             @commit="commitNullableNumber('height', $event)"
           />
           <span class="field-unit">{{ t("unitCm") }}</span>
@@ -140,6 +139,7 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
             :value="profile.estimatedWeight"
             parse-mode="positive"
             step="0.1"
+            @update:draft="updateNullableNumberDraft('estimatedWeight', $event, 'positive')"
             @commit="commitNullableNumber('estimatedWeight', $event)"
           />
           <span class="field-unit">{{ t("unitKg") }}</span>
@@ -151,6 +151,7 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
             :value="profile.targetWeight"
             parse-mode="positive"
             step="0.1"
+            @update:draft="updateNullableNumberDraft('targetWeight', $event, 'positive')"
             @commit="commitNullableNumber('targetWeight', $event)"
           />
           <span class="field-unit">{{ t("unitKg") }}</span>
@@ -169,6 +170,7 @@ function saveActivityFactor(activityFactor: ActivityFactor) {
           step="0.1"
           min="0"
           max="60"
+          @update:draft="updateNullableNumberDraft('bodyFat', $event, 'nonnegative')"
           @commit="commitNullableNumber('bodyFat', $event)"
         />
         <template #helper>

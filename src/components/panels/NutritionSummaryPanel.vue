@@ -857,6 +857,15 @@ function primaryFoodName(food: FoodBreakdownItem) {
   return food.name;
 }
 
+function foodSourceText(food: FoodBreakdownItem) {
+  return food.sourceLabel?.trim() || t("foodSourceLink");
+}
+
+function foodSourceHref(food: FoodBreakdownItem) {
+  const href = food.sourceUrl?.trim();
+  return href ? href : null;
+}
+
 function secondaryFoodName(food: FoodBreakdownItem) {
   if (props.locale === "en") {
     return "";
@@ -1730,6 +1739,16 @@ const proteinPerLeanBodyWeight = computed(() => {
                     <div v-if="secondaryFoodName(food)" class="food-alt-name">
                       {{ secondaryFoodName(food) }}
                     </div>
+                    <div v-if="foodSourceHref(food)" class="food-source">
+                      <a
+                        class="food-source-link"
+                        :href="foodSourceHref(food) ?? undefined"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {{ foodSourceText(food) }}
+                      </a>
+                    </div>
                     <small v-if="food.needsReview || food.assumptions.length" class="food-meta">
                       {{ foodMetaText(food) }}
                     </small>
@@ -1884,6 +1903,16 @@ const proteinPerLeanBodyWeight = computed(() => {
                   <div class="food-name">{{ primaryFoodName(food) }}</div>
                   <div v-if="secondaryFoodName(food)" class="food-alt-name">
                     {{ secondaryFoodName(food) }}
+                  </div>
+                  <div v-if="foodSourceHref(food)" class="food-source">
+                    <a
+                      class="food-source-link"
+                      :href="foodSourceHref(food) ?? undefined"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {{ foodSourceText(food) }}
+                    </a>
                   </div>
                   <small v-if="food.needsReview || food.assumptions.length" class="food-meta">
                     {{ foodMetaText(food) }}
@@ -2123,6 +2152,10 @@ const proteinPerLeanBodyWeight = computed(() => {
           @click.self="closeRowActionMenu(food)"
         >
           <div class="row-action-menu__header">
+            <div class="row-action-menu__heading">
+              <span class="row-action-menu__eyebrow">{{ t("macroAssistantTitle") }}</span>
+              <strong>{{ food.name }}</strong>
+            </div>
             <button
               class="row-action-menu__close"
               type="button"
@@ -2134,7 +2167,6 @@ const proteinPerLeanBodyWeight = computed(() => {
           </div>
           <div class="row-action-menu__content">
             <div class="macro-assistant">
-              <div class="macro-assistant__title">{{ t("macroAssistantTitle") }}</div>
               <p class="macro-assistant__subtitle">{{ t("macroAssistantSubtitle") }}</p>
 
               <div class="macro-assistant__mode-switch" role="tablist" :aria-label="t('macroAssistantSourceTitle')">
@@ -2158,7 +2190,7 @@ const proteinPerLeanBodyWeight = computed(() => {
 
               <div v-if="(macroAssistantSourceMode[food.id] ?? 'ai') === 'ai'" class="macro-assistant__actions">
                 <button
-                  class="secondary-action"
+                  class="secondary-action macro-assistant__primary-action"
                   type="button"
                   :disabled="Boolean(aiLookupLoading[food.id])"
                   @click="runAiMacroLookup(food, 'search')"
@@ -2181,7 +2213,7 @@ const proteinPerLeanBodyWeight = computed(() => {
                 <p class="per100-macro-editor__hint macro-assistant__url-hint">{{ t("macroSourceUrlHint") }}</p>
 
                 <button
-                  class="secondary-action"
+                  class="secondary-action macro-assistant__primary-action"
                   type="button"
                   :disabled="Boolean(aiLookupLoading[food.id]) || !(sourceUrlDrafts[food.id] ?? '').trim()"
                   @click="runAiMacroLookup(food, 'url')"
@@ -2338,6 +2370,7 @@ const proteinPerLeanBodyWeight = computed(() => {
   align-items: baseline;
   min-inline-size: 0;
   overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--status-toast-error-text) 86%, var(--text-primary));
 }
 
 .inline-action-link {
@@ -2836,15 +2869,16 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .error-box {
   display: grid;
-  gap: 6px;
+  gap: 0.4rem;
   margin-block-start: 10px;
-  padding: 8px;
-  border: 1px solid #000;
-  border-color: #808080 #fff #fff #808080;
-  border-inline-start-color: #7a0000;
-  border-inline-start-width: 6px;
-  background: var(--panel);
-  color: #7a0000;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--status-toast-error-border);
+  border-inline-start-width: 5px;
+  background: var(--status-toast-error-bg);
+  color: var(--status-toast-error-text);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--bevel-raised);
+  line-height: 1.5;
 }
 
 .error-box--center {
@@ -3015,6 +3049,24 @@ const proteinPerLeanBodyWeight = computed(() => {
   overflow-wrap: anywhere;
 }
 
+.food-source {
+  margin-block-start: 0.2rem;
+}
+
+.food-source-link {
+  color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+  overflow-wrap: anywhere;
+}
+
+.food-source-link:hover,
+.food-source-link:focus-visible {
+  color: var(--text-primary);
+}
+
 .amount-cell {
   min-inline-size: 150px;
 }
@@ -3046,26 +3098,37 @@ const proteinPerLeanBodyWeight = computed(() => {
 .row-action-menu__toggle {
   cursor: pointer;
   user-select: none;
-  inline-size: 2.35rem;
-  block-size: 2.35rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   display: grid;
   place-items: center;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
   font-size: 1.65rem;
   line-height: 1;
   padding: 0;
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.row-action-menu__toggle:hover,
+.row-action-menu__toggle:focus-visible {
+  background: transparent;
+  opacity: 1;
 }
 
 .row-action-menu__dialog {
   padding: 0;
   margin: auto;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 14px;
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
-  max-inline-size: min(92vw, 26rem);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.32);
+  inline-size: min(94vw, 34rem);
+  max-block-size: min(86vh, 46rem);
+  overflow: hidden;
   z-index: 1000;
 }
 
@@ -3074,61 +3137,89 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .row-action-menu__dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+  background: color-mix(in srgb, rgba(15, 23, 42, 0.58) 82%, transparent);
+  backdrop-filter: blur(3px);
 }
 
 .row-action-menu__header {
   display: flex;
-  justify-content: flex-end;
-  padding: 0.25rem 0.25rem 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.75rem;
+  border-block-end: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--surface-1)), var(--surface-1));
+}
+
+.row-action-menu__heading {
+  display: grid;
+  gap: 0.2rem;
+  min-inline-size: 0;
+}
+
+.row-action-menu__heading strong {
+  font-size: 1.05rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.row-action-menu__eyebrow {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .row-action-menu__close {
-  inline-size: 2rem;
-  block-size: 2rem;
+  inline-size: 2.1rem;
+  block-size: 2.1rem;
   display: grid;
   place-items: center;
-  border: none;
-  background: none;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
   color: var(--text-primary);
-  font-size: 2rem;
+  font-size: 1.55rem;
   line-height: 1;
   padding: 0;
   cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.15s ease;
+  opacity: 0.78;
+  box-shadow: none;
+  transition: opacity 0.15s ease, background 0.15s ease;
 }
 
 .row-action-menu__close:hover,
 .row-action-menu__close:focus-visible {
   opacity: 1;
+  background: var(--surface-2);
 }
 
 .row-action-menu__content {
   display: grid;
-  gap: 0.65rem;
-  padding: 0.5rem;
-  min-inline-size: 11rem;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem 1rem;
+  min-inline-size: 0;
+  max-block-size: calc(min(86vh, 46rem) - 4.35rem);
+  overflow: auto;
 }
 
 .macro-assistant {
   display: grid;
-  gap: 0.6rem;
-  padding: 0.7rem;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 45%, transparent);
-  border-radius: 0.65rem;
-  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  gap: 0.75rem;
 }
 
-.macro-assistant__title,
 .macro-assistant__manual-title {
-  font-weight: 700;
+  margin-block-start: 0.2rem;
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .macro-assistant__subtitle {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -3136,27 +3227,32 @@ const proteinPerLeanBodyWeight = computed(() => {
 .macro-assistant__mode-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
+  gap: 0.25rem;
+  padding: 0.24rem;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 76%, transparent);
 }
 
 .macro-assistant__mode-btn {
-  border: 1px solid color-mix(in srgb, var(--border-strong) 45%, transparent);
-  background: var(--surface-1);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-primary);
-  border-radius: var(--radius);
-  padding: 0.36rem 0.56rem;
+  border-radius: calc(var(--radius-sm) + 0.02rem);
+  padding: 0.46rem 0.58rem;
   font: inherit;
-  font-size: 0.8rem;
-  font-weight: 400;
+  font-size: 0.82rem;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: var(--bevel-raised);
+  box-shadow: none;
   text-align: center;
 }
 
 .macro-assistant__mode-btn.is-active {
   color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong));
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
   background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 .macro-assistant__actions,
@@ -3166,8 +3262,9 @@ const proteinPerLeanBodyWeight = computed(() => {
 }
 
 .macro-assistant__save-actions {
-  border-block-start: 1px dashed color-mix(in srgb, var(--border-strong) 45%, transparent);
-  padding-block-start: 0.6rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-block-start: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  padding-block-start: 0.8rem;
 }
 
 .macro-assistant__url-label {
@@ -3195,6 +3292,14 @@ const proteinPerLeanBodyWeight = computed(() => {
   overflow-wrap: anywhere;
 }
 
+.macro-assistant__primary-action {
+  min-block-size: 2.65rem;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
 .per100-macro-editor {
   display: grid;
   gap: 0.45rem;
@@ -3209,8 +3314,8 @@ const proteinPerLeanBodyWeight = computed(() => {
 
 .per100-macro-editor__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .per100-macro-editor__grid label {
@@ -3220,9 +3325,20 @@ const proteinPerLeanBodyWeight = computed(() => {
   color: var(--text-muted);
 }
 
+.per100-macro-editor__grid input {
+  inline-size: 100%;
+}
+
 .row-action-menu__content .secondary-action {
   inline-size: 100%;
   text-align: center;
+}
+
+@media (max-width: 520px) {
+  .per100-macro-editor__grid,
+  .macro-assistant__save-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .food-card__actions .secondary-action--subtle {

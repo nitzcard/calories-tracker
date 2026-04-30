@@ -170,4 +170,27 @@ describe("mergeExportedAppData", () => {
 
     expect(merged.profile[0]?.sex).toBe("male");
   });
+
+  it("keeps a newer Mifflin TDEE equation choice instead of treating it like a weak default", () => {
+    const local = makeExportedData({
+      profile: [
+        makeProfile({
+          tdeeEquation: "mifflinStJeor",
+          updatedAt: "2026-04-21T11:00:00.000Z",
+        }),
+      ],
+    });
+    const remote = makeExportedData({
+      profile: [
+        makeProfile({
+          tdeeEquation: "harrisBenedict",
+          updatedAt: "2026-04-21T10:00:00.000Z",
+        }),
+      ],
+    });
+
+    const merged = mergeExportedAppData(local, remote);
+
+    expect(merged.profile[0]?.tdeeEquation).toBe("mifflinStJeor");
+  });
 });

@@ -106,7 +106,7 @@ function shiftSelectedDate(days: number) {
       <div class="log-intro">
         <p class="controls-meta">{{ t('todayLogMeta') }}</p>
         <div class="controls-grid">
-          <FormField :label="t('date')">
+          <FormField class="date-field" :label="t('date')">
             <div class="date-stepper">
               <button
                 type="button"
@@ -148,7 +148,6 @@ function shiftSelectedDate(days: number) {
 		                  parse-mode="positive"
 		                  step="0.1"
 		                  min="0"
-                      :commit-on-idle-ms="2000"
                       @update:draft="emit('update:current-weight', $event)"
 		                  @commit="emit('save-weight', $event == null ? '' : String($event))"
 		                />
@@ -175,7 +174,21 @@ function shiftSelectedDate(days: number) {
       </FormField>
 
       <div class="actions">
-        <div class="provider-field">
+        <div class="analysis-toolbar">
+          <div class="form-row">
+            <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft', foodLog)">
+              {{ t("saveOnly") }}
+            </button>
+            <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
+              <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
+              {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}
+            </button>
+            <a v-if="hasResults && !isAnalyzing" class="results-link" href="#nutritionSummaryPanel">
+              {{ t("jumpToResults") }}
+            </a>
+          </div>
+
+          <div class="provider-field">
           <FormField
             :label="t('analysisModelLabel')"
             :helper="canSelectProvider ? activeProvider?.helper : t('analysisModelNeedsGeminiKey')"
@@ -194,21 +207,10 @@ function shiftSelectedDate(days: number) {
               </select>
             </FieldControl>
           </FormField>
+          </div>
         </div>
 
         <p class="helper-text">{{ t("analyzeHelper") }}</p>
-        <div class="form-row">
-          <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft', foodLog)">
-            {{ t("saveOnly") }}
-          </button>
-          <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
-            <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
-            {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}
-          </button>
-          <a v-if="hasResults && !isAnalyzing" class="results-link" href="#nutritionSummaryPanel">
-            {{ t("jumpToResults") }}
-          </a>
-        </div>
         <p v-if="analyzeIssue" class="analyze-issue">
           {{ issueText }}
         </p>
@@ -247,7 +249,7 @@ function shiftSelectedDate(days: number) {
     <div class="log-intro">
       <p class="controls-meta">{{ t('todayLogMeta') }}</p>
       <div class="controls-grid">
-        <FormField :label="t('date')">
+        <FormField class="date-field" :label="t('date')">
           <div class="date-stepper">
             <button
               type="button"
@@ -289,7 +291,6 @@ function shiftSelectedDate(days: number) {
 	                  parse-mode="positive"
 	                  step="0.1"
 	                  min="0"
-                    :commit-on-idle-ms="2000"
                     @update:draft="emit('update:current-weight', $event)"
 	                  @commit="emit('save-weight', $event == null ? '' : String($event))"
 	                />
@@ -316,7 +317,21 @@ function shiftSelectedDate(days: number) {
     </FormField>
 
     <div class="actions">
-      <div class="provider-field">
+      <div class="analysis-toolbar">
+        <div class="form-row">
+          <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
+            {{ t("saveOnly") }}
+          </button>
+          <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
+            <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
+            {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}
+          </button>
+          <a v-if="hasResults && !isAnalyzing" class="results-link" href="#nutritionSummaryPanel">
+            {{ t("jumpToResults") }}
+          </a>
+        </div>
+
+        <div class="provider-field">
         <FormField
           :label="t('analysisModelLabel')"
           :helper="canSelectProvider ? activeProvider?.helper : t('analysisModelNeedsGeminiKey')"
@@ -335,21 +350,10 @@ function shiftSelectedDate(days: number) {
             </select>
           </FieldControl>
         </FormField>
+        </div>
       </div>
 
       <p class="helper-text">{{ t("analyzeHelper") }}</p>
-      <div class="form-row">
-        <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
-          {{ t("saveOnly") }}
-        </button>
-        <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
-          <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
-          {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}
-        </button>
-        <a v-if="hasResults && !isAnalyzing" class="results-link" href="#nutritionSummaryPanel">
-          {{ t("jumpToResults") }}
-        </a>
-      </div>
       <div v-if="analysisError" class="analyze-error" dir="ltr">
         <p>{{ analysisError }}</p>
         <p v-if="showAnalysisRetryAction" class="analyze-error__retry">
@@ -404,7 +408,7 @@ function shiftSelectedDate(days: number) {
 
 .date-stepper {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(10.5rem, 1fr) auto;
   gap: 0.5rem;
   align-items: center;
   direction: ltr;
@@ -412,6 +416,7 @@ function shiftSelectedDate(days: number) {
 
 .date-stepper__input {
   min-inline-size: 0;
+  inline-size: 100%;
   text-align: start;
 }
 
@@ -475,13 +480,25 @@ function shiftSelectedDate(days: number) {
   max-inline-size: 100%;
 }
 
+.controls-grid :deep(.date-field) {
+  inline-size: min(100%, 17.5rem);
+}
+
 .actions {
   display: grid;
   gap: var(--group-gap);
 }
 
+.analysis-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--group-gap);
+  flex-wrap: wrap;
+}
+
 .provider-field {
-  inline-size: 100%;
+  inline-size: min(100%, 18rem);
   max-inline-size: 100%;
 }
 
@@ -580,25 +597,27 @@ function shiftSelectedDate(days: number) {
 
 .analyze-error {
   margin: 6px 0 0;
-  color: #7a0000;
+  color: var(--status-toast-error-text);
   max-inline-size: 46rem;
-  display: inline-block;
-  padding: 0.35rem 0.55rem;
-  background: var(--panel);
-  border: 1px solid #000;
-  border-color: #808080 #fff #fff #808080;
-  border-inline-start-color: #7a0000;
-  border-inline-start-width: 6px;
-  box-shadow: none;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--status-toast-error-bg);
+  border: 1px solid var(--status-toast-error-border);
+  border-inline-start-width: 5px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--bevel-raised);
+  line-height: 1.5;
   white-space: pre-wrap;
 }
 
 .analyze-error__retry {
-  margin: 0.35rem 0 0;
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: baseline;
+  color: color-mix(in srgb, var(--status-toast-error-text) 86%, var(--text-primary));
 }
 
 .inline-action-link {

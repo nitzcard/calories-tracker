@@ -156,6 +156,7 @@ const formulaCards = computed(() =>
 
 <template>
   <BasePanel :class="['tdee-panel', { 'tdee-panel--highlighted': isHighlighted }]" :title="t('tdeeSummary')"
+    :dir="locale === 'he' ? 'rtl' : 'ltr'"
     :helper="t('tdeeHelper')">
     <details class="tdee-explainer">
       <summary class="tdee-explainer__summary">
@@ -204,29 +205,43 @@ const formulaCards = computed(() =>
         </div>
 
         <div class="tdee-card__body">
-          <div class="tdee-card__equation" dir="ltr">
+          <div class="tdee-card__equation">
             <math
               class="math-equation"
               xmlns="http://www.w3.org/1998/Math/MathML"
               :aria-label="`${t('observedTdeeFormulaLabel')} equals ${t('observedTdeeFormulaAverage')} minus ((${t('observedTdeeFormulaLastWeight')} minus ${t('observedTdeeFormulaFirstWeight')}) times 7700) divided by ${t('observedTdeeFormulaDays')}`"
             >
               <mrow>
-                <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
-                <mo>=</mo>
-                <mtext>{{ t("observedTdeeFormulaAverage") }}</mtext>
-                <mo>−</mo>
-                <mfrac>
-                  <mrow>
-                    <mo>(</mo>
-                    <mtext>{{ t("observedTdeeFormulaLastWeight") }}</mtext>
-                    <mo>−</mo>
-                    <mtext>{{ t("observedTdeeFormulaFirstWeight") }}</mtext>
-                    <mo>)</mo>
-                    <mo>×</mo>
-                    <mn>7700</mn>
-                  </mrow>
-                  <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
-                </mfrac>
+                <mtable>
+                  <mtr>
+                    <mtd>
+                      <mrow>
+                        <mtext>{{ t("observedTdeeFormulaLabel") }}</mtext>
+                        <mo>=</mo>
+                        <mtext>{{ t("observedTdeeFormulaAverage") }}</mtext>
+                      </mrow>
+                    </mtd>
+                  </mtr>
+                  <mtr>
+                    <mtd>
+                      <mrow>
+                        <mo>−</mo>
+                        <mfrac>
+                          <mrow>
+                            <mo>(</mo>
+                            <mtext>{{ t("observedTdeeFormulaLastWeight") }}</mtext>
+                            <mo>−</mo>
+                            <mtext>{{ t("observedTdeeFormulaFirstWeight") }}</mtext>
+                            <mo>)</mo>
+                            <mo>×</mo>
+                            <mn>7700</mn>
+                          </mrow>
+                          <mtext>{{ t("observedTdeeFormulaDays") }}</mtext>
+                        </mfrac>
+                      </mrow>
+                    </mtd>
+                  </mtr>
+                </mtable>
               </mrow>
             </math>
           </div>
@@ -259,31 +274,53 @@ const formulaCards = computed(() =>
         </div>
 
         <div class="tdee-card__body">
-          <div class="tdee-card__equation" dir="ltr">
+          <div class="tdee-card__equation">
             <math
               v-if="card.id === 'mifflinStJeor'"
               class="math-equation math-equation--compact"
               xmlns="http://www.w3.org/1998/Math/MathML"
               :aria-label="formulaMathLabel(card.id)"
             >
-              <mrow>
-                <mtext>TDEE</mtext>
-                <mo>=</mo>
-                <mo>(</mo>
-                <mn>10</mn>
-                <mi>W</mi>
-                <mo>+</mo>
-                <mn>6.25</mn>
-                <mi>H</mi>
-                <mo>−</mo>
-                <mn>5</mn>
-                <mi>A</mi>
-                <mo>+</mo>
-                <mi>S</mi>
-                <mo>)</mo>
-                <mo>×</mo>
-                <mi>AF</mi>
-              </mrow>
+              <mtable>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mtext>BMR</mtext>
+                      <mo>=</mo>
+                      <mn>10</mn>
+                      <mo>×</mo>
+                      <mtext>weight</mtext>
+                      <mo>+</mo>
+                      <mn>6.25</mn>
+                      <mo>×</mo>
+                      <mtext>height</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mo>−</mo>
+                      <mn>5</mn>
+                      <mo>×</mo>
+                      <mtext>age</mtext>
+                      <mo>+</mo>
+                      <mtext>sex offset</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mtext>TDEE</mtext>
+                      <mo>=</mo>
+                      <mtext>BMR</mtext>
+                      <mo>×</mo>
+                      <mtext>activity factor</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+              </mtable>
             </math>
             <math
               v-else-if="card.id === 'harrisBenedict'"
@@ -291,13 +328,25 @@ const formulaCards = computed(() =>
               xmlns="http://www.w3.org/1998/Math/MathML"
               :aria-label="formulaMathLabel(card.id)"
             >
-              <mrow>
-                <mtext>TDEE</mtext>
-                <mo>=</mo>
-                <mtext>BMR</mtext>
-                <mo>×</mo>
-                <mi>AF</mi>
-              </mrow>
+              <mtable>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mtext>TDEE</mtext>
+                      <mo>=</mo>
+                      <mtext>BMR</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mo>×</mo>
+                      <mtext>activity factor</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+              </mtable>
             </math>
             <math
               v-else
@@ -305,18 +354,29 @@ const formulaCards = computed(() =>
               xmlns="http://www.w3.org/1998/Math/MathML"
               :aria-label="formulaMathLabel(card.id)"
             >
-              <mrow>
-                <mtext>TDEE</mtext>
-                <mo>=</mo>
-                <mo>(</mo>
-                <mn>500</mn>
-                <mo>+</mo>
-                <mn>22</mn>
-                <mi>LBM</mi>
-                <mo>)</mo>
-                <mo>×</mo>
-                <mi>AF</mi>
-              </mrow>
+              <mtable>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mtext>TDEE</mtext>
+                      <mo>=</mo>
+                      <mn>500</mn>
+                      <mo>+</mo>
+                      <mn>22</mn>
+                      <mo>×</mo>
+                      <mtext>lean body mass</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+                <mtr>
+                  <mtd>
+                    <mrow>
+                      <mo>×</mo>
+                      <mtext>activity factor</mtext>
+                    </mrow>
+                  </mtd>
+                </mtr>
+              </mtable>
             </math>
           </div>
           <p class="tdee-card__muted">{{ card.explain }}</p>
@@ -402,7 +462,7 @@ const formulaCards = computed(() =>
 
 .tdee-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
   gap: 1rem;
 }
 
@@ -440,17 +500,20 @@ const formulaCards = computed(() =>
 }
 
 .tdee-card__main {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: start;
+  min-inline-size: 0;
 }
 
 .tdee-card__title {
+  min-inline-size: 0;
   color: inherit;
   font-size: 1.05rem;
   font-weight: 700;
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 .tdee-card__title:hover {
@@ -458,6 +521,7 @@ const formulaCards = computed(() =>
 }
 
 .tdee-card__value {
+  flex: 0 0 auto;
   font-size: clamp(1.45rem, 3vw, 2.1rem);
   line-height: 1;
 }
@@ -470,12 +534,15 @@ const formulaCards = computed(() =>
 .tdee-card__equation {
   display: flex;
   justify-content: flex-start;
+  max-inline-size: 100%;
 }
 
 .math-equation {
   display: inline-block;
+  inline-size: 100%;
   max-inline-size: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
+  direction: ltr;
   padding: 0.55rem 0.7rem;
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   border-radius: var(--radius-sm);
@@ -490,13 +557,23 @@ const formulaCards = computed(() =>
   font-size: 0.94rem;
 }
 
-@media (max-width: 900px) {
-  .tdee-card-grid {
-    grid-template-columns: 1fr;
-  }
+.math-equation :deep(mtable) {
+  inline-size: 100%;
+}
 
+.math-equation :deep(mtd) {
+  padding: 0;
+}
+
+@media (max-width: 1100px) {
   .tdee-card--observed {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .tdee-card__main {
+    grid-template-columns: 1fr;
   }
 }
 </style>

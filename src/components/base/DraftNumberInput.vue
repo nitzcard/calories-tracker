@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 type ParseMode = "nullable" | "positive" | "nonnegative";
 
@@ -14,7 +14,6 @@ const props = withDefaults(
     max?: string;
     disabled?: boolean;
     dataTestId?: string;
-    commitOnIdleMs?: number | null;
     dir?: "ltr" | "rtl" | "auto";
   }>(),
   {
@@ -26,7 +25,6 @@ const props = withDefaults(
     max: undefined,
     disabled: false,
     dataTestId: undefined,
-    commitOnIdleMs: null,
     dir: "ltr",
   },
 );
@@ -38,7 +36,6 @@ const emit = defineEmits<{
 
 const draft = ref("");
 const isFocused = ref(false);
-let idleCommitTimer: ReturnType<typeof setTimeout> | null = null;
 
 const normalizedValue = computed(() => {
   const next = props.value;
@@ -54,15 +51,6 @@ watch(
   },
   { immediate: true },
 );
-
-function clearIdleCommitTimer() {
-  if (!idleCommitTimer) {
-    return;
-  }
-
-  clearTimeout(idleCommitTimer);
-  idleCommitTimer = null;
-}
 
 function parseDraft(raw: string): number | null | undefined {
   const trimmed = raw.trim();
@@ -87,7 +75,6 @@ function parseDraft(raw: string): number | null | undefined {
 }
 
 function commitDraft(options?: { blur?: boolean }) {
-  clearIdleCommitTimer();
   const parsed = parseDraft(draft.value);
   if (parsed === undefined) {
     if (options?.blur) {
@@ -103,21 +90,9 @@ function commitDraft(options?: { blur?: boolean }) {
   }
 }
 
-function scheduleIdleCommit() {
-  clearIdleCommitTimer();
-  if (!props.commitOnIdleMs || props.commitOnIdleMs <= 0) {
-    return;
-  }
-
-  idleCommitTimer = setTimeout(() => {
-    commitDraft();
-  }, props.commitOnIdleMs);
-}
-
 function onInput(event: Event) {
   draft.value = (event.target as HTMLInputElement).value;
   emit("update:draft", draft.value);
-  scheduleIdleCommit();
 }
 
 function onFocus() {
@@ -129,9 +104,6 @@ function onBlur() {
   commitDraft({ blur: true });
 }
 
-onBeforeUnmount(() => {
-  clearIdleCommitTimer();
-});
 </script>
 
 <template>

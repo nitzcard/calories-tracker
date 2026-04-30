@@ -70,7 +70,7 @@ test("@responsive authenticated routes stay within target viewports", async ({ p
   const routes = [
     { path: "/today", selector: "#dailyDeskPanel" },
     { path: "/progress", selector: "#historyPanel" },
-    { path: "/settings", selector: "[data-testid='settings-theme']" },
+    { path: "/settings", selector: "[data-testid='activity-factor-select']" },
   ];
   const viewports = [
     { width: 390, height: 844 },

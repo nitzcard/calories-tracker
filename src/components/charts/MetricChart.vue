@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import uPlot from "uplot";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-
-type ChartScope = "7d" | "30d" | "all";
+import type { ChartScope } from "../../types";
 
 const props = defineProps<{
   locale?: "en" | "he";
   points: Array<{ x: number; y: number | null }>;
   label: string;
+  scope?: ChartScope;
   yUnit?: string;
   trendline?: {
     label: string;
@@ -24,12 +24,15 @@ const props = defineProps<{
     color?: string;
   };
 }>();
+const emit = defineEmits<{
+  "update:scope": [scope: ChartScope];
+}>();
 
 const chartRef = ref<HTMLDivElement | null>(null);
 const hoverIndex = ref<number | null>(null);
 const hoverPosition = ref({ x: 0, y: 0 });
 const hoverPointPosition = ref({ x: 0, y: 0 });
-const selectedScope = ref<ChartScope>("all");
+const selectedScope = ref<ChartScope>(props.scope ?? "all");
 const currentXScale = ref<{ min: number; max: number } | null>(null);
 let chart: uPlot | undefined;
 let resizeObserver: ResizeObserver | undefined;
@@ -98,6 +101,7 @@ const chartScopeName = computed(() => {
   const normalized = props.label.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   return `chart-scope-${normalized || "series"}`;
 });
+const activeScope = computed<ChartScope>(() => props.scope ?? selectedScope.value);
 const primarySeriesColor = "#0a88a3";
 const chartAxisFont = "600 13px system-ui, sans-serif";
 
@@ -131,7 +135,7 @@ function renderChart() {
   const domainMax = xSplits[xSplits.length - 1] ?? domainMin;
   const minimumXWindowSpan = getMinimumXWindowSpan(renderableXValues);
   currentXScale.value = normalizeXWindow(
-    buildScopedXWindow(xSplits, selectedScope.value),
+    buildScopedXWindow(xSplits, activeScope.value),
     renderableXValues,
     domainMin,
     domainMax,
@@ -276,6 +280,13 @@ function renderChart() {
     [xValues, yValues, ...(activeTrendline.value ? [trendValues] : []), ...referenceValuesList],
     chartRef.value,
   );
+}
+
+function setScope(scope: ChartScope) {
+  if (props.scope === undefined) {
+    selectedScope.value = scope;
+  }
+  emit("update:scope", scope);
 }
 
 function normalizeTimestamp(value: number) {
@@ -718,7 +729,16 @@ watch(() => props.locale, renderChart);
 watch(() => props.yUnit, renderChart);
 watch(() => props.referenceLine, renderChart, { deep: true });
 watch(() => props.referenceLines, renderChart, { deep: true });
-watch(selectedScope, renderChart);
+watch(
+  () => props.scope,
+  (next) => {
+    if (next) {
+      selectedScope.value = next;
+    }
+  },
+);
+
+watch(activeScope, renderChart);
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   chart?.destroy();
@@ -731,7 +751,13 @@ onBeforeUnmount(() => {
     <div class="chart-toolbar">
       <div class="chart-scope" role="radiogroup" :aria-label="scopeLabel">
         <label v-for="option in scopeOptions" :key="option.value" class="chart-scope__option">
-          <input v-model="selectedScope" type="radio" :name="chartScopeName" :value="option.value" />
+          <input
+            :checked="activeScope === option.value"
+            type="radio"
+            :name="chartScopeName"
+            :value="option.value"
+            @change="setScope(option.value)"
+          />
           <span>{{ option.label }}</span>
         </label>
       </div>

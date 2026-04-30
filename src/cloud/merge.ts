@@ -103,11 +103,6 @@ function mergeProfilePreservingData(
   };
 
   // For each field: prefer non-default/non-empty values first; if both are "strong", prefer the chosen side.
-  const mergedEquation = pickEnumWithWeakDefault(
-    preferred.tdeeEquation,
-    other.tdeeEquation,
-    DEFAULT.tdeeEquation,
-  );
   const mergedLocale = pickEnumWithWeakDefault(preferred.locale, other.locale, DEFAULT.locale);
   const mergedModel = pickStringWithWeakDefault(preferred.aiModel, other.aiModel, DEFAULT.aiModel);
   const mergedGoalMode = pickEnumWithWeakDefault(
@@ -115,9 +110,9 @@ function mergeProfilePreservingData(
     other.goalMode ?? DEFAULT.goalMode,
     DEFAULT.goalMode,
   );
-  // Sex is not a weak-default field. "male" is the baseline default, but it can also be a
-  // deliberate user choice and should not lose to "female" during merges.
+  // Sex and TDEE equation can match defaults by deliberate choice, so don't treat them as weak defaults.
   const mergedSex = preferred.sex ?? other.sex ?? DEFAULT.sex;
+  const mergedEquation = preferred.tdeeEquation ?? other.tdeeEquation ?? DEFAULT.tdeeEquation;
   return {
     ...other,
     ...preferred,

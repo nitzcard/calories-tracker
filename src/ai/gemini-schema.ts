@@ -46,6 +46,8 @@ export const GEMINI_RESPONSE_SCHEMA = {
               required: [
                 "foodName",
                 "canonicalName",
+                "sourceLabel",
+                "sourceUrl",
                 "amountText",
                 "servings",
                 "unit",
@@ -58,6 +60,8 @@ export const GEMINI_RESPONSE_SCHEMA = {
               properties: {
                 foodName: { type: "STRING" },
                 canonicalName: { type: "STRING", nullable: true },
+                sourceLabel: { type: "STRING", nullable: true },
+                sourceUrl: { type: "STRING", nullable: true },
                 amountText: { type: "STRING" },
                 servings: { type: "NUMBER", nullable: true },
                 unit: { type: "STRING", nullable: true },
@@ -180,6 +184,8 @@ function isAiFood(value: unknown): value is AiFoodResult {
     isRecord(value) &&
     typeof value.foodName === "string" &&
     isStringOrNull(value.canonicalName) &&
+    isStringOrNull(value.sourceLabel) &&
+    isStringOrNull(value.sourceUrl) &&
     typeof value.amountText === "string" &&
     isNumberOrNull(value.servings) &&
     isStringOrNull(value.unit) &&
@@ -236,6 +242,8 @@ export function normalizeAiNutritionResponse(
       mealLabel: meal.mealLabel,
       name: food.foodName,
       canonicalName: food.canonicalName,
+      sourceLabel: food.sourceLabel,
+      sourceUrl: food.sourceUrl,
       amountText: food.amountText,
       grams: food.estimatedGrams,
       gramsEstimated: false,

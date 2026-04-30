@@ -27,11 +27,11 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   const before = await readPersistedAppState(page);
   const beforeToday = before.dailyEntries.find((entry: { date: string }) => entry.date === today);
 
-  const cloudPanel = page.locator("main.app-shell--blocked");
+  const cloudPanel = page.locator(".login-card");
   await cloudPanel.locator('input[autocomplete="username"]').fill("coalesced-user");
   await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
   await cloudPanel.getByRole("button", { name: "Login" }).click();
-  await expect(page.locator("main.app-shell--blocked")).toHaveCount(0);
+  await expect(page.locator(".login-card")).toHaveCount(0);
 
   const foodLog = page.locator("#dailyDeskPanel textarea").first();
   await foodLog.fill("base log plus");
@@ -40,7 +40,8 @@ test("@inputs rapid edits coalesce into one committed revision per field", async
   await foodLog.blur();
   await page.locator("#dailyDeskPanel").getByRole("button", { name: "Save only" }).click();
 
-  const ageInput = page.locator("#constantDataPanel .constant-data-grid > *").nth(0).locator('input[type="number"]').nth(0);
+  await page.getByRole("button", { name: "Settings" }).click();
+  const ageInput = page.locator(".settings-column--profile").locator('input[type="number"]').nth(0);
   await ageInput.fill("35");
   await ageInput.fill("36");
   await ageInput.fill("37");

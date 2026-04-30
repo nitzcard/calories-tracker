@@ -3,6 +3,7 @@ import {
   buildTdeeSnapshot,
   calculateObservedTdee,
   calculateFormulaTdee,
+  scopeEntries,
 } from "./calculations";
 import {
   makeEntry,
@@ -118,6 +119,21 @@ describe("calculateObservedTdee", () => {
     ];
 
     expect(calculateObservedTdee(entries)).toBe(3295);
+  });
+});
+
+describe("scopeEntries", () => {
+  it("keeps only the latest 7 days for 7d scope", () => {
+    const entries = [
+      makeEntry({ date: "2026-04-01", weight: 82, manualCalories: 2400 }),
+      makeEntry({ date: "2026-04-10", weight: 81.5, manualCalories: 2360 }),
+      makeEntry({ date: "2026-04-20", weight: 81.2, manualCalories: 2350 }),
+      makeEntry({ date: "2026-04-22", weight: 81.0, manualCalories: 2340 }),
+    ];
+
+    expect(scopeEntries(entries, "7d").map((entry) => entry.date)).toEqual([
+      "2026-04-22",
+    ]);
   });
 });
 

@@ -7,7 +7,7 @@ type FakeBlobRow = {
   updated_at: string;
 };
 
-test("@cloud sync now flushes pending profile and email input changes before upload", async ({ page }) => {
+test("@cloud auto sync flushes pending profile and email input changes before upload", async ({ page }) => {
   const remoteRows = new Map<string, FakeBlobRow>();
   let writeCount = 0;
 
@@ -57,6 +57,7 @@ test("@cloud sync now flushes pending profile and email input changes before upl
   await expect(authPanel.locator('input[autocomplete="username"]')).toBeVisible();
   await authPanel.locator('input[autocomplete="username"]').fill("flush-user");
   await authPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
+  await authPanel.locator('input[autocomplete="email"]').fill("flush@example.com");
   await authPanel.getByRole("button", { name: "Login" }).click();
 
   await expect.poll(() => writeCount).toBeGreaterThan(0);
@@ -64,14 +65,10 @@ test("@cloud sync now flushes pending profile and email input changes before upl
 
   await page.goto("/settings", { waitUntil: "networkidle" });
 
-  const ageInput = page.locator(".settings-grid").nth(1).locator('input[type="number"]').first();
+  const ageInput = page.locator(".settings-column--profile").locator('input[type="number"]').first();
   await expect(ageInput).toBeVisible();
   await ageInput.fill("41");
 
-  const emailInput = page.locator('input[autocomplete="email"]');
-  await emailInput.fill("flush@example.com");
-
-  await page.getByRole("button", { name: "Sync now" }).click();
   await expect.poll(() => writeCount).toBeGreaterThan(1);
 
   const savedRemote = remoteRows.get("flush-user");

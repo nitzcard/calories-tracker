@@ -31,4 +31,12 @@ describe("buildGeminiNutritionPrompt", () => {
     expect(prompt).toContain("Use `unmatchedItems` only for text that is truly unreadable or not food-related.");
     expect(prompt).toContain("Simple foods and dishes such as salads");
   });
+
+  it("prefers FoodsDictionary for source lookups", () => {
+    const prompt = buildGeminiNutritionPrompt(baseInput);
+
+    expect(prompt).toContain("FoodsDictionary first");
+    expect(prompt).toContain("sourceUrl");
+    expect(prompt).toContain("Never invent URLs");
+  });
 });

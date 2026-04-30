@@ -153,14 +153,14 @@ function buildPrompt(input: { foodName: string; locale: AppLocale; sourceUrl?: s
   const explicitUrl = input.sourceUrl?.trim();
   const localeGuidance =
     input.locale === "he"
-      ? "Prefer Hebrew or Israeli food databases, manufacturer pages, and nutrition references when they are relevant to the food."
-      : "Prefer reliable local nutrition databases and manufacturer pages relevant to the food.";
+      ? "Answer notes in Hebrew when useful. Prefer Israeli/common Hebrew food names when relevant."
+      : "Answer notes in English.";
 
   return renderPromptTemplate(macroLookupPromptTemplate, {
     localeGuidance,
     sourceGuidance: explicitUrl
-      ? `Use this URL as primary evidence and verify it via web search if needed: ${explicitUrl}`
-      : "Use web search to find a reliable source for this food.",
+      ? `User-provided label/URL for context: ${explicitUrl}`
+      : "No source URL provided. Use standard nutrition knowledge.",
     foodName: input.foodName,
     locale: input.locale,
     localeLabel,
@@ -203,7 +203,6 @@ export async function lookupFoodMacrosPer100WithGemini(input: {
 
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
-    tools: [{ googleSearch: {} }],
     generationConfig: {
       temperature: 0.1,
       responseMimeType: "application/json",
@@ -231,12 +230,21 @@ export async function lookupFoodMacrosPer100WithGemini(input: {
         continue;
       }
 
+      if (response.status === 429 || /rate\s*limit|resource_exhausted|too many requests/i.test(errorMessage ?? "")) {
+        continue;
+      }
+
       throw lastError;
     }
 
-    const payload = (await response.json()) as GeminiGenerateContentResponse;
-    const text = extractText(payload);
-    return parseResult(JSON.parse(text));
+    try {
+      const payload = (await response.json()) as GeminiGenerateContentResponse;
+      const text = extractText(payload);
+      return parseResult(JSON.parse(text));
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("AI macro lookup response could not be read.");
+      continue;
+    }
   }
 
   throw lastError ?? new Error("AI macro lookup failed.");

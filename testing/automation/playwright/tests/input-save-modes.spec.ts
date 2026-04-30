@@ -1,14 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
 import { isoDate, readPersistedAppState, seedProfileAndEntries } from "./helpers";
-
-async function forceOpenPanel(page: Page, selector: string) {
-  await page.locator(selector).evaluate((node: Element) => {
-    if (node instanceof HTMLDetailsElement) {
-      node.open = true;
-    }
-  });
-}
 
 test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   const today = isoDate(0);
@@ -35,18 +26,12 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   await cloudPanel.getByRole("button", { name: "Login" }).click();
   await expect(page.locator(".login-card")).toHaveCount(0);
 
-  await forceOpenPanel(page, "#appSetupPanel");
-  await forceOpenPanel(page, "#constantDataPanel");
+  await page.getByRole("button", { name: "Settings" }).click();
 
-  const appSetup = page.locator("#appSetupPanel");
-  const apiKeysPanel = appSetup.locator(".constant-data-grid > *").nth(0);
-  const profilePanel = page.locator("#constantDataPanel .constant-data-grid > *").nth(0);
-  const tdeePanel = page.locator("#constantDataPanel .constant-data-grid > *").nth(1);
+  await page.locator('input[type="password"]').fill("gemini-test-key");
+  await page.locator('input[type="password"]').blur();
 
-  await apiKeysPanel.locator('input[type="password"]').fill("gemini-test-key");
-  await apiKeysPanel.locator('input[type="password"]').blur();
-
-  const headerSelects = page.locator("header select");
+  const profilePanel = page.locator(".settings-column--profile").first();
 
   const profileSelects = profilePanel.locator("select");
   await profileSelects.nth(0).selectOption("female");
@@ -62,13 +47,9 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   await profileNumberInputs.nth(4).blur();
   await page.waitForTimeout(2600);
 
-  await tdeePanel
-    .locator("tr")
-    .filter({ hasText: "Harris-Benedict" })
-    .locator('input[type="radio"]')
-    .first()
-    .check();
+  await page.locator("article").filter({ hasText: "Harris-Benedict" }).locator('input[type="radio"]').check();
 
+  await page.getByRole("button", { name: "Today" }).click();
   await page.locator("#dailyDeskPanel .weight-input").first().fill("81.2");
   await page.locator("#dailyDeskPanel .weight-input").first().blur();
 
@@ -82,6 +63,7 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
     .poll(async () => (await readPersistedAppState(page)).profile?.foodInstructions ?? "")
     .toBe("banana: 90 calories for 100 gr");
 
+  await page.getByRole("button", { name: "History" }).click();
   await page.getByTestId(`history-calories-${yesterday}`).fill("2050");
   await page.getByTestId(`history-calories-${yesterday}`).blur();
   await page.getByTestId(`history-weight-${yesterday}`).fill("79.9");
@@ -101,11 +83,22 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
       weight: 81.2,
     });
 
-  await headerSelects.nth(0).selectOption("he");
-  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: "עברית" }).click();
+  await expect
+    .poll(async () => {
+      const state = await readPersistedAppState(page);
+      return {
+        locale: state.profile?.locale ?? "",
+        foodInstructions: state.profile?.foodInstructions ?? "",
+      };
+    })
+    .toMatchObject({
+      locale: "he",
+      foodInstructions: "banana: 90 calories for 100 gr",
+    });
   await page.reload({ waitUntil: "networkidle" });
 
-  await expect(page.locator("header .sync-pill")).toContainText("persist-user");
+  await expect(page.locator(".sync-status")).toContainText("persist-user");
 
   const persisted = await readPersistedAppState(page);
   const todayEntry = persisted.dailyEntries.find((entry: { date: string }) => entry.date === today);

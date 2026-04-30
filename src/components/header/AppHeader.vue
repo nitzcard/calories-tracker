@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { AppLocale } from "../../types";
+import type { AppLocale, ThemePreference } from "../../types";
 
 const props = defineProps<{
   locale: AppLocale;
+  themePreference: ThemePreference;
   isSavingLocale: boolean;
   cloudConfirmedUsername: string;
   isCloudBusy: boolean;
@@ -14,6 +15,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "locale-change": [locale: AppLocale];
+  "theme-change": [theme: ThemePreference];
   "go-today": [];
   logout: [];
 }>();
@@ -22,12 +24,15 @@ const { t } = useI18n();
 
 const syncIndicator = computed(() => {
   const normalized = props.cloudConfirmedUsername.trim();
-  return normalized ? t("syncIndicatorCloud") : t("syncIndicatorCloudPending");
+  return normalized || t("syncIndicatorCloudPending");
 });
 
 const showCloudIndicator = computed(() => props.cloudConfirmedUsername.trim());
 const showCloudPending = computed(() => !props.cloudConfirmedUsername.trim());
-const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
+const nextThemePreference = computed<ThemePreference>(() => (props.themePreference === "dark" ? "light" : "dark"));
+const themeToggleLabel = computed(() =>
+  props.themePreference === "dark" ? t("themeLight") : t("themeDark"),
+);
 </script>
 
 <template>
@@ -70,7 +75,19 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
         </div>
       </div>
 
-      <div class="copy-utilities">
+    </div>
+
+    <div class="toolbar">
+      <div class="meta-row">
+        <span
+          v-if="!authView"
+          class="sync-status"
+          :class="{ 'sync-status--cloud': showCloudIndicator, 'sync-status--pending': showCloudPending }"
+        >
+          <span class="live-dot" :class="{ busy: isCloudBusy }" aria-hidden="true" title="sync status">●</span>
+          <span class="sync-label">{{ syncIndicator }}</span>
+        </span>
+
         <div class="locale-control" :aria-label="t('language')">
           <div class="locale-switch" :class="{ 'is-saving': isSavingLocale }" role="group" :aria-label="t('language')">
             <button
@@ -97,29 +114,29 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
             </button>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div class="toolbar">
-      <button
-        v-if="showLogout && !authView"
-        type="button"
-        class="toolbar-button toolbar-button--logout"
-        :disabled="isCloudBusy"
-        @click="emit('logout')"
-      >
-        {{ t("cloudLogout") }}
-      </button>
-
-      <div class="meta-row">
-        <span
-          class="sync-status"
-          :class="{ 'sync-status--cloud': showCloudIndicator, 'sync-status--pending': showCloudPending }"
+        <button
+          type="button"
+          class="theme-toggle"
+          :aria-label="themeToggleLabel"
+          :title="themeToggleLabel"
+          @click="emit('theme-change', nextThemePreference)"
         >
-          <span class="live-dot" :class="{ busy: isCloudBusy }" aria-hidden="true" title="sync status">●</span>
-          <span class="sync-label">{{ syncIndicator }}</span>
-          <span v-if="confirmedUserTag" class="sync-user" dir="ltr">{{ confirmedUserTag }}</span>
-        </span>
+          <svg v-if="themePreference === 'dark'" viewBox="0 0 24 24" class="theme-toggle__icon" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.5" />
+            <path d="M12 2.75v2.2" />
+            <path d="M12 19.05v2.2" />
+            <path d="m4.19 4.19 1.56 1.56" />
+            <path d="m18.25 18.25 1.56 1.56" />
+            <path d="M2.75 12h2.2" />
+            <path d="M19.05 12h2.2" />
+            <path d="m4.19 19.81 1.56-1.56" />
+            <path d="m18.25 5.75 1.56-1.56" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" class="theme-toggle__icon" aria-hidden="true">
+            <path d="M20.25 14.15A7.6 7.6 0 0 1 9.85 3.75 8.7 8.7 0 1 0 20.25 14.15Z" />
+          </svg>
+        </button>
 
         <a
           v-if="!authView"
@@ -130,6 +147,16 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
         >
           {{ t("feedbackLabel") }}
         </a>
+
+        <button
+          v-if="showLogout && !authView"
+          type="button"
+          class="toolbar-button toolbar-button--logout"
+          :disabled="isCloudBusy"
+          @click="emit('logout')"
+        >
+          {{ t("cloudLogout") }}
+        </button>
       </div>
     </div>
   </header>
@@ -161,11 +188,6 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
   display: grid;
   gap: 0.7rem;
   min-inline-size: 0;
-}
-
-.copy-utilities {
-  display: flex;
-  justify-content: flex-start;
 }
 
 .title-row {
@@ -204,14 +226,16 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
   flex: 0 0 auto;
   border-radius: 0.72rem;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, white 12%), color-mix(in srgb, var(--accent-strong) 88%, black 12%));
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 18%, transparent);
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--surface-1)), color-mix(in srgb, var(--accent-strong) 14%, var(--surface-2)));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .brand-mark__svg {
   inline-size: 1.2rem;
   block-size: 1.2rem;
-  color: white;
+  color: var(--accent-strong);
 }
 
 .brand-mark__svg path {
@@ -239,8 +263,9 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
 }
 
 .toolbar {
-  display: grid;
+  display: flex;
   gap: 0.65rem;
+  align-items: center;
   justify-items: end;
   inline-size: fit-content;
   max-inline-size: 100%;
@@ -278,7 +303,7 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
 }
 
 .toolbar-button--logout {
-  padding: 0.28rem 0.5rem;
+  padding: 0.42rem 0.65rem;
   border-color: transparent;
   background: transparent;
   color: var(--text-muted);
@@ -302,11 +327,11 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
   font-size: 0.84rem;
   font-weight: 600;
   white-space: nowrap;
-  padding: 0.42rem 0.68rem;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
-  border-radius: calc(var(--radius-sm) + 0.08rem);
-  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  padding: 0.42rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .sync-label {
@@ -425,6 +450,39 @@ const confirmedUserTag = computed(() => props.cloudConfirmedUsername.trim());
 .locale-switch__flag {
   font-size: 1.1rem;
   line-height: 1;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.6rem;
+  block-size: 2.4rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: calc(var(--radius-sm) + 0.14rem);
+  background: color-mix(in srgb, var(--surface-1) 90%, transparent);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-1));
+}
+
+.theme-toggle__icon {
+  inline-size: 1.16rem;
+  block-size: 1.16rem;
+}
+
+.theme-toggle__icon :is(path, circle) {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
 }
 
 @media (max-width: 960px) {

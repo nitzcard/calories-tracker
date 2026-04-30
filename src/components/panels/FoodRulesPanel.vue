@@ -30,6 +30,10 @@ watch(
 function updateDraft(event: Event) {
   draftInstructions.value = (event.target as HTMLTextAreaElement).value;
 }
+
+function saveInstructions() {
+  emit("save-instructions", draftInstructions.value);
+}
 </script>
 
 <template>
@@ -53,7 +57,7 @@ function updateDraft(event: Event) {
             class="constant-textarea"
             :value="draftInstructions"
             @input="updateDraft"
-            @blur="emit('save-instructions', draftInstructions)"
+            @blur="saveInstructions"
           ></textarea>
         </FieldControl>
       </FormField>
@@ -74,7 +78,7 @@ function updateDraft(event: Event) {
           class="constant-textarea"
           :value="draftInstructions"
           @input="updateDraft"
-          @blur="emit('save-instructions', draftInstructions)"
+          @blur="saveInstructions"
         ></textarea>
       </FieldControl>
     </FormField>

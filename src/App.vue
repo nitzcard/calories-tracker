@@ -45,6 +45,7 @@ const {
   analyzeIssue,
   currentEntry,
   tdee,
+  progressTdeeReferences,
   estimatedLeanWeight,
   weightPoints,
   caloriePoints,
@@ -72,7 +73,6 @@ const {
   cloudUsername,
   cloudConfirmedUsername,
   hasSavedCloudPassword,
-  isCloudBusy,
   isCloudSyncing,
   cloudStatus,
   cloudLastSyncedAt,
@@ -709,6 +709,7 @@ async function confirmDeleteDay() {
   <LoginView
     v-if="isLoginRoute && profile"
     :locale="locale"
+    :theme-preference="themePreference"
     :is-saving-locale="isSavingLocale"
     :cloud-confirmed-username="cloudConfirmedUsername"
     :is-cloud-busy="isCloudSyncing"
@@ -720,6 +721,7 @@ async function confirmDeleteDay() {
     :cloud-error="cloudError"
     :supabase-configured="supabaseConfigured"
     @locale-change="onLocaleChange"
+    @theme-change="saveThemePreference"
     @update:profile="profile = $event"
     @save-profile="saveProfileAndHighlight"
     @update:cloud-username="setCloudUsername"
@@ -728,10 +730,22 @@ async function confirmDeleteDay() {
   />
 
   <main v-else-if="profile" class="app-shell">
-    <div v-if="primaryToast" class="status-toast-stack" aria-live="polite" aria-atomic="true">
+    <div v-if="primaryToast" class="status-toast-stack" aria-atomic="true">
       <Transition name="status-toast" mode="out-in">
-        <div :key="primaryToast.id" class="status-toast" role="status">
-          <span class="status-toast__glyph spinning" aria-hidden="true"></span>
+        <div
+          :key="primaryToast.id"
+          class="status-toast"
+          :class="`status-toast--${primaryToast.kind}`"
+          :role="primaryToast.kind === 'error' ? 'alert' : 'status'"
+          :aria-live="primaryToast.kind === 'error' ? 'assertive' : 'polite'"
+        >
+          <span
+            class="status-toast__glyph"
+            :class="{ spinning: primaryToast.kind !== 'error', 'status-toast__glyph--error': primaryToast.kind === 'error' }"
+            aria-hidden="true"
+          >
+            {{ primaryToast.kind === 'error' ? "!" : "" }}
+          </span>
           <span class="status-toast__message">{{ primaryToast.message }}</span>
           <a
             v-if="primaryToast.action"
@@ -749,9 +763,11 @@ async function confirmDeleteDay() {
       :locale="locale"
       :is-saving-locale="isSavingLocale"
       :cloud-confirmed-username="cloudConfirmedUsername"
+      :theme-preference="themePreference"
       :is-cloud-busy="isCloudSyncing"
       :show-logout="hasConfirmedCloudLogin"
       @locale-change="onLocaleChange"
+      @theme-change="saveThemePreference"
       @go-today="goToToday"
       @logout="cloudLogout"
     />
@@ -841,11 +857,13 @@ async function confirmDeleteDay() {
           :current-entry="currentEntry"
           :profile="profile"
           :correction-notice-token="correctionNoticeToken"
+          :is-saving-food-instructions="isSavingFoodInstructions"
           @update:selected-date="selectedDate = $event"
           @update:current-weight="updateCurrentWeight"
           @update:food-log="updateCurrentFoodLog"
           @save-weight="saveWeightDraft"
           @save-draft="saveFoodDraft"
+          @save-instructions="saveFoodInstructions"
           @analyze="analyzeCurrentDay"
           @accept-model-switch="acceptSuggestedModelSwitch"
           @dismiss-model-switch="dismissSuggestedModelSwitch"
@@ -864,7 +882,7 @@ async function confirmDeleteDay() {
           :weight-points="weightPoints"
           :calorie-trendline-label="calorieTrendlineLabel"
           :weight-trendline-label="weightTrendlineLabel"
-          :tdee-reference="tdee.selectedValue"
+          :tdee-references="progressTdeeReferences"
           :target-weight-reference="tdee.targetWeight"
           :entries="entries"
           :saving-history-calories="savingHistoryCalories"
@@ -880,37 +898,20 @@ async function confirmDeleteDay() {
         <SettingsView
           v-else
           :locale="locale"
-          :theme-preference="themePreference"
           :profile="profile"
           :estimated-lean-weight="estimatedLeanWeight"
           :tdee="tdee"
-          :is-saving-locale="isSavingLocale"
           :is-saving-tdee-equation="isSavingTdeeEquation"
-          :is-saving-food-instructions="isSavingFoodInstructions"
           :keys="aiKeys"
           :saving-ai-key-field="savingAiKeyField"
-          :cloud-username="cloudUsername"
-          :cloud-confirmed-username="cloudConfirmedUsername"
-          :has-saved-cloud-password="hasSavedCloudPassword"
-          :is-cloud-busy="isCloudBusy"
-          :cloud-status="cloudStatus"
-          :cloud-last-synced-at="cloudLastSyncedAt"
-          :cloud-error="cloudError"
-          :supabase-configured="supabaseConfigured"
           :tdee-highlight-token="tdeeHighlightToken"
-          @locale-change="onLocaleChange"
-          @theme-change="saveThemePreference"
           @update:profile="profile = $event"
           @save-profile="saveProfileAndHighlight"
           @select-equation="
             saveTdeeEquation($event);
             tdeeHighlightToken += 1;
           "
-          @save-instructions="saveFoodInstructions"
           @save-ai-key="saveAiKey"
-          @update:cloud-username="setCloudUsername"
-          @sync="cloudSyncNow($event)"
-          @logout="cloudLogout"
         />
       </div>
 
@@ -1125,9 +1126,11 @@ async function confirmDeleteDay() {
   block-size: 2.65rem;
   border-radius: 0.82rem;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 90%, white 10%), color-mix(in srgb, var(--accent-strong) 86%, black 14%));
-  color: white;
-  box-shadow: 0 12px 22px color-mix(in srgb, var(--accent) 14%, transparent);
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface-1)), color-mix(in srgb, var(--accent-strong) 12%, var(--surface-2)));
+  color: var(--accent-strong);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent),
+    0 12px 22px color-mix(in srgb, var(--accent) 10%, transparent);
   flex: 0 0 auto;
 }
 
@@ -1193,25 +1196,55 @@ async function confirmDeleteDay() {
   gap: 0.7rem;
   max-inline-size: min(32rem, calc(100vw - 2rem));
   padding: 0.75rem 0.9rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--status-toast-local-border);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface-1) 94%, transparent);
+  background: var(--status-toast-local-bg);
+  color: var(--status-toast-local-text);
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
   pointer-events: auto;
 }
 
+.status-toast--local {
+  border-color: var(--status-toast-local-border);
+  background: var(--status-toast-local-bg);
+  color: var(--status-toast-local-text);
+}
+
+.status-toast--cloud {
+  border-color: var(--status-toast-cloud-border);
+  background: var(--status-toast-cloud-bg);
+  color: var(--status-toast-cloud-text);
+}
+
+.status-toast--error {
+  border-color: var(--status-toast-error-border);
+  background: var(--status-toast-error-bg);
+  color: var(--status-toast-error-text);
+}
+
 .status-toast__glyph {
-  inline-size: 1rem;
-  block-size: 1rem;
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
   border-radius: 999px;
   border: 2px solid currentColor;
   border-inline-end-color: transparent;
   flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
   opacity: 0.92;
 }
 
 .status-toast__glyph.spinning {
   animation: status-toast-spin 0.85s linear infinite;
+}
+
+.status-toast__glyph--error {
+  border-color: currentColor;
+  border-inline-end-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .status-toast__message {
@@ -1289,7 +1322,8 @@ async function confirmDeleteDay() {
 
 @media (max-width: 960px) {
   .status-toast-stack {
-    inset-inline: 0.75rem;
+    inset-inline-start: 0.75rem;
+    inset-inline-end: 0.75rem;
     inset-block-end: calc(5.75rem + env(safe-area-inset-bottom));
     justify-items: stretch;
   }
