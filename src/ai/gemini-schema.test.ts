@@ -67,11 +67,34 @@ const response: AiNutritionResponse = {
 };
 
 describe("gemini schema", () => {
-  it("preserves source links for discovered foods", () => {
+  it("preserves provided source urls when they are valid http links", () => {
     const parsed = parseAiNutritionResponse(response);
     const normalized = normalizeAiNutritionResponse(parsed, "gemini-2.5-flash", "en");
 
     expect(normalized.foods[0].sourceLabel).toBe("FoodsDictionary");
     expect(normalized.foods[0].sourceUrl).toBe("https://www.foodsdictionary.co.il/Products/12345/greek-yogurt");
+  });
+
+  it("adds foodsdictionary search fallback when source url is missing", () => {
+    const parsed = parseAiNutritionResponse({
+      ...response,
+      meals: [
+        {
+          ...response.meals[0],
+          foods: [
+            {
+              ...response.meals[0].foods[0],
+              foodName: "Cottage cheese",
+              canonicalName: "Cottage cheese",
+              sourceLabel: null,
+              sourceUrl: null,
+            },
+          ],
+        },
+      ],
+    });
+    const normalized = normalizeAiNutritionResponse(parsed, "gemini-2.5-flash", "en");
+    expect(normalized.foods[0].sourceLabel).toBe("FoodsDictionary");
+    expect(normalized.foods[0].sourceUrl).toBe("https://www.foodsdictionary.co.il/FoodsSearch.php?q=Cottage+cheese");
   });
 });

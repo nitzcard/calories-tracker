@@ -857,13 +857,31 @@ function primaryFoodName(food: FoodBreakdownItem) {
   return food.name;
 }
 
-function foodSourceText(food: FoodBreakdownItem) {
-  return food.sourceLabel?.trim() || t("foodSourceLink");
-}
-
 function foodSourceHref(food: FoodBreakdownItem) {
   const href = food.sourceUrl?.trim();
-  return href ? href : null;
+  if (!href) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(href);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    // Support scheme-less urls like www.site.com/path from AI output.
+    try {
+      const parsed = new URL(`https://${href}`);
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  }
+}
+
+function foodNameHref(food: FoodBreakdownItem) {
+  return foodSourceHref(food);
 }
 
 function secondaryFoodName(food: FoodBreakdownItem) {
@@ -1735,19 +1753,20 @@ const proteinPerLeanBodyWeight = computed(() => {
               <tbody>
                 <tr v-for="food in meal.foods" :key="food.id">
                   <td class="food-cell">
-                    <div class="food-name">{{ primaryFoodName(food) }}</div>
-                    <div v-if="secondaryFoodName(food)" class="food-alt-name">
-                      {{ secondaryFoodName(food) }}
-                    </div>
-                    <div v-if="foodSourceHref(food)" class="food-source">
+                    <div class="food-name">
                       <a
-                        class="food-source-link"
-                        :href="foodSourceHref(food) ?? undefined"
+                        v-if="foodNameHref(food)"
+                        class="food-name-link"
+                        :href="foodNameHref(food) ?? undefined"
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        {{ foodSourceText(food) }}
+                        {{ primaryFoodName(food) }}
                       </a>
+                      <span v-else>{{ primaryFoodName(food) }}</span>
+                    </div>
+                    <div v-if="secondaryFoodName(food)" class="food-alt-name">
+                      {{ secondaryFoodName(food) }}
                     </div>
                     <small v-if="food.needsReview || food.assumptions.length" class="food-meta">
                       {{ foodMetaText(food) }}
@@ -1900,19 +1919,20 @@ const proteinPerLeanBodyWeight = computed(() => {
             <div class="meal-cards" aria-label="Meal foods">
               <div v-for="food in meal.foods" :key="`card-${food.id}`" class="food-card">
                 <div class="food-card__head">
-                  <div class="food-name">{{ primaryFoodName(food) }}</div>
-                  <div v-if="secondaryFoodName(food)" class="food-alt-name">
-                    {{ secondaryFoodName(food) }}
-                  </div>
-                  <div v-if="foodSourceHref(food)" class="food-source">
+                  <div class="food-name">
                     <a
-                      class="food-source-link"
-                      :href="foodSourceHref(food) ?? undefined"
+                      v-if="foodNameHref(food)"
+                      class="food-name-link"
+                      :href="foodNameHref(food) ?? undefined"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      {{ foodSourceText(food) }}
+                      {{ primaryFoodName(food) }}
                     </a>
+                    <span v-else>{{ primaryFoodName(food) }}</span>
+                  </div>
+                  <div v-if="secondaryFoodName(food)" class="food-alt-name">
+                    {{ secondaryFoodName(food) }}
                   </div>
                   <small v-if="food.needsReview || food.assumptions.length" class="food-meta">
                     {{ foodMetaText(food) }}
@@ -3042,29 +3062,26 @@ const proteinPerLeanBodyWeight = computed(() => {
   overflow-wrap: anywhere;
 }
 
+.food-name-link {
+  color: color-mix(in srgb, var(--accent) 62%, #6ad9ff);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.16em;
+  font-weight: 800;
+}
+
+.food-name-link:hover,
+.food-name-link:focus-visible {
+  color: #9be8ff;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 0.18rem;
+}
+
 .food-alt-name {
   color: var(--text-muted);
   margin-block-start: 0.2rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
-}
-
-.food-source {
-  margin-block-start: 0.2rem;
-}
-
-.food-source-link {
-  color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
-  overflow-wrap: anywhere;
-}
-
-.food-source-link:hover,
-.food-source-link:focus-visible {
-  color: var(--text-primary);
 }
 
 .amount-cell {

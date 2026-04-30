@@ -236,35 +236,38 @@ export function normalizeAiNutritionResponse(
   locale: AppLocale,
 ): NormalizedNutritionResult {
   const meals: MealBreakdownItem[] = response.meals.map((meal, mealIndex) => {
-    const foods: FoodBreakdownItem[] = meal.foods.map((food, foodIndex) => ({
-      id: `${meal.mealKey}-${mealIndex}-${foodIndex}`,
-      mealKey: meal.mealKey,
-      mealLabel: meal.mealLabel,
-      name: food.foodName,
-      canonicalName: food.canonicalName,
-      sourceLabel: food.sourceLabel,
-      sourceUrl: food.sourceUrl,
-      amountText: food.amountText,
-      grams: food.estimatedGrams,
-      gramsEstimated: false,
-      calories: food.nutrition.calories,
-      caloriesEstimated: false,
-      caloriesPer100g:
-        food.estimatedGrams && food.nutrition.calories
-          ? Math.round((food.nutrition.calories / food.estimatedGrams) * 100)
-          : null,
-      protein: food.nutrition.protein,
-      carbs: food.nutrition.carbs,
-      fat: food.nutrition.fat,
-      fiber: food.nutrition.fiber,
-      confidence: food.confidence,
-      assumptions: food.assumptions,
-      needsReview: food.needsReview,
-      notes:
-        locale === "he"
-          ? "פוענח על ידי AI. רצוי לאמת מול מסד תזונה."
-          : "Parsed by AI. Review against a nutrition database when needed.",
-    }));
+    const foods: FoodBreakdownItem[] = meal.foods.map((food, foodIndex) => {
+      const sourceRef = normalizeFoodSourceReference(food);
+      return {
+        id: `${meal.mealKey}-${mealIndex}-${foodIndex}`,
+        mealKey: meal.mealKey,
+        mealLabel: meal.mealLabel,
+        name: food.foodName,
+        canonicalName: food.canonicalName,
+        sourceLabel: sourceRef.label,
+        sourceUrl: sourceRef.url,
+        amountText: food.amountText,
+        grams: food.estimatedGrams,
+        gramsEstimated: false,
+        calories: food.nutrition.calories,
+        caloriesEstimated: false,
+        caloriesPer100g:
+          food.estimatedGrams && food.nutrition.calories
+            ? Math.round((food.nutrition.calories / food.estimatedGrams) * 100)
+            : null,
+        protein: food.nutrition.protein,
+        carbs: food.nutrition.carbs,
+        fat: food.nutrition.fat,
+        fiber: food.nutrition.fiber,
+        confidence: food.confidence,
+        assumptions: food.assumptions,
+        needsReview: food.needsReview,
+        notes:
+          locale === "he"
+            ? "פוענח על ידי AI. רצוי לאמת מול מסד תזונה."
+            : "Parsed by AI. Review against a nutrition database when needed.",
+      };
+    });
 
     return {
       id: `${meal.mealKey}-${mealIndex}`,
@@ -308,6 +311,67 @@ function averageConfidence(meals: AiMealResult[]): number | null {
   }
 
   return Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(2));
+}
+
+function normalizeFoodSourceReference(food: AiFoodResult): { label: string | null; url: string | null } {
+  const normalizedLabel = normalizeSourceLabel(food.sourceLabel);
+  const existingUrl = normalizeSourceUrl(food.sourceUrl);
+  if (existingUrl) {
+    return { label: normalizedLabel, url: existingUrl };
+  }
+
+  const searchUrl = buildFoodsDictionarySearchUrl(food.canonicalName, food.foodName);
+  if (!searchUrl) {
+    return { label: normalizedLabel, url: null };
+  }
+
+  const fallbackLabel = normalizedLabel ?? "FoodsDictionary";
+  return { label: fallbackLabel, url: searchUrl };
+}
+
+function normalizeSourceLabel(label: string | null): string | null {
+  const value = label?.trim();
+  return value ? value : null;
+}
+
+function normalizeSourceUrl(url: string | null): string | null {
+  const href = url?.trim();
+  if (!href) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(href);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    // Support urls that Gemini might return without a scheme, like www.site.com/path.
+    try {
+      const parsed = new URL(`https://${href}`);
+      if (parsed.protocol !== "https:") {
+        return null;
+      }
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildFoodsDictionarySearchUrl(
+  canonicalName: string | null,
+  foodName: string | null,
+): string | null {
+  const query = canonicalName?.trim() || foodName?.trim();
+  if (!query) {
+    return null;
+  }
+
+  const url = new URL("https://www.foodsdictionary.co.il/FoodsSearch.php");
+  url.searchParams.set("q", query);
+  return url.toString();
 }
 
 function normalizeMealColor(color: string, mealKey: AiMealResult["mealKey"]) {

@@ -37,6 +37,6 @@ describe("buildGeminiNutritionPrompt", () => {
 
     expect(prompt).toContain("FoodsDictionary first");
     expect(prompt).toContain("sourceUrl");
-    expect(prompt).toContain("Never invent URLs");
+    expect(prompt).toContain("Never use old or guessed FoodsDictionary paths like `/nutrition/...`");
   });
 });
