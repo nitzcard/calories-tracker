@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ApiKeysPanel from "../components/panels/ApiKeysPanel.vue";
+import BackupPanel from "../components/panels/BackupPanel.vue";
 import ProfilePanel from "../components/panels/ProfilePanel.vue";
 import TdeeSummaryPanel from "../components/panels/TdeeSummaryPanel.vue";
 import type { AppLocale, Profile, TdeeSnapshot } from "../types";
@@ -11,6 +12,8 @@ defineProps<{
   estimatedLeanWeight: number | null;
   tdee: TdeeSnapshot;
   isSavingTdeeEquation: boolean;
+  isCloudBusy: boolean;
+  canRestoreBackup: boolean;
   keys: StoredAiKeys;
   savingAiKeyField: keyof StoredAiKeys | "";
   tdeeHighlightToken: number;
@@ -21,6 +24,8 @@ const emit = defineEmits<{
   "save-profile": [profile: Profile];
   "select-equation": [value: Profile["tdeeEquation"]];
   "save-ai-key": [provider: keyof StoredAiKeys, value: string];
+  "download-backup": [];
+  "restore-backup": [file: File];
 }>();
 
 </script>
@@ -52,6 +57,13 @@ const emit = defineEmits<{
         :highlight-token="tdeeHighlightToken"
         :is-updating="isSavingTdeeEquation"
         @select-equation="emit('select-equation', $event)"
+      />
+
+      <BackupPanel
+        :is-busy="isCloudBusy"
+        :can-restore="canRestoreBackup"
+        @download="emit('download-backup')"
+        @restore="emit('restore-backup', $event)"
       />
     </div>
   </section>

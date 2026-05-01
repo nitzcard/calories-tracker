@@ -82,6 +82,8 @@ const {
   setCloudUsername,
   cloudLogout,
   cloudSyncNow,
+  createBackupFile,
+  restoreBackupFile,
   notice,
   clearNotice,
 } = dashboard;
@@ -642,6 +644,38 @@ async function clearHistorySummaryBaseline() {
   await saveProfileDraft(profile.value);
 }
 
+async function downloadBackup() {
+  try {
+    const backup = createBackupFile();
+    const blob = new Blob([backup.content], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = backup.filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    showTransientToast("local", t("backupDownloaded"), { duration: 4500 });
+  } catch (error) {
+    showTransientToast("error", `⚠️ ${error instanceof Error ? error.message : String(error)}`, {
+      duration: 5000,
+    });
+  }
+}
+
+async function restoreBackup(file: File) {
+  try {
+    const rawText = await file.text();
+    await restoreBackupFile(rawText);
+    showTransientToast("cloud", t("backupRestored"), { duration: 5000 });
+  } catch (error) {
+    showTransientToast("error", `⚠️ ${error instanceof Error ? error.message : t("backupFileInvalid")}`, {
+      duration: 5000,
+    });
+  }
+}
+
 function closeDeleteDayDialog() {
   deleteDayDialogRef.value?.close();
   deleteDayPendingDate.value = null;
@@ -917,6 +951,8 @@ async function confirmDeleteDay() {
           :estimated-lean-weight="estimatedLeanWeight"
           :tdee="tdee"
           :is-saving-tdee-equation="isSavingTdeeEquation"
+          :is-cloud-busy="isCloudSyncing"
+          :can-restore-backup="hasConfirmedCloudLogin"
           :keys="aiKeys"
           :saving-ai-key-field="savingAiKeyField"
           :tdee-highlight-token="tdeeHighlightToken"
@@ -927,6 +963,8 @@ async function confirmDeleteDay() {
             tdeeHighlightToken += 1;
           "
           @save-ai-key="saveAiKey"
+          @download-backup="downloadBackup"
+          @restore-backup="restoreBackup"
         />
       </div>
 

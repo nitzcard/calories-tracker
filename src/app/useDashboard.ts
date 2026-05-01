@@ -37,6 +37,7 @@ import { fetchGeminiModelOptions } from "../ai/gemini-models";
 import { canonicalCloudFingerprint } from "../cloud/canonical";
 import { localIsoDate } from "../domain/dates";
 import { clearSavedCloudAuth, readSavedCloudAuth, saveCloudAuth, type SavedCloudAuth } from "../cloud/auth-storage";
+import { createBackupDocument, parseBackupDocument } from "../cloud/backup";
 
 type CloudPhase = "idle" | "loading" | "saving" | "saved" | "error";
 
@@ -170,7 +171,7 @@ export function useDashboard() {
       updatedAt: new Date().toISOString(),
       profile: clone(profile.value ?? createDefaultProfile(locale.value)),
       dailyEntries: sortEntries(clone(entries.value)),
-      foodRules: [],
+      foodRules: clone(currentLoadedState.value.foodRules),
       aiKeys: { ...aiKeys.value },
     };
   }
@@ -297,7 +298,7 @@ export function useDashboard() {
     return true;
   }
 
-  async function persistCloudState() {
+  async function persistCloudState(force = false) {
     const username = normalizeUsername(cloudConfirmedUsername.value);
     const secret = getCloudSecret(username);
     if (!username || !secret) {
@@ -306,14 +307,14 @@ export function useDashboard() {
 
     const snapshot = buildCloudStateSnapshot();
     const fingerprint = canonicalCloudFingerprint(snapshot);
-    if (fingerprint === lastSavedFingerprint.value) {
+    if (!force && fingerprint === lastSavedFingerprint.value) {
       return false;
     }
 
     await cloudWriteQueue.enqueue(async () => {
       const latest = buildCloudStateSnapshot();
       const latestFingerprint = canonicalCloudFingerprint(latest);
-      if (latestFingerprint === lastSavedFingerprint.value) {
+      if (!force && latestFingerprint === lastSavedFingerprint.value) {
         return;
       }
 
@@ -832,6 +833,23 @@ export function useDashboard() {
     });
   }
 
+  function createBackupFile() {
+    const backup = createBackupDocument(buildCloudStateSnapshot());
+    const exportedAt = backup.exportedAt.slice(0, 10);
+    const username = normalizeUsername(cloudConfirmedUsername.value) || "cloud";
+    return {
+      filename: `calorie-tracker-backup-${username}-${exportedAt}.json`,
+      content: JSON.stringify(backup, null, 2),
+    };
+  }
+
+  async function restoreBackupFile(rawText: string) {
+    const parsed = JSON.parse(rawText) as unknown;
+    const nextState = parseBackupDocument(parsed, locale.value);
+    hydrateFromState(nextState);
+    await persistCloudState(true);
+  }
+
   async function analyzeCurrentDay() {
     await analysis.analyzeCurrentDay();
     await persistCloudState();
@@ -1070,6 +1088,8 @@ export function useDashboard() {
     setCloudUsername,
     cloudLogout,
     cloudSyncNow,
+    createBackupFile,
+    restoreBackupFile,
     clearNotice,
     saveThemePreference,
   };
