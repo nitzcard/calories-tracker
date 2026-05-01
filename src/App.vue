@@ -74,6 +74,7 @@ const {
   cloudConfirmedUsername,
   hasSavedCloudPassword,
   isCloudSyncing,
+  isInitialCloudHydrating,
   cloudStatus,
   cloudLastSyncedAt,
   cloudError,
@@ -684,6 +685,24 @@ async function confirmDeleteDay() {
     </div>
   </Teleport>
 
+  <Teleport to="body">
+    <div
+      v-if="isInitialCloudHydrating"
+      class="startup-cloud-overlay"
+      role="status"
+      aria-live="polite"
+      :aria-label="t('toastCloudSyncing')"
+    >
+      <div class="startup-cloud-overlay__card">
+        <span class="startup-cloud-overlay__spinner" aria-hidden="true"></span>
+        <div class="startup-cloud-overlay__copy">
+          <strong>{{ t("toastCloudSyncing") }}</strong>
+          <span>{{ t("cloudSyncHelper") }}</span>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
   <dialog ref="deleteDayDialogRef" class="confirm-delete-dialog" @close="deleteDayPendingDate = null">
     <form method="dialog" class="confirm-delete-dialog__form" @submit.prevent="confirmDeleteDay">
       <h2 class="confirm-delete-dialog__title">{{ t("deleteDayModalTitle") }}</h2>
@@ -988,6 +1007,56 @@ async function confirmDeleteDay() {
 .global-analyzing-label {
   font-size: 0.98rem;
   line-height: 1.2;
+}
+
+.startup-cloud-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 46%, transparent), color-mix(in srgb, var(--surface-2) 54%, transparent));
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+
+.startup-cloud-overlay__card {
+  inline-size: min(28rem, calc(100vw - 2rem));
+  display: grid;
+  justify-items: center;
+  gap: 0.8rem;
+  padding: 1.2rem 1.35rem;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+  border-radius: calc(var(--radius-lg) + 0.1rem);
+  background: color-mix(in srgb, var(--surface-1) 84%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 24px 64px rgba(15, 23, 42, 0.2);
+  text-align: center;
+}
+
+.startup-cloud-overlay__spinner {
+  inline-size: 1.45rem;
+  block-size: 1.45rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-inline-end-color: var(--accent-strong);
+  border-radius: 50%;
+  animation: global-spin 850ms linear infinite;
+}
+
+.startup-cloud-overlay__copy {
+  display: grid;
+  gap: 0.3rem;
+  line-height: 1.4;
+}
+
+.startup-cloud-overlay__copy strong {
+  font-size: 1rem;
+}
+
+.startup-cloud-overlay__copy span {
+  color: var(--text-muted);
 }
 
 @keyframes global-spin {

@@ -88,6 +88,7 @@ export function useDashboard() {
     Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
   );
   const cloudIsSyncing = ref(false);
+  const isInitialCloudHydrating = ref(false);
   const cloudPushPendingSignal = ref(false);
   let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
   let cloudPushPending = false;
@@ -1475,7 +1476,12 @@ export function useDashboard() {
     if (!cloudPassword.value.trim()) return;
 
     didInitCloudSync.value = true;
-    await cloudSyncNow({ username, password: cloudPassword.value, backupBeforePull: false });
+    isInitialCloudHydrating.value = true;
+    try {
+      await cloudSyncNow({ username, password: cloudPassword.value, backupBeforePull: false });
+    } finally {
+      isInitialCloudHydrating.value = false;
+    }
   }
 
   onMounted(async () => {
@@ -1580,6 +1586,7 @@ export function useDashboard() {
     hasSavedCloudPassword,
     isCloudBusy,
     isCloudSyncing: computed(() => cloudIsSyncing.value || cloudPushPendingSignal.value),
+    isInitialCloudHydrating,
     cloudStatus,
     cloudLastSyncedAt,
     cloudError,
