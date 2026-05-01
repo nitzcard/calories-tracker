@@ -12,7 +12,7 @@ defineProps<{
   profile: Profile;
   cloudUsername: string;
   hasSavedCloudPassword: boolean;
-  cloudStatus: "idle" | "synced" | "failed";
+  cloudStatus: "idle" | "loading" | "saving" | "saved" | "error";
   cloudLastSyncedAt: string;
   cloudError: string;
   supabaseConfigured: boolean;

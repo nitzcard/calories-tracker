@@ -1,12 +1,12 @@
 import type { ComputedRef, Ref } from "vue";
 import { resolveFoodCorrection } from "./dashboard-helpers";
-import { saveEntry, saveProfile } from "../storage/repository";
 import type { DailyEntry, FoodBreakdownItem, MealBreakdownItem, NutritionTotals, Profile } from "../types";
 
 export function useFoodCorrectionState(args: {
   profile: Ref<Profile | null>;
   currentEntry: ComputedRef<DailyEntry | undefined>;
-  refreshState: () => Promise<void>;
+  setProfile: (profile: Profile) => Promise<void>;
+  updateCurrentEntry: (updater: (entry: DailyEntry) => DailyEntry) => Promise<void>;
   setNotice: (value: string) => void;
 }) {
   function formatCaloriesPer100(value: number) {
@@ -38,12 +38,6 @@ export function useFoodCorrectionState(args: {
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
-    _protein?: number | null,
-    _carbs?: number | null,
-    _fat?: number | null,
-    _fiber?: number | null,
-    _solubleFiber?: number | null,
-    _insolubleFiber?: number | null,
   ) {
     return saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, true);
   }
@@ -54,12 +48,6 @@ export function useFoodCorrectionState(args: {
     grams: number | null,
     calories: number | null,
     caloriesPer100g: number | null,
-    _protein?: number | null,
-    _carbs?: number | null,
-    _fat?: number | null,
-    _fiber?: number | null,
-    _solubleFiber?: number | null,
-    _insolubleFiber?: number | null,
   ) {
     return saveFoodCorrectionInstructionInternal(foodId, foodName, grams, calories, caloriesPer100g, false);
   }
@@ -78,8 +66,6 @@ export function useFoodCorrectionState(args: {
     const previousFood = snapshot.foods.find((food) => food.id === foodId);
     const resolved = resolveFoodCorrection(previousFood, grams, calories, caloriesPer100g);
 
-    // Allow saving instructions even if we can't fully resolve grams+calories.
-    // We only need a per-gram kcal ratio, which can be derived from per-100g or from an existing snapshot.
     const ratioFromPer100 =
       caloriesPer100g != null && Number.isFinite(caloriesPer100g) ? caloriesPer100g / 100 : null;
     const ratioFromPrevPer100 =
@@ -103,30 +89,24 @@ export function useFoodCorrectionState(args: {
 
     const line = buildInstructionLine(foodName, caloriesPerGram * 100);
     const nextInstructions = mergeAutomaticInstructions(args.profile.value.foodInstructions, line);
-    args.profile.value = { ...args.profile.value, foodInstructions: nextInstructions };
-    const profileResult = await saveProfile(args.profile.value);
+    await args.setProfile({ ...args.profile.value, foodInstructions: nextInstructions });
 
-    const noticeValue = markStale ? "instruction-pending" : "instruction-saved";
-    args.setNotice(noticeValue);
+    args.setNotice(markStale ? "instruction-pending" : "instruction-saved");
 
-    let entryChanged = false;
     if (markStale) {
-      const entryResult = await saveEntry({
-        ...args.currentEntry.value,
+      await args.updateCurrentEntry((entry) => ({
+        ...entry,
         analysisStale: true,
-      });
-      entryChanged = entryResult.changed;
+      }));
     }
 
-    await args.refreshState();
-    return profileResult.changed || entryChanged;
+    return true;
   }
 
   function scaleMacro(value: number | null | undefined, ratio: number) {
     if (value == null || !Number.isFinite(value)) {
       return value ?? null;
     }
-
     return Math.round(value * ratio * 10) / 10;
   }
 
@@ -182,7 +162,6 @@ export function useFoodCorrectionState(args: {
     if (value == null || !Number.isFinite(value)) {
       return null;
     }
-
     return value;
   }
 
@@ -304,8 +283,8 @@ export function useFoodCorrectionState(args: {
     const nextFoods = nextMeals.flatMap((meal) => meal.foods);
     const nextDailyTotals = sumNutritionTotals(nextFoods);
 
-    const result = await saveEntry({
-      ...args.currentEntry.value,
+    await args.updateCurrentEntry((entry) => ({
+      ...entry,
       analysisStale: false,
       aiError: null,
       nutritionSnapshot: {
@@ -319,10 +298,9 @@ export function useFoodCorrectionState(args: {
         foods: nextFoods,
         updatedAt: snapshotUpdatedAt,
       },
-    });
+    }));
 
-    await args.refreshState();
-    return result.changed;
+    return true;
   }
 
   async function applyMealTotalCorrectionToCurrentEntry(
@@ -350,8 +328,8 @@ export function useFoodCorrectionState(args: {
 
     const nextDailyTotals = sumMealTotals(nextMeals);
 
-    const result = await saveEntry({
-      ...args.currentEntry.value,
+    await args.updateCurrentEntry((entry) => ({
+      ...entry,
       analysisStale: false,
       aiError: null,
       nutritionSnapshot: {
@@ -364,10 +342,9 @@ export function useFoodCorrectionState(args: {
         meals: nextMeals,
         updatedAt: snapshotUpdatedAt,
       },
-    });
+    }));
 
-    await args.refreshState();
-    return result.changed;
+    return true;
   }
 
   return {

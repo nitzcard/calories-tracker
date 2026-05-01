@@ -176,9 +176,6 @@ function shiftSelectedDate(days: number) {
       <div class="actions">
         <div class="analysis-toolbar">
           <div class="form-row">
-            <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft', foodLog)">
-              {{ t("saveOnly") }}
-            </button>
             <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
               <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
               {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}
@@ -319,9 +316,6 @@ function shiftSelectedDate(days: number) {
     <div class="actions">
       <div class="analysis-toolbar">
         <div class="form-row">
-          <button class="secondary-action" :disabled="isAnalyzing" @click="emit('save-draft')">
-            {{ t("saveOnly") }}
-          </button>
           <button class="primary-action" :disabled="isAnalyzing || !isProfileReady" @click="emit('analyze')">
             <span v-if="isAnalyzing" class="button-feedback" aria-hidden="true"></span>
             {{ isAnalyzing ? t("analyzingNow") : t("analyzeFood") }}

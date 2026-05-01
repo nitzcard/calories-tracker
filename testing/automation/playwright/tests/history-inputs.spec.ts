@@ -1,15 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { isoDate, seedProfileAndEntries } from "./helpers";
+import { isoDate, seedProfileAndEntries, signInToCloud } from "./helpers";
 
 test("@inputs history weight and calories persist independently", async ({ page }) => {
   const today = isoDate(0);
   const yesterday = isoDate(-1);
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     { date: today, foodLogText: "today log", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "yesterday log", weight: 80.4, manualCalories: 1900 },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: "History" }).click();
@@ -36,10 +37,11 @@ test("@inputs today weight stays in sync with today's history row", async ({ pag
   const yesterday = isoDate(-1);
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     { date: today, foodLogText: "today log", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "yesterday log", weight: 80.4, manualCalories: 1900 },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
 
@@ -65,10 +67,11 @@ test("@inputs invalid history weight input does not overwrite saved value", asyn
   const yesterday = isoDate(-1);
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     { date: today, foodLogText: "today log", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "yesterday log", weight: 80.4, manualCalories: 1900 },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: "History" }).click();
@@ -90,10 +93,11 @@ test("@inputs clearing history calories persists explicit clear", async ({ page 
   const yesterday = isoDate(-1);
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     { date: today, foodLogText: "today log", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "yesterday log", weight: 80.4, manualCalories: 1900 },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: "History" }).click();

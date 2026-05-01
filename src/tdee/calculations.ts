@@ -47,7 +47,6 @@ export function calculateFormulaTdee(
       average: null,
       breakdown: {
         mifflinStJeor: null,
-        harrisBenedict: null,
         cunningham: null,
       },
       activityMultiplier: null,
@@ -72,19 +71,12 @@ export function calculateFormulaTdee(
       : kg;
 
   const mifflin = (10 * kg + 6.25 * cm - 5 * profile.age + sexOffset) * activity;
-  const harris =
-    (profile.sex === "female"
-      ? 655.0955 + 9.5634 * kg + 1.8496 * cm - 4.6756 * profile.age
-      : 66.473 + 13.7516 * kg + 5.0033 * cm - 6.755 * profile.age) * activity;
   const cunningham = (500 + 22 * leanMassKg) * activity;
   const breakdown = {
     mifflinStJeor: Math.round(mifflin),
-    harrisBenedict: Math.round(harris),
     cunningham: Math.round(cunningham),
   };
-  const average = Math.round(
-    (breakdown.mifflinStJeor + breakdown.harrisBenedict + breakdown.cunningham) / 3,
-  );
+  const average = Math.round((breakdown.mifflinStJeor + breakdown.cunningham) / 2);
   return { average, breakdown, activityMultiplier: activity };
 }
 
@@ -243,7 +235,6 @@ export function buildTdeeSnapshot(
         average: null,
         breakdown: {
           mifflinStJeor: null,
-          harrisBenedict: null,
           cunningham: null,
         },
         activityMultiplier: null,

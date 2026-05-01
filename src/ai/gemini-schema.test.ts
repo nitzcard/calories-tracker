@@ -75,7 +75,7 @@ describe("gemini schema", () => {
     expect(normalized.foods[0].sourceUrl).toBe("https://www.foodsdictionary.co.il/Products/12345/greek-yogurt");
   });
 
-  it("adds foodsdictionary search fallback when source url is missing", () => {
+  it("drops the link when no direct foodsdictionary product url exists", () => {
     const parsed = parseAiNutritionResponse({
       ...response,
       meals: [
@@ -94,7 +94,28 @@ describe("gemini schema", () => {
       ],
     });
     const normalized = normalizeAiNutritionResponse(parsed, "gemini-2.5-flash", "en");
+    expect(normalized.foods[0].sourceLabel).toBeNull();
+    expect(normalized.foods[0].sourceUrl).toBeNull();
+  });
+
+  it("drops foodsdictionary search links because they are not direct product sources", () => {
+    const parsed = parseAiNutritionResponse({
+      ...response,
+      meals: [
+        {
+          ...response.meals[0],
+          foods: [
+            {
+              ...response.meals[0].foods[0],
+              sourceLabel: "FoodsDictionary",
+              sourceUrl: "https://www.foodsdictionary.co.il/FoodsSearch.php?q=%D7%92%D7%96%D7%A8",
+            },
+          ],
+        },
+      ],
+    });
+    const normalized = normalizeAiNutritionResponse(parsed, "gemini-2.5-flash", "he");
     expect(normalized.foods[0].sourceLabel).toBe("FoodsDictionary");
-    expect(normalized.foods[0].sourceUrl).toBe("https://www.foodsdictionary.co.il/FoodsSearch.php?q=Cottage+cheese");
+    expect(normalized.foods[0].sourceUrl).toBeNull();
   });
 });

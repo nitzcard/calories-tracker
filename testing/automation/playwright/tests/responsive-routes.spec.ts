@@ -4,6 +4,7 @@ import {
   makeFoodSeed,
   makeNutritionSnapshot,
   seedProfileAndEntries,
+  signInToCloud,
 } from "./helpers";
 
 test("@responsive authenticated routes stay within target viewports", async ({ page }) => {
@@ -56,7 +57,7 @@ test("@responsive authenticated routes stay within target viewports", async ({ p
   ];
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     {
       date: today,
       foodLogText: "eggs, rice, salmon",
@@ -66,11 +67,12 @@ test("@responsive authenticated routes stay within target viewports", async ({ p
       aiStatus: "done",
     },
   ]);
+  await signInToCloud(page, auth);
 
   const routes = [
-    { path: "/today", selector: "#dailyDeskPanel" },
-    { path: "/progress", selector: "#historyPanel" },
-    { path: "/settings", selector: "[data-testid='activity-factor-select']" },
+    { name: "Today", selector: "#dailyDeskPanel" },
+    { name: "History", selector: "#historyPanel" },
+    { name: "Settings", selector: "[data-testid='activity-factor-select']" },
   ];
   const viewports = [
     { width: 390, height: 844 },
@@ -82,18 +84,19 @@ test("@responsive authenticated routes stay within target viewports", async ({ p
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
+    await page.reload({ waitUntil: "networkidle" });
 
     for (const route of routes) {
-      await page.goto(route.path, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: route.name }).first().click();
       await expect(page.locator(route.selector).first()).toBeVisible();
 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(
         overflow,
-        `${route.path} should avoid horizontal overflow at ${viewport.width}x${viewport.height}`,
+        `${route.name} should avoid horizontal overflow at ${viewport.width}x${viewport.height}`,
       ).toBeLessThanOrEqual(1);
 
-      if (route.path === "/today" && viewport.width <= 430) {
+      if (route.name === "Today" && viewport.width <= 430) {
         const macroPieText = page.locator("#nutritionSummaryPanel .macro-pie-text").first();
         await expect(macroPieText).toBeVisible();
 
@@ -103,7 +106,7 @@ test("@responsive authenticated routes stay within target viewports", async ({ p
         expect(fontSize).toBeLessThanOrEqual(9.5);
       }
 
-      if (route.path === "/progress") {
+      if (route.name === "History") {
         await expect(page.getByLabel("7 days").first()).toBeVisible();
         await expect(page.getByLabel("30 days").first()).toBeVisible();
         await expect(page.getByLabel("All").first()).toBeVisible();

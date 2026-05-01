@@ -13,7 +13,7 @@ const props = defineProps<{
   cloudConfirmedUsername?: string;
   hasSavedCloudPassword: boolean;
   isCloudBusy: boolean;
-  cloudStatus: "idle" | "synced" | "failed";
+  cloudStatus: "idle" | "loading" | "saving" | "saved" | "error";
   cloudLastSyncedAt: string;
   cloudError: string;
   supabaseConfigured: boolean;
@@ -68,8 +68,9 @@ onUnmounted(() => {
 });
 
 const statusText = computed(() => {
-  if (props.cloudStatus === "synced") return t("cloudSyncSuccess");
-  if (props.cloudStatus === "failed") return t("cloudSyncFailed");
+  if (props.cloudStatus === "saved") return t("cloudSyncSuccess");
+  if (props.cloudStatus === "error") return t("cloudSyncFailed");
+  if (props.cloudStatus === "loading" || props.cloudStatus === "saving") return t("toastCloudSyncing");
   return "";
 });
 

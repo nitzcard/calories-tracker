@@ -4,16 +4,12 @@ declare const process: {
   env: Record<string, string | undefined> & {
     APP_URL?: string;
     CI?: string;
-    VITE_SUPABASE_URL?: string;
-    VITE_SUPABASE_ANON_KEY?: string;
   };
 };
 
 const baseURL = process.env.APP_URL || "http://127.0.0.1:7001";
 const isCI = Boolean(process.env.CI);
 const shouldManageWebServer = !process.env.APP_URL;
-const fakeSupabaseUrl = process.env.VITE_SUPABASE_URL || "https://playwright-supabase.test";
-const fakeSupabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "playwright-anon-key";
 
 export default defineConfig({
   testDir: "./tests",
@@ -38,7 +34,7 @@ export default defineConfig({
   },
   webServer: shouldManageWebServer
     ? {
-        command: `VITE_SUPABASE_URL='${fakeSupabaseUrl}' VITE_SUPABASE_ANON_KEY='${fakeSupabaseAnonKey}' npm run dev:fixed`,
+        command: "npm run dev:fixed",
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120_000,

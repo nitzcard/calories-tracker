@@ -319,14 +319,7 @@ function normalizeFoodSourceReference(food: AiFoodResult): { label: string | nul
   if (existingUrl) {
     return { label: normalizedLabel, url: existingUrl };
   }
-
-  const searchUrl = buildFoodsDictionarySearchUrl(food.canonicalName, food.foodName);
-  if (!searchUrl) {
-    return { label: normalizedLabel, url: null };
-  }
-
-  const fallbackLabel = normalizedLabel ?? "FoodsDictionary";
-  return { label: fallbackLabel, url: searchUrl };
+  return { label: normalizedLabel, url: null };
 }
 
 function normalizeSourceLabel(label: string | null): string | null {
@@ -345,7 +338,7 @@ function normalizeSourceUrl(url: string | null): string | null {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return null;
     }
-    return parsed.toString();
+    return normalizeTrustedFoodSourceUrl(parsed);
   } catch {
     // Support urls that Gemini might return without a scheme, like www.site.com/path.
     try {
@@ -353,25 +346,26 @@ function normalizeSourceUrl(url: string | null): string | null {
       if (parsed.protocol !== "https:") {
         return null;
       }
-      return parsed.toString();
+      return normalizeTrustedFoodSourceUrl(parsed);
     } catch {
       return null;
     }
   }
 }
 
-function buildFoodsDictionarySearchUrl(
-  canonicalName: string | null,
-  foodName: string | null,
-): string | null {
-  const query = canonicalName?.trim() || foodName?.trim();
-  if (!query) {
+function normalizeTrustedFoodSourceUrl(parsed: URL): string | null {
+  const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+  if (hostname !== "foodsdictionary.co.il") {
+    return parsed.toString();
+  }
+
+  const path = parsed.pathname.replace(/\/+$/, "");
+  if (!/^\/Products\/\d+(?:\/[^/]+)?$/i.test(path)) {
     return null;
   }
 
-  const url = new URL("https://www.foodsdictionary.co.il/FoodsSearch.php");
-  url.searchParams.set("q", query);
-  return url.toString();
+  parsed.hash = "";
+  return parsed.toString();
 }
 
 function normalizeMealColor(color: string, mealKey: AiMealResult["mealKey"]) {

@@ -1,4 +1,4 @@
-import type { ExportedAppData } from "../storage/repository";
+import type { CloudAppState } from "../cloud/app-state";
 import type { DailyEntry, Profile } from "../types";
 
 export function makeProfile(overrides: Partial<Profile> = {}): Profile {
@@ -71,18 +71,19 @@ export function makeNutritionSnapshot(overrides: Partial<NonNullable<DailyEntry[
   };
 }
 
-export function makeExportedData(args: {
-  profile?: Profile[];
+export function makeCloudAppState(args: {
+  profile?: Profile;
   dailyEntries?: DailyEntry[];
-} = {}): ExportedAppData {
+} = {}): CloudAppState {
   return {
-    schemaVersion: "1",
-    exportedAt: "2026-04-21T10:00:00.000Z",
-    profile: args.profile ?? [makeProfile()],
+    schemaVersion: "2",
+    updatedAt: "2026-04-21T10:00:00.000Z",
+    profile: args.profile ?? makeProfile(),
     dailyEntries: args.dailyEntries ?? [],
-    deletedDailyEntryTombstones: [],
     foodRules: [],
-    syncQueue: [],
+    aiKeys: {
+      gemini: "",
+    },
   };
 }
 

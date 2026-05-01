@@ -1,20 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Page } from "@playwright/test";
-
-export function isoDate(offsetDays: number) {
-  const now = new Date();
-  if (now.getHours() < 6) {
-    now.setDate(now.getDate() - 1);
-  }
-  now.setDate(now.getDate() + offsetDays);
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-export function todayIso() {
-  return isoDate(0);
-}
+import { CLOUD_AUTH_STORAGE_KEY } from "../../../../src/cloud/auth-storage";
+import { decryptJsonWithPassphrase, encryptJsonWithPassphrase, type EncryptedSecretBoxV1 } from "../../../../src/cloud/crypto";
+import { createDefaultProfile, normalizeCloudAppState, type CloudAppState } from "../../../../src/cloud/app-state";
 
 type SeedEntry = {
   date: string;
@@ -42,6 +31,303 @@ type FoodSeedOptions = {
   solubleFiber?: number | null;
   insolubleFiber?: number | null;
 };
+
+type SavedCloudAuth = {
+  username: string;
+  password: string;
+};
+
+export type SeededCloudAuth = SavedCloudAuth;
+export const TEST_USERNAME_PREFIX = "test_";
+
+type UserBlobRow = {
+  data: unknown;
+  updated_at: string;
+};
+
+type CloudEncryptedEnvelopeV1 = {
+  kind: "encrypted-v1";
+  box: EncryptedSecretBoxV1;
+  email?: string;
+};
+
+type SupabaseConfig = {
+  url: string;
+  anonKey: string;
+};
+
+let cachedSupabaseConfig: SupabaseConfig | null = null;
+
+function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizeTestUsername(value: string) {
+  const normalized = normalizeUsername(value);
+  if (!normalized) {
+    return normalized;
+  }
+  return normalized.startsWith(TEST_USERNAME_PREFIX) ? normalized : `${TEST_USERNAME_PREFIX}${normalized}`;
+}
+
+function cloudSecret(username: string, password: string) {
+  return `${normalizeUsername(username)}::${password.trim()}`;
+}
+
+function parseDotEnvFile() {
+  const envPath = path.join(process.cwd(), ".env");
+  if (!fs.existsSync(envPath)) {
+    return {} as Record<string, string>;
+  }
+
+  const raw = fs.readFileSync(envPath, "utf8");
+  const values: Record<string, string> = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    const key = trimmed.slice(0, separatorIndex).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    values[key] = value;
+  }
+
+  return values;
+}
+
+function loadSupabaseConfig(): SupabaseConfig {
+  if (cachedSupabaseConfig) {
+    return cachedSupabaseConfig;
+  }
+
+  const dotEnv = parseDotEnvFile();
+  const url = process.env.VITE_SUPABASE_URL ?? dotEnv.VITE_SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY ?? dotEnv.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error("Missing Supabase config for Playwright. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+  }
+
+  cachedSupabaseConfig = { url, anonKey };
+  return cachedSupabaseConfig;
+}
+
+async function supabaseRestFetch<T>(query: string, init?: RequestInit): Promise<T> {
+  const { url, anonKey } = loadSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/${query}`, {
+    ...init,
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...init?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase request failed (${response.status})`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function makeCloudEnvelope(payload: CloudAppState, email?: string) {
+  return async (username: string, password: string): Promise<CloudEncryptedEnvelopeV1> => {
+    const profile = {
+      ...payload.profile,
+      email: "",
+    };
+    const box = await encryptJsonWithPassphrase(
+      {
+        payload: {
+          ...payload,
+          profile,
+        },
+      },
+      cloudSecret(username, password),
+    );
+    return {
+      kind: "encrypted-v1",
+      box,
+      email: email?.trim() || undefined,
+    };
+  };
+}
+
+export async function readRemoteUserBlob(username: string) {
+  const normalizedUsername = normalizeTestUsername(username);
+  const rows = await supabaseRestFetch<UserBlobRow[]>(
+    `user_blobs?select=data,updated_at&username=eq.${encodeURIComponent(normalizedUsername)}`,
+    { method: "GET" },
+  );
+  return rows[0] ?? null;
+}
+
+export async function readRemoteUserState(username: string, password: string) {
+  const row = await readRemoteUserBlob(username);
+  if (!row) {
+    return null;
+  }
+
+  const raw = row.data;
+  if (raw && typeof raw === "object" && (raw as { kind?: string }).kind === "encrypted-v1") {
+    const envelope = raw as CloudEncryptedEnvelopeV1;
+    const decrypted = await decryptJsonWithPassphrase<{ payload: unknown }>(
+      envelope.box,
+      cloudSecret(username, password),
+    );
+    return normalizeCloudAppState(
+      {
+        ...(decrypted.payload as Record<string, unknown>),
+        profile: {
+          ...((decrypted.payload as Record<string, any>).profile ?? {}),
+          email: envelope.email ?? "",
+        },
+      },
+      "en",
+    );
+  }
+
+  return normalizeCloudAppState(raw, "en");
+}
+
+async function upsertRemoteUserState(username: string, password: string, state: CloudAppState) {
+  const normalizedUsername = normalizeTestUsername(username);
+  const envelope = await makeCloudEnvelope(state, state.profile.email)(normalizedUsername, password);
+  await supabaseRestFetch(
+    "user_blobs",
+    {
+      method: "POST",
+      headers: {
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify([
+        {
+          username: normalizedUsername,
+          data: envelope,
+          updated_at: new Date().toISOString(),
+        },
+      ]),
+    },
+  );
+}
+
+export async function resetRemoteUser(username: string) {
+  const normalizedUsername = normalizeTestUsername(username);
+  await supabaseRestFetch(
+    `user_blobs?username=eq.${encodeURIComponent(normalizedUsername)}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+async function setSavedCloudAuth(page: Page, auth: SavedCloudAuth | null) {
+  const currentUrl = page.url();
+  const shouldRestorePage = currentUrl && currentUrl !== "about:blank";
+  await page.goto("/test-empty.html", { waitUntil: "networkidle" });
+  await page.evaluate(
+    ({ storageKey, nextAuth }) => {
+      if (nextAuth) {
+        localStorage.setItem(storageKey, JSON.stringify(nextAuth));
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+    },
+    {
+      storageKey: CLOUD_AUTH_STORAGE_KEY,
+      nextAuth: auth,
+    },
+  );
+  if (shouldRestorePage) {
+    await page.goto(currentUrl, { waitUntil: "networkidle" });
+    if (auth) {
+      const loginCard = page.locator(".login-card");
+      try {
+        await loginCard.waitFor({ state: "visible", timeout: 3_000 });
+        await loginCard.locator('input[autocomplete="username"]').fill(auth.username);
+        await loginCard.locator('input[autocomplete="current-password"]').fill(auth.password);
+        await loginCard.getByRole("button", { name: "Login" }).click();
+        await page.waitForSelector(".login-card", { state: "detached", timeout: 20_000 });
+      } catch {
+        // Leave page as-is when login UI is not available.
+      }
+    }
+  }
+}
+
+function buildSeedProfileState(entries: SeedEntry[]): CloudAppState {
+  return {
+    schemaVersion: "2",
+    updatedAt: new Date().toISOString(),
+    profile: {
+      ...createDefaultProfile("en"),
+      age: 34,
+      height: 180,
+      estimatedWeight: 80,
+      targetWeight: 78,
+      bodyFat: 18,
+      activityFactor: "light",
+      aiModel: "gemini-2.5-flash",
+      updatedAt: new Date().toISOString(),
+    },
+    dailyEntries: entries.map((entry) => ({
+      date: entry.date,
+      foodLogText: entry.foodLogText,
+      weight: entry.weight,
+      manualCalories: entry.manualCalories,
+      analysisStale: false,
+      nutritionSnapshot: entry.nutritionSnapshot ?? null,
+      aiStatus: entry.aiStatus ?? "idle",
+      aiError: null,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    })),
+    foodRules: [],
+    aiKeys: {
+      gemini: "",
+    },
+  };
+}
+
+export function isoDate(offsetDays: number) {
+  const zone = "Asia/Jerusalem";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? "1970");
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? "01");
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? "01");
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "12");
+  const now = new Date(Date.UTC(year, month - 1, day));
+  if (hour < 6) {
+    now.setUTCDate(now.getUTCDate() - 1);
+  }
+  now.setUTCDate(now.getUTCDate() + offsetDays);
+  const monthText = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const dayText = String(now.getUTCDate()).padStart(2, "0");
+  const yearText = String(now.getUTCFullYear());
+  return `${yearText}-${monthText}-${dayText}`;
+}
+
+export function todayIso() {
+  return isoDate(0);
+}
 
 export function makeFoodSeed(options: FoodSeedOptions) {
   return {
@@ -133,214 +419,101 @@ function sumFoods(foods: Array<ReturnType<typeof makeFoodSeed>>) {
 export async function seedProfileAndEntries(
   page: Page,
   entries: SeedEntry[],
-  options?: { signedInUsername?: string | null },
-) {
-  await page.evaluate(async ({ entries, options }) => {
-    function openDb(name: string) {
-      return new Promise<IDBDatabase>((resolve, reject) => {
-        let upgradeTx: IDBTransaction | null = null;
-        const request = indexedDB.open(name);
-        request.onerror = () => reject(request.error);
-        request.onupgradeneeded = () => {
-          upgradeTx = request.transaction!;
-        };
-        request.onsuccess = () => {
-          const tx = upgradeTx;
-          if (tx) {
-            tx.oncomplete = () => resolve(request.result);
-            tx.onerror = () => reject(tx.error || request.error);
-            return;
-          }
-          resolve(request.result);
-        };
-      });
-    }
+  options?: { signedInUsername?: string | null; seedUsername?: string; password?: string },
+): Promise<SeededCloudAuth> {
+  const seedPassword = options?.password ?? "secret-pass";
+  const fallbackUsername = `playwright-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const signedInUsername =
+    options?.signedInUsername === undefined ? fallbackUsername : options.signedInUsername;
+  const seedUsername = normalizeTestUsername(options?.seedUsername ?? signedInUsername ?? fallbackUsername);
+  const persistentAuth =
+    signedInUsername === null
+      ? null
+      : {
+          username: seedUsername,
+          password: seedPassword,
+        } satisfies SeededCloudAuth;
 
-    const db = await openDb("calorie-tracker");
-    const tx = db.transaction(["profile", "dailyEntries"], "readwrite");
+  if (persistentAuth) {
+    await page.addInitScript(
+      ({ storageKey, auth }) => {
+        localStorage.setItem(storageKey, JSON.stringify(auth));
+      },
+      {
+        storageKey: CLOUD_AUTH_STORAGE_KEY,
+        auth: persistentAuth,
+      },
+    );
+  }
 
-    tx.objectStore("profile").put({
-      id: "default",
-      sex: "male",
-      email: "",
-      age: 34,
-      height: 180,
-      estimatedWeight: 80,
-      targetWeight: 78,
-      bodyFat: 18,
-      goalMode: "maingain",
-      tdeeEquation: "mifflinStJeor",
-      activityFactor: "light",
-      foodInstructions: "",
-      aiModel: "gemini-2.5-flash",
-      locale: "en",
-      updatedAt: new Date().toISOString(),
-    });
+  await resetRemoteUser(seedUsername);
+  await upsertRemoteUserState(seedUsername, seedPassword, buildSeedProfileState(entries));
+  await setSavedCloudAuth(
+    page,
+    persistentAuth,
+  );
 
-    const dailyEntries = tx.objectStore("dailyEntries");
-    for (const entry of entries) {
-      dailyEntries.put({
-        date: entry.date,
-        foodLogText: entry.foodLogText,
-        weight: entry.weight,
-        manualCalories: entry.manualCalories,
-        analysisStale: false,
-        nutritionSnapshot: entry.nutritionSnapshot ?? null,
-        aiStatus: entry.aiStatus ?? "idle",
-        aiError: null,
-        updatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-      });
-    }
+  return {
+    username: seedUsername,
+    password: seedPassword,
+  };
+}
 
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+export async function signInToCloud(page: Page, auth: SeededCloudAuth) {
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  const loginCard = page.locator(".login-card");
+  if (!(await loginCard.count())) {
+    return;
+  }
+  await loginCard.locator('input[autocomplete="username"]').fill(normalizeTestUsername(auth.username));
+  await loginCard.locator('input[autocomplete="current-password"]').fill(auth.password);
+  await loginCard.getByRole("button", { name: "Login" }).click();
+  await page.waitForSelector(".login-card", { state: "detached", timeout: 20_000 });
+}
 
-    const signedInUsername = (
-      options?.signedInUsername === undefined ? "playwright-user" : options.signedInUsername ?? ""
-    )
-      .trim()
-      .toLowerCase();
-    if (signedInUsername) {
-      localStorage.setItem("calorie-tracker.cloud-username", signedInUsername);
-      localStorage.setItem("calorie-tracker.cloud-confirmed-username", signedInUsername);
-    } else {
-      localStorage.removeItem("calorie-tracker.cloud-username");
-      localStorage.removeItem("calorie-tracker.cloud-confirmed-username");
-    }
-
-    db.close();
-  }, { entries, options });
+export async function ensureCloudSession(page: Page, auth: SeededCloudAuth) {
+  const loginCard = page.locator(".login-card");
+  if (!(await loginCard.count())) {
+    return;
+  }
+  await loginCard.locator('input[autocomplete="username"]').fill(normalizeTestUsername(auth.username));
+  await loginCard.locator('input[autocomplete="current-password"]').fill(auth.password);
+  await loginCard.getByRole("button", { name: "Login" }).click();
+  await page.waitForSelector(".login-card", { state: "detached", timeout: 20_000 });
 }
 
 export async function readPersistedAppState(page: Page) {
-  return page.evaluate(async () => {
-    function openDb(name: string) {
-      return new Promise<IDBDatabase>((resolve, reject) => {
-        let upgradeTx: IDBTransaction | null = null;
-        const request = indexedDB.open(name);
-        request.onerror = () => reject(request.error);
-        request.onupgradeneeded = () => {
-          upgradeTx = request.transaction!;
-        };
-        request.onsuccess = () => {
-          const tx = upgradeTx;
-          if (tx) {
-            tx.oncomplete = () => resolve(request.result);
-            tx.onerror = () => reject(tx.error || request.error);
-            return;
-          }
-          resolve(request.result);
-        };
-      });
-    }
-
-    const db = await openDb("calorie-tracker");
-    const tx = db.transaction(["profile", "dailyEntries", "settings"], "readonly");
-
-    const readOne = <T>(storeName: string, key: IDBValidKey) =>
-      new Promise<T | undefined>((resolve, reject) => {
-        const request = tx.objectStore(storeName).get(key);
-        request.onsuccess = () => resolve(request.result as T | undefined);
-        request.onerror = () => reject(request.error);
-      });
-
-    const readAll = <T>(storeName: string) =>
-      new Promise<T[]>((resolve, reject) => {
-        const request = tx.objectStore(storeName).getAll();
-        request.onsuccess = () => resolve((request.result as T[]) ?? []);
-        request.onerror = () => reject(request.error);
-      });
-
-    const [profile, dailyEntries, aiKeysRow, cloudSyncStateRow] = await Promise.all([
-      readOne<any>("profile", "default"),
-      readAll<any>("dailyEntries"),
-      readOne<any>("settings", "aiKeys"),
-      readOne<any>("settings", "cloudSyncState"),
-    ]);
-
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-
+  const browserState = await page.evaluate((storageKey) => {
+    const authRaw = localStorage.getItem(storageKey);
+    const debug = (window as any).__APP_DEBUG_STATE__ ?? null;
     return {
-      profile,
-      dailyEntries,
-      aiKeys: aiKeysRow?.aiKeys ?? null,
-      cloudSyncState: cloudSyncStateRow?.cloudSyncState ?? null,
+      auth: authRaw ? JSON.parse(authRaw) : null,
+      debug,
       localStorage: {
         locale: localStorage.getItem("calorie-tracker.locale"),
         aiModel: localStorage.getItem("calorie-tracker.ai-model"),
       },
     };
-  });
-}
+  }, CLOUD_AUTH_STORAGE_KEY);
 
-export async function initializeCloudSyncState(page: Page, state?: {
-  revision?: number;
-  lastSyncedRevision?: number;
-  pendingScopes?: string[];
-  lastRemoteFingerprint?: string;
-}) {
-  await page.evaluate(async ({ state }) => {
-    function openDb(name: string) {
-      return new Promise<IDBDatabase>((resolve, reject) => {
-        let upgradeTx: IDBTransaction | null = null;
-        const request = indexedDB.open(name);
-        request.onerror = () => reject(request.error);
-        request.onupgradeneeded = () => {
-          upgradeTx = request.transaction!;
-        };
-        request.onsuccess = () => {
-          const tx = upgradeTx;
-          if (tx) {
-            tx.oncomplete = () => resolve(request.result);
-            tx.onerror = () => reject(tx.error || request.error);
-            return;
-          }
-          resolve(request.result);
-        };
-      });
+  const auth = browserState.auth as SavedCloudAuth | null;
+  if (auth?.username && auth?.password) {
+    const remote = await readRemoteUserState(auth.username, auth.password);
+    if (remote) {
+      return {
+        profile: remote.profile,
+        dailyEntries: remote.dailyEntries,
+        aiKeys: remote.aiKeys,
+        localStorage: browserState.localStorage,
+      };
     }
+  }
 
-    const db = await openDb("calorie-tracker");
-    const tx = db.transaction(["settings"], "readwrite");
-    tx.objectStore("settings").put({
-      id: "cloudSyncState",
-      cloudSyncState: {
-        revision: state?.revision ?? 0,
-        lastSyncedRevision: state?.lastSyncedRevision ?? 0,
-        pendingScopes: state?.pendingScopes ?? [],
-        lastRemoteFingerprint: state?.lastRemoteFingerprint ?? "",
-        updatedAt: "2026-04-22T00:00:00.000Z",
-      },
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-  }, { state });
-}
-
-export async function clearAppStorage(page: Page) {
-  await page.goto("/test-empty.html", { waitUntil: "networkidle" });
-  await page.evaluate(async () => {
-    localStorage.clear();
-
-    const deleteDb = (name: string) =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.deleteDatabase(name);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-        request.onblocked = () => reject(new Error(`deleteDatabase blocked for ${name}`));
-      });
-
-    await deleteDb("calorie-tracker");
-  });
+  const raw = browserState.debug;
+  return {
+    profile: raw?.profile ?? null,
+    dailyEntries: raw?.dailyEntries ?? [],
+    aiKeys: raw?.aiKeys ?? null,
+    localStorage: browserState.localStorage,
+  };
 }

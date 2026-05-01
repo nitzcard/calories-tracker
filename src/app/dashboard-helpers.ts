@@ -1,28 +1,8 @@
-import { isSupportedProviderOption } from "../ai/registry";
-import { DEFAULT_GEMINI_MODEL, isGeminiModelId } from "../ai/gemini-config";
-import type { AppLocale, AiStatus } from "../types";
-
-export const DASHBOARD_STORAGE_KEYS = {
-  locale: "calorie-tracker.locale",
-  aiModel: "calorie-tracker.ai-model",
-  aiModelUserSet: "calorie-tracker.ai-model-user-set",
-  geminiLatestModel: "calorie-tracker.gemini-latest-model",
-  cloudUsername: "calorie-tracker.cloud-username",
-  cloudConfirmedUsername: "calorie-tracker.cloud-confirmed-username",
-  dailyDraftPrefix: "calorie-tracker.daily-draft::",
-} as const;
+import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
+import type { AiStatus } from "../types";
 
 export function normalizeProvider(value: string | null): string {
-  if (value && (isSupportedProviderOption(value) || isGeminiModelId(value))) {
-    return value;
-  }
-
-  const suggestedLatest = localStorage.getItem(DASHBOARD_STORAGE_KEYS.geminiLatestModel);
-  if (isGeminiModelId(suggestedLatest)) {
-    return suggestedLatest;
-  }
-
-  return DEFAULT_GEMINI_MODEL;
+  return value?.trim() || DEFAULT_GEMINI_MODEL;
 }
 
 export function buildAnalyzeIssue(
@@ -58,15 +38,6 @@ export function statusLabel(labelFor: (key: string) => string, status: AiStatus 
     failed: labelFor("statusFailed"),
   };
   return labels[status];
-}
-
-export function readStoredLocale(): AppLocale | null {
-  const value = localStorage.getItem(DASHBOARD_STORAGE_KEYS.locale);
-  return value === "he" || value === "en" ? value : null;
-}
-
-export function readStoredProvider(): string | null {
-  return localStorage.getItem(DASHBOARD_STORAGE_KEYS.aiModel);
 }
 
 export function resolveFoodCorrection(

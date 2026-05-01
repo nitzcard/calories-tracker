@@ -4,24 +4,15 @@ import { isoDate, readPersistedAppState, seedProfileAndEntries } from "./helpers
 test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   const today = isoDate(0);
   const yesterday = isoDate(-1);
-  await page.route("**/rest/v1/user_blobs*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: route.request().method() === "GET" ? "[]" : "[]",
-    });
-  });
-
-  await page.goto("/login", { waitUntil: "networkidle" });
   await seedProfileAndEntries(page, [
     { date: today, foodLogText: "seed today", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "seed yesterday", weight: 80.4, manualCalories: 1900 },
-  ], { signedInUsername: null });
+  ], { signedInUsername: null, seedUsername: "test_persist-user" });
 
-  await page.reload({ waitUntil: "networkidle" });
+  await page.goto("/login", { waitUntil: "networkidle" });
   const cloudPanel = page.locator(".login-card");
   await expect(cloudPanel.locator('input[autocomplete="username"]')).toBeVisible();
-  await cloudPanel.locator('input[autocomplete="username"]').fill("persist-user");
+  await cloudPanel.locator('input[autocomplete="username"]').fill("test_persist-user");
   await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
   await cloudPanel.getByRole("button", { name: "Login" }).click();
   await expect(page.locator(".login-card")).toHaveCount(0);
@@ -47,7 +38,7 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   await profileNumberInputs.nth(4).blur();
   await page.waitForTimeout(2600);
 
-  await page.locator("article").filter({ hasText: "Harris-Benedict" }).locator('input[type="radio"]').check();
+  await page.locator("article").filter({ hasText: "Cunningham" }).locator('input[type="radio"]').check();
 
   await page.getByRole("button", { name: "Today" }).click();
   await page.locator("#dailyDeskPanel .weight-input").first().fill("81.2");
@@ -55,7 +46,6 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
 
   await page.locator("#dailyDeskPanel textarea").first().fill("eggs toast salad");
   await page.locator("#dailyDeskPanel textarea").first().blur();
-  await page.locator("#dailyDeskPanel").getByRole("button", { name: "Save only" }).click();
 
   await page.locator("#food-rules-textarea").fill("banana: 90 calories for 100 gr");
   await page.locator("header .title").click();
@@ -97,14 +87,14 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
       foodInstructions: "banana: 90 calories for 100 gr",
     });
   await page.reload({ waitUntil: "networkidle" });
-
-  await expect(page.locator(".sync-status")).toContainText("persist-user");
+  await expect(page.locator(".login-card")).toHaveCount(0);
+  await expect(page.locator(".sync-status")).toContainText("test_persist-user");
+  await page.goto("/settings", { waitUntil: "networkidle" });
+  await expect(page.locator('input[type="password"]')).toHaveValue("gemini-test-key");
 
   const persisted = await readPersistedAppState(page);
   const todayEntry = persisted.dailyEntries.find((entry: { date: string }) => entry.date === today);
   const yesterdayEntry = persisted.dailyEntries.find((entry: { date: string }) => entry.date === yesterday);
-
-  expect(persisted.localStorage.locale).toBe("he");
 
   expect(persisted.profile).toMatchObject({
     sex: "female",
@@ -115,7 +105,7 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
     bodyFat: 15.5,
     goalMode: "cut",
     activityFactor: "veryActive",
-    tdeeEquation: "harrisBenedict",
+    tdeeEquation: "cunningham",
     foodInstructions: "banana: 90 calories for 100 gr",
     locale: "he",
   });

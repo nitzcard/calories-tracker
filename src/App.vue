@@ -110,7 +110,9 @@ const hasEffectiveGeminiKey = computed(() =>
   Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim()),
 );
 const hasConfirmedCloudLogin = computed(() => Boolean(cloudConfirmedUsername.value.trim()));
-const showCloudLoginGate = computed(() => supabaseConfigured.value && !hasConfirmedCloudLogin.value);
+const showCloudLoginGate = computed(
+  () => supabaseConfigured.value && !hasConfirmedCloudLogin.value && !isInitialCloudHydrating.value,
+);
 const isLoginRoute = computed(() => route.name === "login");
 const themePreference = computed<ThemePreference>(() => profile.value?.themePreference ?? "system");
 useThemePreference(themePreference);
@@ -505,7 +507,7 @@ watch(
       return;
     }
 
-    if (next === "failed") {
+    if (next === "error") {
       showTransientToast("error", `⚠️ ${cloudError.value || t("cloudSyncFailed")}`, { duration: 5000 });
     }
   },
@@ -693,13 +695,7 @@ async function confirmDeleteDay() {
       aria-live="polite"
       :aria-label="t('toastCloudSyncing')"
     >
-      <div class="startup-cloud-overlay__card">
-        <span class="startup-cloud-overlay__spinner" aria-hidden="true"></span>
-        <div class="startup-cloud-overlay__copy">
-          <strong>{{ t("toastCloudSyncing") }}</strong>
-          <span>{{ t("cloudSyncHelper") }}</span>
-        </div>
-      </div>
+      <span class="startup-cloud-overlay__spinner" aria-hidden="true"></span>
     </div>
   </Teleport>
 
@@ -1015,48 +1011,18 @@ async function confirmDeleteDay() {
   z-index: 9998;
   display: grid;
   place-items: center;
-  padding: 1rem;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 46%, transparent), color-mix(in srgb, var(--surface-2) 54%, transparent));
   backdrop-filter: blur(22px) saturate(1.1);
 }
 
-.startup-cloud-overlay__card {
-  inline-size: min(28rem, calc(100vw - 2rem));
-  display: grid;
-  justify-items: center;
-  gap: 0.8rem;
-  padding: 1.2rem 1.35rem;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
-  border-radius: calc(var(--radius-lg) + 0.1rem);
-  background: color-mix(in srgb, var(--surface-1) 84%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 24px 64px rgba(15, 23, 42, 0.2);
-  text-align: center;
-}
-
 .startup-cloud-overlay__spinner {
-  inline-size: 1.45rem;
-  block-size: 1.45rem;
-  border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  inline-size: clamp(3rem, 6vw, 4.5rem);
+  block-size: clamp(3rem, 6vw, 4.5rem);
+  border: 4px solid color-mix(in srgb, var(--accent) 18%, transparent);
   border-inline-end-color: var(--accent-strong);
   border-radius: 50%;
   animation: global-spin 850ms linear infinite;
-}
-
-.startup-cloud-overlay__copy {
-  display: grid;
-  gap: 0.3rem;
-  line-height: 1.4;
-}
-
-.startup-cloud-overlay__copy strong {
-  font-size: 1rem;
-}
-
-.startup-cloud-overlay__copy span {
-  color: var(--text-muted);
 }
 
 @keyframes global-spin {

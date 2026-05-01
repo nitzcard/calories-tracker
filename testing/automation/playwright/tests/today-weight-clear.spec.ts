@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { seedProfileAndEntries, todayIso } from "./helpers";
+import { seedProfileAndEntries, signInToCloud, todayIso } from "./helpers";
 
 test("@weight clearing current-day weight persists after refresh", async ({ page }) => {
   const date = todayIso();
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     {
       date,
       foodLogText: "test food log",
@@ -13,6 +13,7 @@ test("@weight clearing current-day weight persists after refresh", async ({ page
       manualCalories: null,
     },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#dailyDeskPanel").scrollIntoViewIfNeeded();
@@ -22,7 +23,7 @@ test("@weight clearing current-day weight persists after refresh", async ({ page
 
   await todayWeightInput.fill("");
   await todayWeightInput.blur();
-  await page.waitForTimeout(1100);
+  await page.waitForTimeout(1200);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#dailyDeskPanel").scrollIntoViewIfNeeded();

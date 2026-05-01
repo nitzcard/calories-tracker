@@ -67,7 +67,6 @@ const tdeeParts = [
 function formulaLabel(name: string) {
   const labels: Record<string, string> = {
     mifflinStJeor: "Mifflin-St Jeor",
-    harrisBenedict: "Harris-Benedict",
     cunningham: "Cunningham",
   };
 
@@ -77,7 +76,6 @@ function formulaLabel(name: string) {
 function formulaExplain(name: string) {
   const notes: Record<string, string> = {
     mifflinStJeor: t("mifflinStJeorExplain"),
-    harrisBenedict: t("harrisBenedictExplain"),
     cunningham: t("cunninghamExplain"),
   };
 
@@ -87,7 +85,6 @@ function formulaExplain(name: string) {
 function formulaMathLabel(name: string) {
   const labels: Record<string, string> = {
     mifflinStJeor: "TDEE equals (10 times weight plus 6.25 times height minus 5 times age plus sex offset) times activity factor",
-    harrisBenedict: "TDEE equals resting energy estimate times activity factor",
     cunningham: "TDEE equals (500 plus 22 times lean body mass) times activity factor",
   };
 
@@ -97,7 +94,6 @@ function formulaMathLabel(name: string) {
 function formulaHref(name: string) {
   const urls: Record<string, string> = {
     mifflinStJeor: "https://pubmed.ncbi.nlm.nih.gov/2305711/",
-    harrisBenedict: "https://en.wikipedia.org/wiki/Harris%E2%80%93Benedict_equation",
     cunningham: "https://pubmed.ncbi.nlm.nih.gov/25275434/",
   };
 
@@ -315,32 +311,6 @@ const formulaCards = computed(() =>
                       <mtext>TDEE</mtext>
                       <mo>=</mo>
                       <mtext>BMR</mtext>
-                      <mo>×</mo>
-                      <mtext>activity factor</mtext>
-                    </mrow>
-                  </mtd>
-                </mtr>
-              </mtable>
-            </math>
-            <math
-              v-else-if="card.id === 'harrisBenedict'"
-              class="math-equation math-equation--compact"
-              xmlns="http://www.w3.org/1998/Math/MathML"
-              :aria-label="formulaMathLabel(card.id)"
-            >
-              <mtable>
-                <mtr>
-                  <mtd>
-                    <mrow>
-                      <mtext>TDEE</mtext>
-                      <mo>=</mo>
-                      <mtext>BMR</mtext>
-                    </mrow>
-                  </mtd>
-                </mtr>
-                <mtr>
-                  <mtd>
-                    <mrow>
                       <mo>×</mo>
                       <mtext>activity factor</mtext>
                     </mrow>

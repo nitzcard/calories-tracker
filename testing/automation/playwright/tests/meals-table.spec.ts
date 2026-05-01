@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { makeFoodSeed, makeNutritionSnapshot, seedProfileAndEntries, todayIso } from "./helpers";
+import { makeFoodSeed, makeNutritionSnapshot, seedProfileAndEntries, signInToCloud, todayIso } from "./helpers";
 
 test("@meals meals table persists edits and avoids duplicate correction toast", async ({ page }) => {
   const date = todayIso();
@@ -29,7 +29,7 @@ test("@meals meals table persists edits and avoids duplicate correction toast", 
   });
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     {
       date,
       foodLogText: "oats and yogurt",
@@ -39,6 +39,7 @@ test("@meals meals table persists edits and avoids duplicate correction toast", 
       nutritionSnapshot: makeNutritionSnapshot([oats, yogurt]),
     },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#nutritionSummaryPanel").scrollIntoViewIfNeeded();
@@ -116,7 +117,7 @@ test("@meals meal totals persist and survive date switch", async ({ page }) => {
   });
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     {
       date: today,
       foodLogText: "oats and yogurt",
@@ -132,6 +133,7 @@ test("@meals meal totals persist and survive date switch", async ({ page }) => {
       manualCalories: 1900,
     },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#nutritionSummaryPanel").scrollIntoViewIfNeeded();
@@ -168,7 +170,7 @@ test("@meals grams and macro edits persist without dropping latest value", async
   });
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     {
       date,
       foodLogText: "oats only",
@@ -178,6 +180,7 @@ test("@meals grams and macro edits persist without dropping latest value", async
       nutritionSnapshot: makeNutritionSnapshot([oats]),
     },
   ]);
+  await signInToCloud(page, auth);
 
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#nutritionSummaryPanel").scrollIntoViewIfNeeded();

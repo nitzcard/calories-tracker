@@ -1,23 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { initializeCloudSyncState, isoDate, readPersistedAppState, seedProfileAndEntries } from "./helpers";
+import { isoDate, readPersistedAppState, seedProfileAndEntries, signInToCloud } from "./helpers";
 
-test("@inputs unchanged saves do not rewrite persisted timestamps or sync revision", async ({ page }) => {
+test("@inputs unchanged saves do not rewrite persisted timestamps", async ({ page }) => {
   const today = isoDate(0);
   const yesterday = isoDate(-1);
 
-  await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(page, [
+  const auth = await seedProfileAndEntries(page, [
     { date: today, foodLogText: "same today log", weight: 80.1, manualCalories: 2100 },
     { date: yesterday, foodLogText: "same yesterday log", weight: 80.4, manualCalories: 1900 },
   ]);
-  await initializeCloudSyncState(page, {
-    revision: 7,
-    lastSyncedRevision: 7,
-    pendingScopes: [],
-    lastRemoteFingerprint: "fingerprint-1",
-  });
-
-  await page.reload({ waitUntil: "networkidle" });
+  await signInToCloud(page, auth);
 
   const before = await readPersistedAppState(page);
   const beforeToday = before.dailyEntries.find((entry: { date: string }) => entry.date === today);
@@ -26,7 +18,6 @@ test("@inputs unchanged saves do not rewrite persisted timestamps or sync revisi
   expect(before.profile).toBeTruthy();
   expect(beforeToday).toBeTruthy();
   expect(beforeYesterday).toBeTruthy();
-  expect(before.cloudSyncState?.revision).toBe(7);
 
   await page.getByRole("button", { name: "English" }).click();
 
@@ -58,7 +49,4 @@ test("@inputs unchanged saves do not rewrite persisted timestamps or sync revisi
   expect(after.profile?.updatedAt).toBe(before.profile?.updatedAt);
   expect(afterToday?.updatedAt).toBe(beforeToday?.updatedAt);
   expect(afterYesterday?.updatedAt).toBe(beforeYesterday?.updatedAt);
-  expect(after.cloudSyncState?.revision).toBe(7);
-  expect(after.cloudSyncState?.pendingScopes ?? []).toEqual([]);
-  expect(after.cloudSyncState?.lastRemoteFingerprint).toBe("fingerprint-1");
 });

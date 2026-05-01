@@ -1,32 +1,18 @@
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { getStoredAiKeys, saveStoredAiKeys, type StoredAiKeys } from "../ai/credentials";
+import { computed, onMounted, ref, watch } from "vue";
+import { type StoredAiKeys, getStoredAiKeys, resetStoredAiKeys, saveStoredAiKeys } from "../ai/credentials";
 import { detectLocale, localeDirection, syncI18nLocale } from "../i18n";
-import {
-  DASHBOARD_STORAGE_KEYS,
-  normalizeProvider,
-  readStoredLocale,
-  readStoredProvider,
-  statusLabel,
-} from "./dashboard-helpers";
+import { normalizeProvider, statusLabel } from "./dashboard-helpers";
 import { createSerialTaskQueue } from "./serialTaskQueue";
 import { useSaveController } from "./useSaveController";
 import { useAnalysisFlow } from "./useAnalysisFlow";
 import { useFoodCorrectionState } from "./useFoodCorrectionState";
 import {
-  ensureDefaultProfile,
-  getCloudSyncState,
-  getProfile,
-  listEntries,
-  exportAppData,
-  importAppData,
-  saveCloudSyncState,
-  saveProfile,
-  upsertDailyEntry,
-  deleteDailyEntry,
-  type ExportedAppData,
-  getStoredAiKeysFromDb,
-  saveStoredAiKeysToDb,
-} from "../storage/repository";
+  cloneCloudAppState,
+  createDefaultProfile,
+  createEmptyCloudAppState,
+  normalizeCloudAppState,
+  type CloudAppState,
+} from "../cloud/app-state";
 import {
   chartDayTimestamp,
   dailyEntryDraft,
@@ -35,7 +21,7 @@ import {
   resolvedDailyCalories,
 } from "../domain/entries";
 import { buildTdeeSnapshot, scopeEntries } from "../tdee/calculations";
-import type { AiProviderOption, AppLocale, ChartScope, DailyEntry, Profile, TdeeEquation } from "../types";
+import type { AiProviderOption, AppLocale, ChartScope, DailyEntry, Profile, TdeeEquation, ThemePreference } from "../types";
 import {
   decryptJsonWithPassphrase,
   encryptJsonWithPassphrase,
@@ -48,51 +34,104 @@ import {
 } from "../ai/registry";
 import { isGeminiModelId } from "../ai/gemini-config";
 import { fetchGeminiModelOptions } from "../ai/gemini-models";
-import { mergeExportedAppData } from "../cloud/merge";
 import { canonicalCloudFingerprint } from "../cloud/canonical";
 import { localIsoDate } from "../domain/dates";
+import { clearSavedCloudAuth, readSavedCloudAuth, saveCloudAuth, type SavedCloudAuth } from "../cloud/auth-storage";
+
+type CloudPhase = "idle" | "loading" | "saving" | "saved" | "error";
+
+type CloudEncryptedEnvelopeV1 = {
+  kind: "encrypted-v1";
+  box: EncryptedSecretBoxV1;
+  email?: string;
+};
+
+function createEntry(date: string): DailyEntry {
+  const now = new Date().toISOString();
+  return {
+    date,
+    foodLogText: "",
+    weight: null,
+    manualCalories: null,
+    analysisStale: false,
+    nutritionSnapshot: null,
+    aiStatus: "idle",
+    aiError: null,
+    updatedAt: now,
+    createdAt: now,
+  };
+}
+
+function sortEntries(entries: DailyEntry[]) {
+  return [...entries].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isUsernameValid(value: string) {
+  return normalizeUsername(value).length >= 3;
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function formatCloudSyncTimestamp(locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
+
+function syncChrome(locale: AppLocale) {
+  const direction = localeDirection(locale);
+  syncI18nLocale(locale);
+  document.documentElement.lang = locale;
+  document.documentElement.dir = direction;
+  document.body.dir = direction;
+  document.body.style.direction = direction;
+}
+
+function cloudStatusFromPhase(phase: CloudPhase): "idle" | "loading" | "saving" | "saved" | "error" {
+  return phase;
+}
 
 export function useDashboard() {
-  type PersistedDailyDraft = {
-    foodLogText?: string;
-    weight?: string;
-    updatedAt: number;
-  };
-
   const today = localIsoDate();
-  const locale = ref<AppLocale>(readStoredLocale() ?? detectLocale());
-  const profile = ref<Profile | null>(null);
+  const startupLocale = detectLocale();
+  const initialSavedCloudAuth = readSavedCloudAuth();
+  const locale = ref<AppLocale>(startupLocale);
+  const profile = ref<Profile | null>(createDefaultProfile(startupLocale));
   const entries = ref<DailyEntry[]>([]);
   const selectedDate = ref(today);
   const currentFoodLog = ref("");
   const currentWeight = ref("");
   const hasUserEditedCurrentFoodLog = ref(false);
   const hasUserEditedCurrentWeight = ref(false);
-  const provider = ref(normalizeProvider(readStoredProvider()));
+  const provider = ref(normalizeProvider(profile.value?.aiModel ?? null));
   const providerOptions = ref<AiProviderOption[]>([]);
   const aiKeys = ref<StoredAiKeys>(getStoredAiKeys());
   const notice = ref("");
-  const autoSave = useSaveController({
-    onChanged: notifyPersistedChange,
-  });
-  const cloudUsername = ref(localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudUsername) ?? "");
-  const cloudConfirmedUsername = ref(
-    localStorage.getItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername) ?? "",
-  );
-  const isCloudBusy = ref(false);
-  const cloudStatus = ref<"idle" | "synced" | "failed">("idle");
+  const savedCloudAuth = ref<SavedCloudAuth | null>(initialSavedCloudAuth);
+  const cloudUsername = ref(initialSavedCloudAuth?.username ?? "");
+  const cloudConfirmedUsername = ref("");
+  const cloudPassword = ref(initialSavedCloudAuth?.password ?? "");
+  const cloudPhase = ref<CloudPhase>("idle");
   const cloudLastSyncedAt = ref("");
   const cloudError = ref("");
-  // Avoid pulling Supabase SDK into initial bundle; cloud module loads lazily on demand.
+  const isInitialCloudHydrating = ref(Boolean(initialSavedCloudAuth));
   const supabaseConfigured = computed(() =>
     Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
   );
-  const cloudIsSyncing = ref(false);
-  const isInitialCloudHydrating = ref(false);
-  const cloudPushPendingSignal = ref(false);
-  let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
-  let cloudPushPending = false;
-  let cloudPushInFlight = false;
+  const currentLoadedState = ref<CloudAppState>(createEmptyCloudAppState(startupLocale));
+  const lastSavedFingerprint = ref(canonicalCloudFingerprint(currentLoadedState.value));
+  const cloudWriteQueue = createSerialTaskQueue();
   let cachedCloudBlobModule:
     | Promise<{
         createUserBlob: (username: string, raw: unknown) => Promise<any>;
@@ -106,201 +145,201 @@ export function useDashboard() {
     return cachedCloudBlobModule;
   }
 
-  function normalizeUsername(value: string) {
-    return value.trim().toLowerCase();
-  }
-
-  function formatCloudSyncTimestamp() {
-    return new Intl.DateTimeFormat(locale.value === "he" ? "he-IL" : "en-US", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date());
-  }
-
-  function dailyDraftStorageKey(date: string) {
-    return `${DASHBOARD_STORAGE_KEYS.dailyDraftPrefix}${date}`;
-  }
-
-  function readPersistedDraft(date: string): PersistedDailyDraft | null {
-    try {
-      const raw = localStorage.getItem(dailyDraftStorageKey(date));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as PersistedDailyDraft | null;
-      if (!parsed || typeof parsed !== "object") {
-        return null;
-      }
-      return {
-        foodLogText: typeof parsed.foodLogText === "string" ? parsed.foodLogText : undefined,
-        weight: typeof parsed.weight === "string" ? parsed.weight : undefined,
-        updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
-      };
-    } catch {
-      return null;
+  function hydrateFromState(next: CloudAppState, options?: { preserveSelectedInputs?: boolean }) {
+    const cloned = cloneCloudAppState(next);
+    currentLoadedState.value = cloned;
+    profile.value = clone(cloned.profile);
+    entries.value = sortEntries(clone(cloned.dailyEntries));
+    aiKeys.value = { ...cloned.aiKeys };
+    saveStoredAiKeys(aiKeys.value);
+    locale.value = profile.value.locale;
+    provider.value = normalizeProvider(profile.value.aiModel);
+    ensureProviderOption(provider.value, locale.value);
+    syncChrome(locale.value);
+    refreshVisibleProviderOptions(locale.value);
+    if (!options?.preserveSelectedInputs) {
+      loadSelectedEntry();
     }
+    lastSavedFingerprint.value = canonicalCloudFingerprint(buildCloudStateSnapshot());
+    (globalThis as any).__APP_DEBUG_STATE__ = buildCloudStateSnapshot();
   }
 
-  function writePersistedDraft(date: string, patch: Partial<Omit<PersistedDailyDraft, "updatedAt">>) {
-    try {
-      const next: PersistedDailyDraft = {
-        ...(readPersistedDraft(date) ?? { updatedAt: Date.now() }),
-        ...patch,
-        updatedAt: Date.now(),
-      };
+  function buildCloudStateSnapshot(): CloudAppState {
+    return {
+      schemaVersion: "2",
+      updatedAt: new Date().toISOString(),
+      profile: clone(profile.value ?? createDefaultProfile(locale.value)),
+      dailyEntries: sortEntries(clone(entries.value)),
+      foodRules: [],
+      aiKeys: { ...aiKeys.value },
+    };
+  }
 
-      const hasFoodLog = typeof next.foodLogText === "string";
-      const hasWeight = typeof next.weight === "string";
-      if (!hasFoodLog && !hasWeight) {
-        localStorage.removeItem(dailyDraftStorageKey(date));
+  function getCloudSecret(username: string, passwordOverride?: string) {
+    const password = (passwordOverride ?? cloudPassword.value).trim();
+    if (!password) return "";
+    return `${normalizeUsername(username)}::${password}`;
+  }
+
+  function stripEmailFromPayload(payload: CloudAppState): CloudAppState {
+    return {
+      ...payload,
+      profile: {
+        ...payload.profile,
+        email: "",
+      },
+    };
+  }
+
+  function applyCloudEmailToPayload(payload: CloudAppState, email?: string): CloudAppState {
+    if (!email?.trim()) {
+      return payload;
+    }
+    return {
+      ...payload,
+      profile: {
+        ...payload.profile,
+        email,
+      },
+    };
+  }
+
+  function isEncryptedSecretBox(raw: unknown): raw is EncryptedSecretBoxV1 {
+    return (
+      Boolean(raw) &&
+      typeof raw === "object" &&
+      (raw as EncryptedSecretBoxV1).v === 1 &&
+      (raw as EncryptedSecretBoxV1).alg === "AES-GCM" &&
+      (raw as EncryptedSecretBoxV1).kdf === "PBKDF2"
+    );
+  }
+
+  function isEncryptedEnvelope(raw: unknown): raw is CloudEncryptedEnvelopeV1 {
+    return Boolean(raw) && typeof raw === "object" && (raw as CloudEncryptedEnvelopeV1).kind === "encrypted-v1";
+  }
+
+  async function decodeCloudBlob(raw: unknown, secret: string): Promise<CloudAppState> {
+    if (isEncryptedEnvelope(raw)) {
+      const decrypted = await decryptJsonWithPassphrase<{ payload: unknown }>(raw.box, secret);
+      return applyCloudEmailToPayload(normalizeCloudAppState(decrypted.payload, locale.value), raw.email);
+    }
+
+    if (isEncryptedSecretBox(raw)) {
+      const decrypted = await decryptJsonWithPassphrase<unknown>(raw, secret);
+      return normalizeCloudAppState(decrypted, locale.value);
+    }
+
+    return normalizeCloudAppState(raw, locale.value);
+  }
+
+  async function encodeCloudBlob(payload: CloudAppState, secret: string): Promise<CloudEncryptedEnvelopeV1> {
+    const publicEmail = payload.profile.email?.trim() || undefined;
+    const box = await encryptJsonWithPassphrase({ payload: stripEmailFromPayload(payload) }, secret);
+    return { kind: "encrypted-v1", box, email: publicEmail };
+  }
+
+  function refreshVisibleProviderOptions(nextLocale = locale.value) {
+    providerOptions.value = aiKeys.value.gemini.trim() ? listProviderOptions(nextLocale) : [];
+  }
+
+  function setProfileOnly(nextProfile: Profile) {
+    const stampedProfile = {
+      ...nextProfile,
+      updatedAt: new Date().toISOString(),
+    };
+    profile.value = stampedProfile;
+    currentLoadedState.value = {
+      ...currentLoadedState.value,
+      profile: clone(stampedProfile),
+      updatedAt: new Date().toISOString(),
+    };
+    locale.value = stampedProfile.locale;
+    provider.value = normalizeProvider(stampedProfile.aiModel);
+    ensureProviderOption(provider.value, locale.value);
+    syncChrome(locale.value);
+    refreshVisibleProviderOptions(locale.value);
+    (globalThis as any).__APP_DEBUG_STATE__ = buildCloudStateSnapshot();
+  }
+
+  function upsertEntryLocally(date: string, updater: (entry: DailyEntry) => DailyEntry) {
+    const existing = findEntryByDate(entries.value, date) ?? createEntry(date);
+    const next = {
+      ...updater(clone(existing)),
+      date,
+      updatedAt: new Date().toISOString(),
+      createdAt: existing.createdAt,
+    };
+    entries.value = sortEntries([
+      next,
+      ...entries.value.filter((entry) => entry.date !== date),
+    ]);
+    currentLoadedState.value = {
+      ...currentLoadedState.value,
+      dailyEntries: clone(entries.value),
+      updatedAt: new Date().toISOString(),
+    };
+    (globalThis as any).__APP_DEBUG_STATE__ = buildCloudStateSnapshot();
+    return next;
+  }
+
+  function deleteEntryLocally(date: string) {
+    const existing = findEntryByDate(entries.value, date);
+    if (!existing) {
+      return false;
+    }
+    entries.value = entries.value.filter((entry) => entry.date !== date);
+    currentLoadedState.value = {
+      ...currentLoadedState.value,
+      dailyEntries: clone(entries.value),
+      updatedAt: new Date().toISOString(),
+    };
+    (globalThis as any).__APP_DEBUG_STATE__ = buildCloudStateSnapshot();
+    return true;
+  }
+
+  async function persistCloudState() {
+    const username = normalizeUsername(cloudConfirmedUsername.value);
+    const secret = getCloudSecret(username);
+    if (!username || !secret) {
+      return false;
+    }
+
+    const snapshot = buildCloudStateSnapshot();
+    const fingerprint = canonicalCloudFingerprint(snapshot);
+    if (fingerprint === lastSavedFingerprint.value) {
+      return false;
+    }
+
+    await cloudWriteQueue.enqueue(async () => {
+      const latest = buildCloudStateSnapshot();
+      const latestFingerprint = canonicalCloudFingerprint(latest);
+      if (latestFingerprint === lastSavedFingerprint.value) {
         return;
       }
 
-      localStorage.setItem(dailyDraftStorageKey(date), JSON.stringify(next));
-    } catch {
-      // Ignore; draft caching is best effort.
-    }
-  }
-
-  function clearPersistedDraftFieldsIfUnchanged(
-    date: string,
-    saved: { foodLogText?: string; weight?: string },
-  ) {
-    try {
-      const existing = readPersistedDraft(date);
-      if (!existing) return;
-
-      const next: PersistedDailyDraft = { ...existing };
-      if (
-        saved.foodLogText !== undefined &&
-        typeof existing.foodLogText === "string" &&
-        existing.foodLogText === saved.foodLogText
-      ) {
-        delete next.foodLogText;
-      }
-      if (
-        saved.weight !== undefined &&
-        typeof existing.weight === "string" &&
-        existing.weight === saved.weight
-      ) {
-        delete next.weight;
+      cloudPhase.value = "saving";
+      cloudError.value = "";
+      const { upsertUserBlob } = await getCloudBlobModule();
+      const pushed = await upsertUserBlob(username, await encodeCloudBlob(latest, secret));
+      if (!pushed.ok) {
+        cloudPhase.value = "error";
+        cloudError.value = pushed.error;
+        throw new Error(pushed.error);
       }
 
-      if (next.foodLogText === undefined && next.weight === undefined) {
-        localStorage.removeItem(dailyDraftStorageKey(date));
-        return;
-      }
+      lastSavedFingerprint.value = latestFingerprint;
+      cloudLastSyncedAt.value = formatCloudSyncTimestamp(locale.value);
+      cloudPhase.value = "saved";
+    });
 
-      localStorage.setItem(
-        dailyDraftStorageKey(date),
-        JSON.stringify({ ...next, updatedAt: Date.now() }),
-      );
-    } catch {
-      // Ignore; draft caching is best effort.
-    }
+    return true;
   }
 
-  function clearPersistedDraftFields(
-    date: string,
-    fields: Array<keyof Omit<PersistedDailyDraft, "updatedAt">>,
-  ) {
-    try {
-      const existing = readPersistedDraft(date);
-      if (!existing) return;
-
-      const next: PersistedDailyDraft = { ...existing };
-      for (const field of fields) {
-        delete next[field];
-      }
-
-      if (next.foodLogText === undefined && next.weight === undefined) {
-        localStorage.removeItem(dailyDraftStorageKey(date));
-        return;
-      }
-
-      localStorage.setItem(
-        dailyDraftStorageKey(date),
-        JSON.stringify({ ...next, updatedAt: Date.now() }),
-      );
-    } catch {
-      // Ignore; draft caching is best effort.
-    }
-  }
-
-  function updateCurrentFoodLog(value: string) {
-    hasUserEditedCurrentFoodLog.value = true;
-    currentFoodLog.value = value;
-  }
-
-  function updateCurrentWeight(value: string) {
-    hasUserEditedCurrentWeight.value = true;
-    currentWeight.value = value;
-  }
-
-  function weightDraftString(weight: number | null) {
-    return weight !== null ? String(weight) : "";
-  }
-
-  function isUsernameValid(value: string) {
-    return normalizeUsername(value).length >= 3;
-  }
-
-  const cloudPassword = ref("");
-  const savedCloudPasswordVersion = ref(0);
-  const cloudPasswordStorageKeyPrefix = "calorie-tracker.cloud-password::";
-
-  function cloudPasswordStorageKey(username: string) {
-    return `${cloudPasswordStorageKeyPrefix}${normalizeUsername(username)}`;
-  }
-
-  function bumpSavedCloudPasswordVersion() {
-    savedCloudPasswordVersion.value += 1;
-  }
-
-  function loadCloudPasswordFromStorage(username: string) {
-    try {
-      const stored = localStorage.getItem(cloudPasswordStorageKey(username)) ?? "";
-      if (stored.trim()) {
-        cloudPassword.value = stored;
-        bumpSavedCloudPasswordVersion();
-        return true;
-      }
-    } catch {
-      // Ignore; storage may be unavailable in some contexts.
-    }
-    return false;
-  }
-
-  function saveCloudPasswordToStorage(username: string, password: string) {
-    try {
-      localStorage.setItem(cloudPasswordStorageKey(username), password);
-      bumpSavedCloudPasswordVersion();
-    } catch {
-      // Ignore; storage may be unavailable in some contexts.
-    }
-  }
-
-  function removeCloudPasswordFromStorage(username: string) {
-    try {
-      localStorage.removeItem(cloudPasswordStorageKey(username));
-      bumpSavedCloudPasswordVersion();
-    } catch {
-      // Ignore; storage may be unavailable in some contexts.
-    }
-  }
-
-  const hasSavedCloudPassword = computed(() => {
-    void savedCloudPasswordVersion.value;
-    const normalized = normalizeUsername(cloudUsername.value);
-    if (!normalized) return false;
-    try {
-      const stored = localStorage.getItem(cloudPasswordStorageKey(normalized)) ?? "";
-      return Boolean(stored.trim());
-    } catch {
-      return Boolean(cloudPassword.value.trim());
-    }
+  const autoSave = useSaveController({
+    debounceMs: 400,
+    onChanged: async () => {
+      await persistCloudState();
+    },
   });
 
   const savedCurrentEntry = computed(() =>
@@ -316,46 +355,29 @@ export function useDashboard() {
     return currentWeight.value.trim() !== savedWeight.trim();
   });
 
-  const cloudOperationQueue = createSerialTaskQueue();
-  const pendingProfileSnapshot = ref<Profile | null>(null);
+  function loadSelectedEntry(options?: { skipFoodLog?: boolean }) {
+    const savedEntry = findEntryByDate(entries.value, selectedDate.value);
+    const draft = dailyEntryDraft(savedEntry);
 
-  function hasEffectiveGeminiKey() {
-    return Boolean((aiKeys.value.gemini || import.meta.env.VITE_GEMINI_API_KEY || "").trim());
+    if (!options?.skipFoodLog) {
+      currentFoodLog.value = draft.foodLogText;
+      hasUserEditedCurrentFoodLog.value = false;
+    }
+
+    currentWeight.value = draft.weight;
+    hasUserEditedCurrentWeight.value = false;
   }
 
-  function refreshVisibleProviderOptions(nextLocale = locale.value) {
-    providerOptions.value = hasEffectiveGeminiKey() ? listProviderOptions(nextLocale) : [];
+  function updateCurrentFoodLog(value: string) {
+    hasUserEditedCurrentFoodLog.value = true;
+    currentFoodLog.value = value;
   }
 
-  watch(currentFoodLog, () => {
-    if (!hasUserEditedCurrentFoodLog.value) {
-      return;
-    }
+  function updateCurrentWeight(value: string) {
+    hasUserEditedCurrentWeight.value = true;
+    currentWeight.value = value;
+  }
 
-    if (!isCurrentFoodLogDirty.value) {
-      clearPersistedDraftFieldsIfUnchanged(selectedDate.value, { foodLogText: currentFoodLog.value });
-      autoSave.cancel("today.foodLog");
-      return;
-    }
-
-    writePersistedDraft(selectedDate.value, { foodLogText: currentFoodLog.value });
-    scheduleFoodDraftSave();
-  });
-
-  watch(currentWeight, () => {
-    if (!hasUserEditedCurrentWeight.value) {
-      return;
-    }
-
-    if (!isCurrentWeightDirty.value) {
-      clearPersistedDraftFieldsIfUnchanged(selectedDate.value, { weight: currentWeight.value });
-      autoSave.cancel("today.weight");
-      return;
-    }
-
-    writePersistedDraft(selectedDate.value, { weight: currentWeight.value });
-    scheduleWeightDraftSave();
-  });
   const displayEntries = computed(() =>
     entries.value.map((entry) =>
       entry.date === selectedDate.value && isCurrentFoodLogDirty.value && !analysis.isAnalyzing.value
@@ -372,36 +394,12 @@ export function useDashboard() {
   const tdee = computed(() =>
     profile.value
       ? buildTdeeSnapshot(displayEntries.value, profile.value)
-	        : {
-	          observedTdee: null,
-	          observedFromDate: null,
-	          observedToDate: null,
-	          observedValidEntryCount: 0,
-	          observedDaySpanDays: null,
-	          observedReason: "insufficient_entries" as const,
-	          observedMinEntries: 4,
-	          observedMinDays: 7,
-	          formulaTdeeAverage: null,
-	          formulaBreakdown: {},
-	          formulaWeight: null,
-          formulaWeightSource: null,
-          activityMultiplier: null,
-          selectedEquation: "mifflinStJeor" as const,
-          selectedValue: null,
-          targetWeight: null,
-          targetTdee: null,
-          lastComputedAt: "",
-        },
+      : buildTdeeSnapshot([], createDefaultProfile(locale.value)),
   );
   const progressTdeeReferences = computed<Record<ChartScope, number | null>>(() => {
     if (!profile.value) {
-      return {
-        "7d": null,
-        "30d": null,
-        all: null,
-      };
+      return { "7d": null, "30d": null, all: null };
     }
-
     return {
       "7d": buildTdeeSnapshot(scopeEntries(displayEntries.value, "7d"), profile.value).selectedValue,
       "30d": buildTdeeSnapshot(scopeEntries(displayEntries.value, "30d"), profile.value).selectedValue,
@@ -431,256 +429,103 @@ export function useDashboard() {
     if (weight == null || bodyFat == null || weight <= 0 || bodyFat < 0 || bodyFat >= 100) {
       return null;
     }
-
     return Math.round(weight * (1 - bodyFat / 100) * 10) / 10;
   });
-  function syncChrome() {
-    const direction = localeDirection(locale.value);
-    syncI18nLocale(locale.value);
-    document.documentElement.lang = locale.value;
-    document.documentElement.dir = direction;
-    document.body.dir = direction;
-    document.body.style.direction = direction;
-  }
 
-  async function refreshState(opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) {
-    entries.value = await listEntries();
-    const savedProfile = await getProfile();
-    const loadedProfile = savedProfile ?? (await ensureDefaultProfile(locale.value));
-    profile.value = pendingProfileSnapshot.value
-      ? { ...loadedProfile, ...pendingProfileSnapshot.value }
-      : loadedProfile;
-    loadSelectedEntry({
-      skipFoodLog: opts?.skipReloadFoodLog,
-      preserveDirtyFields: opts?.preserveDirtyFields ?? true,
-    });
-  }
-
-  async function notifyPersistedChange(scopes: string | string[]) {
-    for (const scope of Array.isArray(scopes) ? scopes : [scopes]) {
-      await markCloudChange(scope);
-    }
-    scheduleCloudPush((Array.isArray(scopes) ? scopes : [scopes])[0] ?? "");
-  }
-
-  async function runPersistedAutoSave(
+  async function runProfileSave(
     fieldKey: string,
     scopes: string | string[],
-    persist: () => Promise<{ changed: boolean }>,
-    onChanged?: () => Promise<void> | void,
-    options?: { mode?: "schedule" | "now"; shouldSave?: () => boolean; queueKey?: string },
-  ) {
-    const spec = {
-      fieldKey,
-      queueKey: options?.queueKey,
-      scopes,
-      shouldSave: options?.shouldSave,
-      save: async () => {
-        const result = await persist();
-        if (result.changed) {
-          await onChanged?.();
-        }
-        return result.changed;
-      },
-    };
-
-    return options?.mode === "schedule" ? autoSave.schedule(spec) : autoSave.runNow(spec);
-  }
-
-  async function runPersistedMutationWithCloudSync(
-    scopes: string | string[],
-    mutate: () => Promise<boolean>,
-  ) {
-    return autoSave.runNow({
-      fieldKey: Array.isArray(scopes) ? scopes[0] ?? "mutation" : scopes,
-      scopes,
-      save: mutate,
-    });
-  }
-
-  async function runQueuedProfileSave(
-    fieldKey: string,
-    scopes: string | string[],
-    nextProfile: Profile | null | undefined,
+    nextProfile: Profile,
     mode: "schedule" | "now" = "schedule",
   ) {
-    if (!nextProfile) return false;
-    const nextProfileToSave: Profile = { ...nextProfile };
-    profile.value = nextProfileToSave;
-    pendingProfileSnapshot.value = nextProfileToSave;
-
-    return runPersistedAutoSave(
-      fieldKey,
-      scopes,
-      async () => {
-        const result = await saveProfile(nextProfileToSave);
-        if (pendingProfileSnapshot.value === nextProfileToSave) {
-          pendingProfileSnapshot.value = null;
-        }
-        return result;
-      },
-      undefined,
-      { mode, queueKey: "profile" },
-    );
+    const profileChanged = () => JSON.stringify(currentLoadedState.value.profile) !== JSON.stringify(nextProfile);
+    return mode === "now"
+      ? autoSave.runNow({
+          fieldKey,
+          queueKey: "profile",
+          scopes,
+          shouldSave: profileChanged,
+          save: async () => {
+            setProfileOnly(nextProfile);
+            return true;
+          },
+        })
+      : autoSave.schedule({
+          fieldKey,
+          queueKey: "profile",
+          scopes,
+          shouldSave: profileChanged,
+          save: async () => {
+            setProfileOnly(nextProfile);
+            return true;
+          },
+        });
   }
 
-  function syncAppPreferencesFromProfile(nextProfile: Profile | null) {
-    if (!nextProfile) {
-      return;
-    }
-
-    locale.value = nextProfile.locale;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, locale.value);
-    provider.value = normalizeProvider(nextProfile.aiModel);
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, provider.value);
-    ensureProviderOption(provider.value, locale.value);
-    refreshVisibleProviderOptions(locale.value);
-    syncChrome();
-  }
-
-  function profilesEqualIgnoringUpdatedAt(left: Profile | null | undefined, right: Profile | null | undefined) {
-    if (!left || !right) return false;
-    const leftComparable = { ...left, updatedAt: right.updatedAt };
-    return JSON.stringify(leftComparable) === JSON.stringify(right);
-  }
-
-  async function flushCloudBoundInputs() {
-    await autoSave.flushAll();
-  }
-
-  async function persistDraftsForDate(date: string) {
-    const savedEntry = findEntryByDate(entries.value, date);
-    const savedFoodLog = savedEntry?.foodLogText ?? "";
-    const foodLogDirty = currentFoodLog.value.trim() !== savedFoodLog.trim();
-
-    const rawWeight = currentWeight.value;
-    const parsed = rawWeight.trim() ? Number(rawWeight) : null;
-    const normalizedWeight = parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-    const savedWeight = savedEntry?.weight ?? null;
-    const weightDirty = normalizedWeight !== savedWeight;
-
-    if (!foodLogDirty && !weightDirty) {
-      return;
-    }
-
-    const update: Parameters<typeof upsertDailyEntry>[0] = { date };
-    if (foodLogDirty) {
-      update.foodLogText = currentFoodLog.value;
-    }
-    if (weightDirty) {
-      update.weight = normalizedWeight;
-    }
-
-    const changed = await runPersistedAutoSave(
-      "today.persistDrafts",
-      [foodLogDirty ? "today.foodLog" : "", weightDirty ? "today.weight" : ""].filter(Boolean),
-      () => upsertDailyEntry(update),
-      async () => {
-        entries.value = await listEntries();
-      },
-    );
-
-    clearPersistedDraftFieldsIfUnchanged(date, {
-      foodLogText: update.foodLogText,
-      weight:
-        update.weight !== undefined
-          ? normalizedWeight !== null
-            ? String(normalizedWeight)
-            : ""
-          : undefined,
-    });
-
-    if (!changed) return;
-  }
-
-  function loadSelectedEntry(options?: { skipFoodLog?: boolean; preserveDirtyFields?: boolean }) {
-    const savedEntry = findEntryByDate(entries.value, selectedDate.value);
-    const draft = dailyEntryDraft(savedEntry);
-    const persistedDraft = readPersistedDraft(selectedDate.value);
-    const hasPersistedFoodLogDraft = typeof persistedDraft?.foodLogText === "string";
-    const hasPersistedWeightDraft = typeof persistedDraft?.weight === "string";
-    const entryUpdatedAtMs = savedEntry?.updatedAt ? Date.parse(savedEntry.updatedAt) : Number.NaN;
-    const persistedIsFresh =
-      !savedEntry ||
-      !Number.isFinite(entryUpdatedAtMs) ||
-      persistedDraft == null ||
-      persistedDraft.updatedAt >= entryUpdatedAtMs;
-
-    const nextFoodLog =
-      persistedIsFresh && persistedDraft?.foodLogText !== undefined
-        ? persistedDraft.foodLogText
-        : draft.foodLogText;
-    const nextWeight =
-      persistedIsFresh && persistedDraft?.weight !== undefined ? persistedDraft.weight : draft.weight;
-    const shouldKeepFoodLog =
-      Boolean(options?.skipFoodLog) ||
-      (Boolean(options?.preserveDirtyFields) && isCurrentFoodLogDirty.value && hasPersistedFoodLogDraft);
-    const shouldKeepWeight =
-      Boolean(options?.preserveDirtyFields) && isCurrentWeightDirty.value && hasPersistedWeightDraft;
-
-    if (!shouldKeepFoodLog) {
-      currentFoodLog.value = nextFoodLog;
-      hasUserEditedCurrentFoodLog.value = false;
-    }
-    if (!shouldKeepWeight) {
-      currentWeight.value = nextWeight;
-      hasUserEditedCurrentWeight.value = false;
-    }
-  }
-
-  async function onLocaleChange(nextLocale: AppLocale) {
-    locale.value = nextLocale;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.locale, nextLocale);
-    ensureProviderOption(provider.value, nextLocale);
-    refreshVisibleProviderOptions(nextLocale);
-    await runQueuedProfileSave("settings.locale", "settings.locale", profile.value ? { ...profile.value, locale: locale.value } : null, "now");
-  }
-
-  async function onProviderChange(nextProvider: string) {
-    ensureProviderOption(nextProvider, locale.value);
-    provider.value = nextProvider;
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, nextProvider);
-    localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet, "1");
-    await runQueuedProfileSave("settings.provider", "settings.provider", profile.value ? { ...profile.value, aiModel: nextProvider } : null, "now");
-    refreshVisibleProviderOptions();
-  }
-
-  async function persistWeightDraft(mode: "schedule" | "now") {
-    await nextTick();
-
-    const rawWeight = currentWeight.value;
-    const date = selectedDate.value;
+  async function persistWeightDraft(
+    mode: "schedule" | "now",
+    options?: { date?: string; rawWeight?: string },
+  ) {
+    const rawWeight = options?.rawWeight ?? currentWeight.value;
+    const date = options?.date ?? selectedDate.value;
     const parsed = rawWeight.trim() ? Number(rawWeight) : null;
     const normalizedWeight =
       parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     const saved = findEntryByDate(entries.value, date)?.weight ?? null;
-    const changed = await runPersistedAutoSave(
-      "today.weight",
-      "today.weight",
-      () => upsertDailyEntry({
-        date,
-        weight: normalizedWeight,
-      }),
-      async () => {
-        await refreshState();
-        if (selectedDate.value === date && currentWeight.value.trim() === rawWeight.trim()) {
+
+    const runner = mode === "now" ? autoSave.runNow.bind(autoSave) : autoSave.schedule.bind(autoSave);
+    const changed = await runner({
+      fieldKey: "today.weight",
+      scopes: "today.weight",
+      shouldSave: () => normalizedWeight !== saved,
+      save: async () => {
+        upsertEntryLocally(date, (entry) => ({
+          ...entry,
+          weight: normalizedWeight,
+        }));
+        if (selectedDate.value === date) {
           currentWeight.value = normalizedWeight !== null ? String(normalizedWeight) : "";
           hasUserEditedCurrentWeight.value = false;
         }
-        clearPersistedDraftFieldsIfUnchanged(date, {
-          weight: normalizedWeight !== null ? String(normalizedWeight) : "",
+        return true;
+      },
+    });
+
+    return changed;
+  }
+
+  async function persistFoodDraft(
+    mode: "schedule" | "now",
+    options?: { date?: string; foodLogText?: string },
+  ) {
+    const foodLogText = options?.foodLogText ?? currentFoodLog.value;
+    const date = options?.date ?? selectedDate.value;
+    const savedFoodLog = findEntryByDate(entries.value, date)?.foodLogText ?? "";
+    const runner = mode === "now" ? autoSave.runNow.bind(autoSave) : autoSave.schedule.bind(autoSave);
+    const changed = await runner({
+      fieldKey: "today.foodLog",
+      scopes: "today.foodLog",
+      shouldSave: () => foodLogText.trim() !== savedFoodLog.trim(),
+      save: async () => {
+        upsertEntryLocally(date, (entry) => {
+          const foodLogChanged = foodLogText !== entry.foodLogText;
+          return {
+            ...entry,
+            foodLogText,
+            analysisStale: foodLogChanged ? true : entry.analysisStale,
+            aiStatus: foodLogChanged ? "idle" : entry.aiStatus,
+            aiError: foodLogChanged ? null : entry.aiError,
+          };
         });
+        if (selectedDate.value === date && currentFoodLog.value === foodLogText) {
+          hasUserEditedCurrentFoodLog.value = false;
+        }
+        return true;
       },
-      {
-        mode,
-        shouldSave: () => normalizedWeight !== saved,
-      },
-    );
+    });
+
     if (mode === "now") {
-      clearPersistedDraftFields(date, ["weight"]);
-      if (!changed && selectedDate.value === date) {
-        hasUserEditedCurrentWeight.value = false;
-      }
+      hasUserEditedCurrentFoodLog.value = false;
     }
 
     return changed;
@@ -688,6 +533,10 @@ export function useDashboard() {
 
   function scheduleWeightDraftSave() {
     void persistWeightDraft("schedule");
+  }
+
+  function scheduleFoodDraftSave() {
+    void persistFoodDraft("schedule");
   }
 
   async function saveWeightDraft(weightOverride?: string) {
@@ -698,43 +547,6 @@ export function useDashboard() {
     await persistWeightDraft("now");
   }
 
-  async function persistFoodDraft(mode: "schedule" | "now") {
-    await nextTick();
-
-    const foodLogText = currentFoodLog.value;
-    const date = selectedDate.value;
-    const savedFoodLog = findEntryByDate(entries.value, date)?.foodLogText ?? "";
-    const changed = await runPersistedAutoSave(
-      "today.foodLog",
-      "today.foodLog",
-      () => upsertDailyEntry({
-        date,
-        foodLogText,
-      }),
-      async () => {
-        await refreshState({ skipReloadFoodLog: true });
-        if (selectedDate.value === date && currentFoodLog.value === foodLogText) {
-          hasUserEditedCurrentFoodLog.value = false;
-        }
-        clearPersistedDraftFieldsIfUnchanged(date, { foodLogText });
-      },
-      {
-        mode,
-        shouldSave: () => foodLogText.trim() !== savedFoodLog.trim(),
-      },
-    );
-    if (mode === "now") {
-      hasUserEditedCurrentFoodLog.value = false;
-      clearPersistedDraftFieldsIfUnchanged(date, { foodLogText });
-    }
-
-    return changed;
-  }
-
-  function scheduleFoodDraftSave() {
-    void persistFoodDraft("schedule");
-  }
-
   async function saveFoodDraft(foodLogOverride?: string) {
     if (typeof foodLogOverride === "string") {
       currentFoodLog.value = foodLogOverride;
@@ -743,90 +555,55 @@ export function useDashboard() {
     await persistFoodDraft("now");
   }
 
-  async function deleteDay(date: string) {
-    autoSave.cancel("today.foodLog");
-    autoSave.cancel("today.weight");
-
-    const changed = await runPersistedAutoSave(
-      `day.delete.${date}`,
-      `day.delete.${date}`,
-      () => deleteDailyEntry(date),
-      async () => {
-        localStorage.removeItem(dailyDraftStorageKey(date));
-        await refreshState({ preserveDirtyFields: false });
-      },
-    );
-
-    if (changed) {
-      notice.value = "day-deleted";
-    }
+  async function onLocaleChange(nextLocale: AppLocale) {
+    if (!profile.value) return;
+    await runProfileSave("settings.locale", "settings.locale", { ...profile.value, locale: nextLocale }, "now");
   }
 
-  async function saveHistoryCalories(date: string, calories: number | null) {
-    const savedCalories = findEntryByDate(entries.value, date)?.manualCalories ?? null;
-    await runPersistedAutoSave(
-      `history.calories.${date}`,
-      `history.calories.${date}`,
-      () => upsertDailyEntry({
-        date,
-        manualCalories: calories,
-      }),
-      async () => {
-        await refreshState();
-      },
-      { shouldSave: () => calories !== savedCalories },
-    );
-  }
-
-  async function saveHistoryWeight(date: string, weight: number | null) {
-    const savedWeight = findEntryByDate(entries.value, date)?.weight ?? null;
-    await runPersistedAutoSave(
-      `history.weight.${date}`,
-      `history.weight.${date}`,
-      () => upsertDailyEntry({
-        date,
-        weight,
-      }),
-      async () => {
-        clearPersistedDraftFields(date, ["weight"]);
-        await refreshState();
-        if (selectedDate.value === date) {
-          currentWeight.value = weightDraftString(weight);
-          hasUserEditedCurrentWeight.value = false;
-        }
-      },
-      { shouldSave: () => weight !== savedWeight },
-    );
+  async function onProviderChange(nextProvider: string) {
+    if (!profile.value) return;
+    ensureProviderOption(nextProvider, locale.value);
+    await runProfileSave("settings.provider", "settings.provider", { ...profile.value, aiModel: nextProvider }, "now");
   }
 
   async function saveProfileDraft(nextProfile?: Profile) {
-    const nextProfileToSave = nextProfile ?? profile.value;
-    if (profilesEqualIgnoringUpdatedAt(nextProfileToSave, await getProfile())) {
-      return;
-    }
-    await runQueuedProfileSave("constants.profile", "constants.profile", nextProfileToSave);
+    if (!nextProfile && !profile.value) return;
+    await runProfileSave("constants.profile", "constants.profile", nextProfile ?? profile.value!, "schedule");
   }
 
   async function saveTdeeEquation(tdeeEquation: TdeeEquation) {
-    if (profile.value?.tdeeEquation === tdeeEquation) {
+    if (!profile.value || profile.value.tdeeEquation === tdeeEquation) {
       return;
     }
-    await runQueuedProfileSave(
+    await runProfileSave(
       "constants.profile.tdeeEquation",
       "constants.profile.tdeeEquation",
-      profile.value ? { ...profile.value, tdeeEquation } : null,
+      { ...profile.value, tdeeEquation },
+      "now",
+    );
+  }
+
+  async function saveThemePreference(nextTheme: ThemePreference) {
+    if (!profile.value || profile.value.themePreference === nextTheme) {
+      return;
+    }
+    await runProfileSave(
+      "constants.profile.themePreference",
+      "constants.profile.themePreference",
+      { ...profile.value, themePreference: nextTheme },
       "now",
     );
   }
 
   async function saveFoodInstructions(foodInstructions: string) {
-    if ((profile.value?.foodInstructions ?? "") === foodInstructions) {
+    if (!profile.value || profile.value.foodInstructions === foodInstructions) {
       return;
     }
-    await runQueuedProfileSave(
+    await runProfileSave(
       "constants.foodInstructions",
       "constants.foodInstructions",
-      profile.value ? { ...profile.value, foodInstructions } : null,
+      { ...profile.value, foodInstructions },
+      "schedule",
     );
   }
 
@@ -834,17 +611,83 @@ export function useDashboard() {
     if ((aiKeys.value[providerKey] ?? "") === value) {
       return;
     }
-    await runPersistedAutoSave(
-      `credentials.${providerKey}`,
-      `credentials.${providerKey}`,
-      async () => {
+    await autoSave.runNow({
+      fieldKey: `credentials.${providerKey}`,
+      scopes: `credentials.${providerKey}`,
+      save: async () => {
         aiKeys.value = { ...aiKeys.value, [providerKey]: value };
         saveStoredAiKeys(aiKeys.value);
-        return saveStoredAiKeysToDb(aiKeys.value);
+        currentLoadedState.value = {
+          ...currentLoadedState.value,
+          aiKeys: { ...aiKeys.value },
+          updatedAt: new Date().toISOString(),
+        };
+        refreshVisibleProviderOptions(locale.value);
+        (globalThis as any).__APP_DEBUG_STATE__ = buildCloudStateSnapshot();
+        return true;
       },
-    );
-    // Keys are stored separately from the IndexedDB backup; cloud sync can encrypt them
-    // only when a passphrase is provided.
+    });
+  }
+
+  async function deleteDay(date: string) {
+    autoSave.cancel("today.foodLog");
+    autoSave.cancel("today.weight");
+    const changed = await autoSave.runNow({
+      fieldKey: `day.delete.${date}`,
+      scopes: `day.delete.${date}`,
+      save: async () => deleteEntryLocally(date),
+    });
+    if (changed) {
+      if (selectedDate.value === date) {
+        loadSelectedEntry();
+      }
+      notice.value = "day-deleted";
+    }
+  }
+
+  async function saveHistoryCalories(date: string, calories: number | null) {
+    const savedCalories = findEntryByDate(entries.value, date)?.manualCalories ?? null;
+    await autoSave.runNow({
+      fieldKey: `history.calories.${date}`,
+      scopes: `history.calories.${date}`,
+      shouldSave: () => calories !== savedCalories,
+      save: async () => {
+        upsertEntryLocally(date, (entry) => ({
+          ...entry,
+          manualCalories: calories,
+        }));
+        return true;
+      },
+    });
+  }
+
+  async function saveHistoryWeight(date: string, weight: number | null) {
+    const savedWeight = findEntryByDate(entries.value, date)?.weight ?? null;
+    await autoSave.runNow({
+      fieldKey: `history.weight.${date}`,
+      scopes: `history.weight.${date}`,
+      shouldSave: () => weight !== savedWeight,
+      save: async () => {
+        upsertEntryLocally(date, (entry) => ({
+          ...entry,
+          weight,
+        }));
+        if (selectedDate.value === date) {
+          currentWeight.value = weight !== null ? String(weight) : "";
+          hasUserEditedCurrentWeight.value = false;
+        }
+        return true;
+      },
+    });
+  }
+
+  async function updateEntry(date: string, updater: (entry: DailyEntry) => DailyEntry) {
+    upsertEntryLocally(date, updater);
+  }
+
+  async function updateCurrentEntry(updater: (entry: DailyEntry) => DailyEntry) {
+    const existing = findEntryByDate(entries.value, selectedDate.value) ?? createEntry(selectedDate.value);
+    upsertEntryLocally(existing.date, updater);
   }
 
   function clearNotice() {
@@ -857,561 +700,191 @@ export function useDashboard() {
     providerOptions,
     currentFoodLog,
     selectedDate,
-    refreshState,
+    getEntryForDate: (date) => findEntryByDate(entries.value, date),
     saveFoodDraft,
     saveProvider: onProviderChange,
+    updateEntry,
   });
 
   const corrections = useFoodCorrectionState({
     profile,
     currentEntry,
-    refreshState,
+    setProfile: async (nextProfile) => {
+      setProfileOnly(nextProfile);
+    },
+    updateCurrentEntry,
     setNotice: (value) => {
       notice.value = value;
     },
   });
 
-  type CloudEncryptedEnvelopeV1 = {
-    kind: "encrypted-v1";
-    box: EncryptedSecretBoxV1;
-    email?: string;
-  };
-  type CloudDecodedBlob = { payload: ExportedAppData; aiKeys?: StoredAiKeys };
-
-  function isEncryptedSecretBox(raw: unknown): raw is EncryptedSecretBoxV1 {
-    return (
-      Boolean(raw) &&
-      typeof raw === "object" &&
-      (raw as EncryptedSecretBoxV1).v === 1 &&
-      (raw as EncryptedSecretBoxV1).alg === "AES-GCM" &&
-      (raw as EncryptedSecretBoxV1).kdf === "PBKDF2"
-    );
-  }
-
-  function isEncryptedEnvelope(raw: unknown): raw is CloudEncryptedEnvelopeV1 {
-    return Boolean(raw) && typeof raw === "object" && (raw as CloudEncryptedEnvelopeV1).kind === "encrypted-v1";
-  }
-
-  function normalizeCloudEmail(value: string | undefined | null) {
-    return value?.trim() ? value.trim() : "";
-  }
-
-  function canonicalPayloadEquals(left: ExportedAppData, right: ExportedAppData) {
-    return canonicalCloudFingerprint(left) === canonicalCloudFingerprint(right);
-  }
-
-  async function markCloudChange(scope: string) {
-    const state = await getCloudSyncState();
-    await saveCloudSyncState({
-      ...state,
-      revision: state.revision + 1,
-      pendingScopes: state.pendingScopes.includes(scope) ? state.pendingScopes : [...state.pendingScopes, scope],
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function markCloudSynced(
-    revision: number,
-    remoteFingerprint: string,
-    options?: { keepPending?: boolean },
+  async function runMutationWithCloudSync(
+    scopes: string | string[],
+    mutate: () => Promise<boolean>,
   ) {
-    const state = await getCloudSyncState();
-    await saveCloudSyncState({
-      ...state,
-      lastSyncedRevision: Math.max(state.lastSyncedRevision, revision),
-      pendingScopes: options?.keepPending ? state.pendingScopes : [],
-      lastRemoteFingerprint: remoteFingerprint,
-      updatedAt: new Date().toISOString(),
+    await autoSave.runNow({
+      fieldKey: Array.isArray(scopes) ? scopes[0] ?? "mutation" : scopes,
+      scopes,
+      save: mutate,
     });
   }
 
-  function stripEmailFromPayload(payload: ExportedAppData): ExportedAppData {
-    if (!payload.profile.length) {
-      return payload;
-    }
-
-    return {
-      ...payload,
-      profile: payload.profile.map((item, index) =>
-        index === 0
-          ? {
-              ...item,
-              email: "",
-            }
-          : item,
-      ),
-    };
-  }
-
-  function applyCloudEmailToPayload(payload: ExportedAppData, email?: string): ExportedAppData {
-    const normalizedEmail = normalizeCloudEmail(email);
-    if (!normalizedEmail || !payload.profile.length) {
-      return payload;
-    }
-
-    return {
-      ...payload,
-      profile: payload.profile.map((item, index) =>
-        index === 0
-          ? {
-              ...item,
-              email: normalizedEmail,
-            }
-          : item,
-      ),
-    };
-  }
-
-  function toArray<T>(value: unknown): T[] {
-    if (!value) return [];
-    if (Array.isArray(value)) return value as T[];
-    // Common loose legacy shape: object keyed by id/date.
-    if (typeof value === "object") return Object.values(value as Record<string, T>);
-    return [];
-  }
-
-  function normalizeExportedAppDataLoose(raw: unknown): ExportedAppData {
-    const obj = (raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null) ?? {};
-
-    // Some buggy/legacy exports omitted these keys.
-    const schemaVersion = "1" as const;
-    const exportedAt =
-      typeof obj.exportedAt === "string" && obj.exportedAt ? obj.exportedAt : new Date().toISOString();
-
-    const profile = toArray<Profile>(obj.profile);
-    const dailyEntries =
-      toArray<DailyEntry>(obj.dailyEntries).length > 0
-        ? toArray<DailyEntry>(obj.dailyEntries)
-        : toArray<DailyEntry>(obj.entries); // legacy key
-    const foodRules = toArray<import("../types").FoodRule>(obj.foodRules);
-    const syncQueue = toArray<import("../types").SyncQueueItem>(obj.syncQueue);
-    const deletedDailyEntryTombstones = toArray<import("../types").DeletedDailyEntryTombstone>(
-      obj.deletedDailyEntryTombstones,
-    );
-
-    const encryptedSecrets =
-      obj.encryptedSecrets && typeof obj.encryptedSecrets === "object"
-        ? (obj.encryptedSecrets as ExportedAppData["encryptedSecrets"])
-        : undefined;
-
-    return {
-      schemaVersion,
-      exportedAt,
-      profile,
-      dailyEntries,
-      deletedDailyEntryTombstones,
-      foodRules,
-      syncQueue,
-      encryptedSecrets,
-    };
-  }
-
-  function parseLegacyCloudPayload(raw: unknown): ExportedAppData {
-    // Backward compatible: some older builds stored `{ payload, secrets }` in the `data` column.
-    if (raw && typeof raw === "object" && "payload" in raw) {
-      const obj = raw as { payload?: unknown };
-      if (obj.payload && typeof obj.payload === "object") {
-        return normalizeExportedAppDataLoose(obj.payload);
-      }
-    }
-    if (raw && typeof raw === "object") {
-      return normalizeExportedAppDataLoose(raw);
-    }
-    throw new Error("Cloud data format is not recognized.");
-  }
-
-  function mergeStoredAiKeys(localKeys: StoredAiKeys, remoteKeys?: StoredAiKeys): StoredAiKeys {
-    if (!remoteKeys) return localKeys;
-    return {
-      gemini: remoteKeys.gemini?.trim() ? remoteKeys.gemini : localKeys.gemini,
-    };
-  }
-
-  async function decodeCloudBlob(raw: unknown, secret: string): Promise<CloudDecodedBlob> {
-    if (isEncryptedEnvelope(raw)) {
-      const decrypted = await decryptJsonWithPassphrase<{ payload: ExportedAppData; aiKeys: StoredAiKeys }>(
-        raw.box,
-        secret,
-      );
-      return {
-        payload: applyCloudEmailToPayload(normalizeExportedAppDataLoose(decrypted.payload), raw.email),
-        aiKeys: decrypted.aiKeys,
-      };
-    }
-
-    if (isEncryptedSecretBox(raw)) {
-      const decrypted = await decryptJsonWithPassphrase<{ payload: ExportedAppData; aiKeys: StoredAiKeys }>(raw, secret);
-      return { payload: normalizeExportedAppDataLoose(decrypted.payload), aiKeys: decrypted.aiKeys };
-    }
-
-    const payload = parseLegacyCloudPayload(raw);
-    if (payload.encryptedSecrets?.aiKeys) {
-      const decryptedKeys = await decryptJsonWithPassphrase<StoredAiKeys>(payload.encryptedSecrets.aiKeys, secret);
-      return { payload, aiKeys: decryptedKeys };
-    }
-
-    return { payload };
-  }
-
-  async function encodeCloudBlob(payload: ExportedAppData, secret: string): Promise<CloudEncryptedEnvelopeV1> {
-    const publicEmail = normalizeCloudEmail(payload.profile[0]?.email);
-    const box = await encryptJsonWithPassphrase({ payload: stripEmailFromPayload(payload), aiKeys: aiKeys.value }, secret);
-    return { kind: "encrypted-v1", box, email: publicEmail || undefined };
-  }
-
-  async function clearPublicCloudEmail(username: string) {
-    const secret = getCloudSecret(username);
-    if (!secret) {
-      return;
-    }
-
-    const { fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
-    const remote = await fetchUserBlob(username);
-    if (!remote.ok || !remote.data?.raw) {
-      return;
-    }
-
-    const raw = remote.data.raw;
-    if (!isEncryptedEnvelope(raw)) {
-      return;
-    }
-
-    const updatedRaw: CloudEncryptedEnvelopeV1 = {
-      kind: raw.kind,
-      box: raw.box,
-    };
-
-    const result = await upsertUserBlob(username, updatedRaw);
-    if (!result.ok) {
-      throw new Error(result.error);
-    }
-  }
-
-  async function cloudSyncNow(options?: { backupBeforePull?: boolean; username?: string; password?: string }) {
-    await cloudOperationQueue.enqueue(() => cloudSyncNowLocked(options));
-  }
-
-  async function cloudSyncNowLocked(options?: { backupBeforePull?: boolean; username?: string; password?: string }) {
+  async function cloudSyncNow(options?: { username?: string; password?: string }) {
     const username = normalizeUsername(options?.username ?? cloudUsername.value);
-    if (!username) {
-      cloudStatus.value = "failed";
-      cloudError.value = "";
-      return;
-    }
+    const password = (options?.password ?? cloudPassword.value).trim();
     if (!isUsernameValid(username)) {
-      cloudStatus.value = "failed";
+      cloudPhase.value = "error";
       cloudError.value = "";
       return;
     }
-
     if (!supabaseConfigured.value) {
-      cloudStatus.value = "failed";
+      cloudPhase.value = "error";
       cloudError.value = "Supabase is not available in this build.";
       return;
     }
-
-    if (!options?.password?.trim() && !cloudPassword.value.trim()) {
-      loadCloudPasswordFromStorage(username);
-    }
-
-    const secret = getCloudSecret(username, options?.password);
-    if (!secret) {
-      cloudStatus.value = "failed";
+    if (!password) {
+      cloudPhase.value = "error";
       cloudError.value = "Missing cloud password.";
       return;
     }
 
-    isCloudBusy.value = true;
-    cloudIsSyncing.value = true;
-    cloudStatus.value = "idle";
+    cloudPhase.value = "loading";
     cloudError.value = "";
+    isInitialCloudHydrating.value = true;
     try {
-      const selectedDateAtSync = selectedDate.value;
-      const hadFoodDraftAtSync = isCurrentFoodLogDirty.value;
-      const hadWeightDraftAtSync = isCurrentWeightDirty.value;
-
       const { createUserBlob, fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
-      await flushCloudBoundInputs();
-
-      const localBefore = await exportAppData();
       const remote = await fetchUserBlob(username);
       if (!remote.ok) {
         throw new Error(remote.error);
       }
 
-      let remotePayload: ExportedAppData | null = null;
-      let remoteFingerprint = "";
+      let nextState: CloudAppState;
       if (remote.data?.raw) {
         try {
-          const decoded = await decodeCloudBlob(remote.data.raw, secret);
-          remotePayload = decoded.payload;
-          remoteFingerprint = canonicalCloudFingerprint(decoded.payload);
-          aiKeys.value = mergeStoredAiKeys(aiKeys.value, decoded.aiKeys);
-          saveStoredAiKeys(aiKeys.value);
-          await saveStoredAiKeysToDb(aiKeys.value);
+          nextState = await decodeCloudBlob(remote.data.raw, getCloudSecret(username, password));
         } catch {
           throw new Error("Bad cloud password.");
         }
+      } else {
+        nextState = {
+          ...createEmptyCloudAppState(locale.value),
+          profile: {
+            ...createDefaultProfile(locale.value),
+            locale: profile.value?.locale ?? locale.value,
+            themePreference: profile.value?.themePreference ?? "system",
+            email: profile.value?.email ?? "",
+            aiModel: profile.value?.aiModel ?? provider.value,
+          },
+          aiKeys: { ...aiKeys.value },
+        };
       }
 
-      // If we got here, the password was valid (or there was nothing to decrypt yet).
-      if (options?.password?.trim()) {
-        cloudPassword.value = options.password;
-        saveCloudPasswordToStorage(username, options.password);
-      }
-
-      // Two-way merge: keep newer daily entries on either side.
-      const merged = mergeExportedAppData(localBefore, remotePayload);
-      // Manual sync should never surprise-revert a field the user just edited and saved.
-      if (hadFoodDraftAtSync || hadWeightDraftAtSync) {
-        const localSelectedEntry = localBefore.dailyEntries.find((entry) => entry.date === selectedDateAtSync);
-        if (localSelectedEntry) {
-          const existingMergedIndex = merged.dailyEntries.findIndex(
-            (entry) => entry.date === selectedDateAtSync,
-          );
-          if (existingMergedIndex >= 0) {
-            merged.dailyEntries[existingMergedIndex] = localSelectedEntry;
-          } else {
-            merged.dailyEntries.push(localSelectedEntry);
-            merged.dailyEntries.sort((a, b) => b.date.localeCompare(a.date));
-          }
-        }
-      }
-      // Defensive: never let a cloud login wipe local data.
-      if (localBefore.dailyEntries.length > 0 && merged.dailyEntries.length === 0) {
-        merged.dailyEntries = localBefore.dailyEntries;
-      }
-      if (localBefore.profile.length > 0 && merged.profile.length === 0) {
-        merged.profile = localBefore.profile;
-      }
-      if (localBefore.foodRules.length > 0 && merged.foodRules.length === 0) {
-        merged.foodRules = localBefore.foodRules;
-      }
-
-      const mergedFingerprint = canonicalCloudFingerprint(merged);
-
-      if (!canonicalPayloadEquals(localBefore, merged)) {
-        await importAppData(merged);
-        await refreshState();
-        syncAppPreferencesFromProfile(profile.value);
-      }
-
-      if (mergedFingerprint !== remoteFingerprint) {
-        const encoded = await encodeCloudBlob(merged, secret);
-        const pushed = remote.data?.raw
-          ? await upsertUserBlob(username, encoded)
-          : await createUserBlob(username, encoded);
-        if (!pushed.ok) {
-          throw new Error(
-            remote.data?.raw
-              ? pushed.error
-              : "This username already exists. Use the correct password to log in instead of creating it again.",
-          );
-        }
-      }
-
-      cloudStatus.value = "synced";
-      cloudLastSyncedAt.value = formatCloudSyncTimestamp();
-      const syncState = await getCloudSyncState();
-      await markCloudSynced(syncState.revision, mergedFingerprint);
-      cloudConfirmedUsername.value = username;
-      localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername, username);
+      hydrateFromState(nextState);
       cloudUsername.value = username;
-      localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, username);
-      if (options?.password) {
-        cloudPassword.value = options.password;
-        saveCloudPasswordToStorage(username, options.password);
-      } else if (!cloudPassword.value.trim()) {
-        loadCloudPasswordFromStorage(username);
+      cloudConfirmedUsername.value = username;
+      cloudPassword.value = password;
+      savedCloudAuth.value = { username, password };
+      saveCloudAuth({ username, password });
+      const encoded = await encodeCloudBlob(buildCloudStateSnapshot(), getCloudSecret(username, password));
+      const pushed = remote.data?.raw
+        ? await upsertUserBlob(username, encoded)
+        : await createUserBlob(username, encoded);
+      if (!pushed.ok) {
+        throw new Error(pushed.error);
       }
-    } catch (err) {
-      cloudStatus.value = "failed";
-      const message = err instanceof Error ? err.message : String(err);
-      cloudError.value = message;
-      if (message === "Bad cloud password.") {
+
+      lastSavedFingerprint.value = canonicalCloudFingerprint(buildCloudStateSnapshot());
+      cloudLastSyncedAt.value = formatCloudSyncTimestamp(locale.value);
+      cloudPhase.value = "saved";
+    } catch (error) {
+      cloudPhase.value = "error";
+      cloudError.value = error instanceof Error ? error.message : String(error);
+      if (cloudError.value === "Bad cloud password.") {
+        clearSavedCloudAuth();
+        savedCloudAuth.value = null;
         cloudPassword.value = "";
-        removeCloudPasswordFromStorage(username);
         cloudConfirmedUsername.value = "";
-        localStorage.removeItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername);
       }
     } finally {
-      isCloudBusy.value = false;
-      cloudIsSyncing.value = false;
-    }
-  }
-
-  function canAutoCloudSync() {
-    if (!supabaseConfigured.value) return false;
-    if (typeof navigator !== "undefined" && !navigator.onLine) return false;
-    const normalized = normalizeUsername(cloudUsername.value);
-    return cloudConfirmedUsername.value === normalized && isUsernameValid(normalized) && Boolean(cloudPassword.value);
-  }
-
-  function scheduleCloudPush(_reason: string) {
-    if (!canAutoCloudSync()) return;
-    cloudPushPending = true;
-    cloudPushPendingSignal.value = true;
-    if (cloudPushTimer) clearTimeout(cloudPushTimer);
-    cloudPushTimer = setTimeout(() => {
-      void runCloudPush();
-    }, 0);
-  }
-
-  async function runCloudPush() {
-    await cloudOperationQueue.enqueue(runCloudPushLocked);
-  }
-
-  async function runCloudPushLocked() {
-    if (!canAutoCloudSync()) {
-      cloudPushPending = false;
-      cloudPushPendingSignal.value = false;
-      return;
-    }
-    if (!cloudPushPending) return;
-    if (cloudPushInFlight) return;
-
-    try {
-      cloudPushPending = false;
-      cloudPushPendingSignal.value = false;
-      cloudPushInFlight = true;
-      isCloudBusy.value = true;
-      cloudIsSyncing.value = true;
-      cloudError.value = "";
-
-      await flushCloudBoundInputs();
-
-      const { fetchUserBlob, upsertUserBlob } = await getCloudBlobModule();
-      const normalized = normalizeUsername(cloudUsername.value);
-      const secret = getCloudSecret(normalized);
-      if (!secret) return;
-
-      const local = await exportAppData();
-      const syncState = await getCloudSyncState();
-      const startedRevision = syncState.revision;
-      const remote = await fetchUserBlob(normalized);
-      if (!remote.ok) {
-        throw new Error(remote.error);
-      }
-      let remotePayload: ExportedAppData | null = null;
-      let remoteFingerprint = "";
-      if (remote.ok && remote.data?.raw) {
-        // If this fails (wrong password), don't overwrite cloud with garbage.
-        const decoded = await decodeCloudBlob(remote.data.raw, secret);
-        remotePayload = decoded.payload;
-        remoteFingerprint = canonicalCloudFingerprint(decoded.payload);
-        aiKeys.value = mergeStoredAiKeys(aiKeys.value, decoded.aiKeys);
-        saveStoredAiKeys(aiKeys.value);
-        await saveStoredAiKeysToDb(aiKeys.value);
-      }
-      const merged = mergeExportedAppData(local, remotePayload);
-      const mergedFingerprint = canonicalCloudFingerprint(merged);
-
-      if (!canonicalPayloadEquals(local, merged)) {
-        await importAppData(merged);
-        await refreshState();
-        syncAppPreferencesFromProfile(profile.value);
-      }
-
-      if (mergedFingerprint !== remoteFingerprint) {
-        const pushed = await upsertUserBlob(normalized, await encodeCloudBlob(merged, secret));
-        if (!pushed.ok) throw new Error(pushed.error);
-      }
-      const latestSyncState = await getCloudSyncState();
-      const keepPending = latestSyncState.revision > startedRevision;
-      await markCloudSynced(startedRevision, mergedFingerprint, { keepPending });
-      cloudStatus.value = "synced";
-      cloudLastSyncedAt.value = formatCloudSyncTimestamp();
-    } catch (err) {
-      cloudStatus.value = "failed";
-      cloudError.value = err instanceof Error ? err.message : String(err);
-    } finally {
-      cloudPushInFlight = false;
-      isCloudBusy.value = false;
-      cloudIsSyncing.value = false;
-      const syncState = await getCloudSyncState();
-      if (cloudStatus.value === "synced" && canAutoCloudSync() && syncState.pendingScopes.length > 0) {
-        cloudPushPending = true;
-        cloudPushPendingSignal.value = true;
-        cloudPushTimer = setTimeout(() => void runCloudPush(), 0);
-      }
-    }
-  }
-
-  function setCloudUsername(next: string) {
-    cloudUsername.value = next;
-    if (next.trim()) {
-      localStorage.setItem(DASHBOARD_STORAGE_KEYS.cloudUsername, next);
-    } else {
-      localStorage.removeItem(DASHBOARD_STORAGE_KEYS.cloudUsername);
-    }
-    const normalized = normalizeUsername(next);
-    if (cloudConfirmedUsername.value && cloudConfirmedUsername.value !== normalized) {
-      cloudStatus.value = "idle";
-      cloudLastSyncedAt.value = "";
-      cloudError.value = "";
-    }
-    if (normalized && !cloudPassword.value.trim()) {
-      loadCloudPasswordFromStorage(normalized);
+      isInitialCloudHydrating.value = false;
     }
   }
 
   async function cloudLogout() {
-    const username = normalizeUsername(cloudConfirmedUsername.value || cloudUsername.value);
-    const shouldClearPublicEmail =
-      Boolean(username) &&
-      cloudConfirmedUsername.value === username &&
-      Boolean(cloudPassword.value.trim());
-    const previousProfile = profile.value;
-    const shouldClearProfileEmail = Boolean(previousProfile?.email?.trim());
-
-    if (shouldClearProfileEmail && previousProfile) {
-      const nextProfile = { ...previousProfile, email: "" };
-      profile.value = nextProfile;
-    }
-
-    cloudPassword.value = "";
+    const nextLocale = locale.value;
+    const nextTheme = profile.value?.themePreference ?? "system";
+    cloudUsername.value = "";
     cloudConfirmedUsername.value = "";
-    localStorage.removeItem(DASHBOARD_STORAGE_KEYS.cloudConfirmedUsername);
-    cloudStatus.value = "idle";
+    cloudPassword.value = "";
+    savedCloudAuth.value = null;
     cloudLastSyncedAt.value = "";
     cloudError.value = "";
-    setCloudUsername("");
-
-    if (shouldClearProfileEmail && previousProfile) {
-      const nextProfile = { ...previousProfile, email: "" };
-      void saveProfile(nextProfile);
-    }
-
-    if (shouldClearPublicEmail && username) {
-      void clearPublicCloudEmail(username).catch(() => {
-        // Best-effort cleanup only; logout should still complete locally.
-      });
-    }
+    cloudPhase.value = "idle";
+    clearSavedCloudAuth();
+    resetStoredAiKeys();
+    aiKeys.value = getStoredAiKeys();
+    hydrateFromState({
+      ...createEmptyCloudAppState(nextLocale),
+      profile: {
+        ...createDefaultProfile(nextLocale),
+        themePreference: nextTheme,
+      },
+    });
   }
 
   async function analyzeCurrentDay() {
     await analysis.analyzeCurrentDay();
-    const finished = findEntryByDate(entries.value, selectedDate.value);
-    if (finished?.aiStatus === "done" && finished.nutritionSnapshot) {
-      await markCloudChange("analysis.done");
-      scheduleCloudPush("analysis.done");
+    await persistCloudState();
+  }
+
+  function setCloudUsername(next: string) {
+    cloudUsername.value = next;
+    if (cloudConfirmedUsername.value && cloudConfirmedUsername.value !== normalizeUsername(next)) {
+      cloudPhase.value = "idle";
+      cloudLastSyncedAt.value = "";
+      cloudError.value = "";
     }
   }
+
+  watch(currentFoodLog, () => {
+    if (!hasUserEditedCurrentFoodLog.value) return;
+    if (!isCurrentFoodLogDirty.value) {
+      autoSave.cancel("today.foodLog");
+      return;
+    }
+    scheduleFoodDraftSave();
+  });
+
+  watch(currentWeight, () => {
+    if (!hasUserEditedCurrentWeight.value) return;
+    if (!isCurrentWeightDirty.value) {
+      autoSave.cancel("today.weight");
+      return;
+    }
+    scheduleWeightDraftSave();
+  });
 
   watch(
     selectedDate,
     async (nextDate, previousDate) => {
       if (previousDate && previousDate !== nextDate) {
+        const previousFoodLog = currentFoodLog.value;
+        const previousWeight = currentWeight.value;
         autoSave.cancel("today.foodLog");
         autoSave.cancel("today.weight");
-        await persistDraftsForDate(previousDate);
+        await persistFoodDraft("now", {
+          date: previousDate,
+          foodLogText: previousFoodLog,
+        });
+        await persistWeightDraft("now", {
+          date: previousDate,
+          rawWeight: previousWeight,
+        });
       }
-
       loadSelectedEntry();
     },
     { flush: "sync" },
   );
-  watch(locale, syncChrome);
 
   watch(
     () => aiKeys.value.gemini,
@@ -1425,36 +898,14 @@ export function useDashboard() {
         const geminiOptions = await fetchGeminiModelOptions(effectiveKey, locale.value);
         syncGeminiProviderOptions(geminiOptions);
         const detectedIds = new Set(geminiOptions.map((option) => option.id));
-        const suggested = suggestLatestStableFlash(geminiOptions);
-        if (suggested) {
-          try {
-            localStorage.setItem(DASHBOARD_STORAGE_KEYS.geminiLatestModel, suggested);
-          } catch {
-            // ignore
+        if (isGeminiModelId(provider.value) && !detectedIds.has(provider.value)) {
+          const suggested = geminiOptions[0]?.id;
+          if (suggested && profile.value) {
+            provider.value = suggested;
+            setProfileOnly({ ...profile.value, aiModel: suggested });
+            void persistCloudState();
           }
         }
-        const userPicked = localStorage.getItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet) === "1";
-        const shouldNormalizeToLatest =
-          isGeminiModelId(provider.value) && !detectedIds.has(provider.value);
-
-        // If the saved model is not part of the latest-only API list, or the user never picked,
-        // normalize to the preferred latest Flash model.
-        if ((shouldNormalizeToLatest || !userPicked) && suggested && provider.value !== suggested) {
-          provider.value = suggested;
-          localStorage.setItem(DASHBOARD_STORAGE_KEYS.aiModel, suggested);
-          if (shouldNormalizeToLatest) {
-            localStorage.removeItem(DASHBOARD_STORAGE_KEYS.aiModelUserSet);
-          }
-          if (profile.value) {
-            profile.value = { ...profile.value, aiModel: suggested };
-            const result = await saveProfile(profile.value);
-            if (result.changed) {
-              await markCloudChange("settings.provider");
-              scheduleCloudPush("settings.provider");
-            }
-          }
-        }
-
         ensureProviderOption(provider.value, locale.value);
         refreshVisibleProviderOptions();
       } catch {
@@ -1465,88 +916,18 @@ export function useDashboard() {
     { immediate: true },
   );
 
-  const didInitCloudSync = ref(false);
-
-  async function maybeInitCloudSync() {
-    if (didInitCloudSync.value) return;
-    if (!supabaseConfigured.value) return;
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
-    const username = normalizeUsername(cloudConfirmedUsername.value || cloudUsername.value);
-    if (!isUsernameValid(username)) return;
-    if (!cloudPassword.value.trim()) return;
-
-    didInitCloudSync.value = true;
-    isInitialCloudHydrating.value = true;
-    try {
-      await cloudSyncNow({ username, password: cloudPassword.value, backupBeforePull: false });
-    } finally {
-      isInitialCloudHydrating.value = false;
-    }
-  }
-
-  onMounted(async () => {
-    profile.value = await ensureDefaultProfile(locale.value);
-    provider.value = normalizeProvider(readStoredProvider() ?? profile.value.aiModel);
-    locale.value = readStoredLocale() ?? profile.value.locale;
-    ensureProviderOption(provider.value, locale.value);
-    refreshVisibleProviderOptions();
-    profile.value = {
-      ...profile.value,
-      aiModel: provider.value,
-      locale: locale.value,
-    };
-    // If localStorage was cleared but IndexedDB still has keys, restore them.
-    if (!aiKeys.value.gemini.trim()) {
-      const dbKeys = await getStoredAiKeysFromDb();
-      if (dbKeys?.gemini?.trim()) {
-        aiKeys.value = mergeStoredAiKeys(aiKeys.value, dbKeys);
-        saveStoredAiKeys(aiKeys.value);
-      }
-    }
-    localStorage.removeItem("calorie-tracker.cloud-mode");
-    localStorage.removeItem("calorie-tracker.auto-backup-after-analyze");
-    syncChrome();
-    await refreshState();
-
-    const existingCloudUser = normalizeUsername(cloudConfirmedUsername.value || cloudUsername.value);
-    if (existingCloudUser && !cloudPassword.value.trim()) {
-      loadCloudPasswordFromStorage(existingCloudUser);
-    }
-
-    await maybeInitCloudSync();
-  });
-
-  function suggestLatestStableFlash(options: AiProviderOption[]) {
-    // Prefer the newest API-reported `latest` Flash Lite, then regular Flash as fallback.
-    const candidates = options
-      .map((o) => o.id)
-      .filter((id) => id.includes("latest"));
-    const flashLite = candidates.find((id) => id.includes("-flash-lite") && !id.includes("preview"));
-    if (flashLite) return flashLite;
-    const flash = candidates.find((id) => id.includes("-flash") && !id.includes("lite") && !id.includes("preview"));
-    if (flash) return flash;
-    if (!candidates.length) return null;
-    return candidates[0] ?? null;
-  }
-
-  function getCloudSecret(username: string, passwordOverride?: string) {
-    const password = (passwordOverride ?? cloudPassword.value).trim();
-    if (!password) return "";
-    return `${normalizeUsername(username)}::${password}`;
-  }
-
-  function handleOnline() {
-    void analysis.flushPendingAnalysis(false);
-  }
-
   onMounted(() => {
-    window.addEventListener("online", handleOnline);
+    if (!savedCloudAuth.value || cloudConfirmedUsername.value) {
+      return;
+    }
+    cloudUsername.value = savedCloudAuth.value.username;
+    void cloudSyncNow(savedCloudAuth.value);
   });
 
-  onUnmounted(() => {
-    window.removeEventListener("online", handleOnline);
-    void autoSave.flushAll();
-  });
+  syncChrome(locale.value);
+  refreshVisibleProviderOptions();
+  loadSelectedEntry();
+  (globalThis as any).__APP_DEBUG_STATE__ = buildCloudStateSnapshot();
 
   return {
     locale,
@@ -1583,11 +964,15 @@ export function useDashboard() {
     notice,
     cloudUsername,
     cloudConfirmedUsername,
-    hasSavedCloudPassword,
-    isCloudBusy,
-    isCloudSyncing: computed(() => cloudIsSyncing.value || cloudPushPendingSignal.value),
+    hasSavedCloudPassword: computed(
+      () =>
+        savedCloudAuth.value?.username === normalizeUsername(cloudUsername.value) &&
+        Boolean(savedCloudAuth.value?.password.trim()),
+    ),
+    isCloudBusy: computed(() => cloudPhase.value === "loading" || cloudPhase.value === "saving"),
+    isCloudSyncing: computed(() => cloudPhase.value === "loading" || cloudPhase.value === "saving"),
     isInitialCloudHydrating,
-    cloudStatus,
+    cloudStatus: computed(() => cloudStatusFromPhase(cloudPhase.value)),
     cloudLastSyncedAt,
     cloudError,
     supabaseConfigured,
@@ -1613,28 +998,16 @@ export function useDashboard() {
       grams: number | null,
       calories: number | null,
       caloriesPer100g: number | null,
-      protein?: number | null,
-      carbs?: number | null,
-      fat?: number | null,
-      fiber?: number | null,
-      solubleFiber?: number | null,
-      insolubleFiber?: number | null,
+      _protein?: number | null,
+      _carbs?: number | null,
+      _fat?: number | null,
+      _fiber?: number | null,
+      _solubleFiber?: number | null,
+      _insolubleFiber?: number | null,
     ) => {
-      await runPersistedMutationWithCloudSync(
+      await runMutationWithCloudSync(
         "nutrition.correction",
-        () => corrections.saveFoodCorrectionInstruction(
-          foodId,
-          foodName,
-          grams,
-          calories,
-          caloriesPer100g,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          solubleFiber,
-          insolubleFiber,
-        ),
+        () => corrections.saveFoodCorrectionInstruction(foodId, foodName, grams, calories, caloriesPer100g),
       );
     },
     saveFoodCorrectionInstructionOnly: async (
@@ -1643,28 +1016,16 @@ export function useDashboard() {
       grams: number | null,
       calories: number | null,
       caloriesPer100g: number | null,
-      protein?: number | null,
-      carbs?: number | null,
-      fat?: number | null,
-      fiber?: number | null,
-      solubleFiber?: number | null,
-      insolubleFiber?: number | null,
+      _protein?: number | null,
+      _carbs?: number | null,
+      _fat?: number | null,
+      _fiber?: number | null,
+      _solubleFiber?: number | null,
+      _insolubleFiber?: number | null,
     ) => {
-      await runPersistedMutationWithCloudSync(
+      await runMutationWithCloudSync(
         "nutrition.correction",
-        () => corrections.saveFoodCorrectionInstructionOnly(
-          foodId,
-          foodName,
-          grams,
-          calories,
-          caloriesPer100g,
-          protein,
-          carbs,
-          fat,
-          fiber,
-          solubleFiber,
-          insolubleFiber,
-        ),
+        () => corrections.saveFoodCorrectionInstructionOnly(foodId, foodName, grams, calories, caloriesPer100g),
       );
     },
     applyFoodCorrectionToCurrentEntry: async (
@@ -1680,7 +1041,7 @@ export function useDashboard() {
       solubleFiber?: number | null,
       insolubleFiber?: number | null,
     ) => {
-      await runPersistedMutationWithCloudSync(
+      await runMutationWithCloudSync(
         "nutrition.correction",
         () => corrections.applyFoodCorrectionToCurrentEntry(
           foodId,
@@ -1701,7 +1062,7 @@ export function useDashboard() {
       mealId: string,
       totals: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null },
     ) => {
-      await runPersistedMutationWithCloudSync(
+      await runMutationWithCloudSync(
         "nutrition.correction",
         () => corrections.applyMealTotalCorrectionToCurrentEntry(mealId, totals),
       );
@@ -1710,5 +1071,6 @@ export function useDashboard() {
     cloudLogout,
     cloudSyncNow,
     clearNotice,
+    saveThemePreference,
   };
 }

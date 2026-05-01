@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { isoDate, seedProfileAndEntries } from "./helpers";
+import { isoDate, seedProfileAndEntries, signInToCloud } from "./helpers";
 
 test("@history last 7 days summary excludes older logged entries", async ({ page }) => {
   const dates = [0, -1, -2, -3, -4, -5, -20].map((offset) => isoDate(offset));
 
   await page.goto("/", { waitUntil: "networkidle" });
-  await seedProfileAndEntries(
+  const auth = await seedProfileAndEntries(
     page,
     dates.map((date, index) => ({
       date,
@@ -14,8 +14,10 @@ test("@history last 7 days summary excludes older logged entries", async ({ page
       manualCalories: 2100,
     })),
   );
+  await signInToCloud(page, auth);
 
-  await page.goto("/progress", { waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "History" }).click();
   await page.locator("#historyPanel").scrollIntoViewIfNeeded();
 
   await expect(page.getByTestId("history-all-time-delta")).toHaveText("2240");

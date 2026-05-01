@@ -1,6 +1,6 @@
-import type { ExportedAppData } from "../storage/repository";
+import type { CloudAppState } from "./app-state";
 
-type CanonicalExportedAppData = Omit<ExportedAppData, "exportedAt" | "syncQueue">;
+type CanonicalCloudAppState = Omit<CloudAppState, "updatedAt">;
 
 function stableSortObject(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -19,18 +19,16 @@ function stableSortObject(value: unknown): unknown {
     }, {});
 }
 
-export function toCanonicalCloudPayload(payload: ExportedAppData): CanonicalExportedAppData {
+export function toCanonicalCloudPayload(payload: CloudAppState): CanonicalCloudAppState {
   return {
     schemaVersion: payload.schemaVersion,
     profile: payload.profile,
     dailyEntries: payload.dailyEntries,
-    deletedDailyEntryTombstones: payload.deletedDailyEntryTombstones,
     foodRules: payload.foodRules,
-    encryptedSecrets: payload.encryptedSecrets,
+    aiKeys: payload.aiKeys,
   };
 }
 
-export function canonicalCloudFingerprint(payload: ExportedAppData): string {
+export function canonicalCloudFingerprint(payload: CloudAppState): string {
   return JSON.stringify(stableSortObject(toCanonicalCloudPayload(payload)));
 }
-

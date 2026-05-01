@@ -1,10 +1,8 @@
 import { computed, ref, type Ref } from "vue";
 import { formatGeminiModelLabel, isGeminiModelId } from "../ai/gemini-config";
-import { hasGeminiApiKey } from "../ai/registry";
-import { clearQueueForDate, queueAnalysis, runPendingAnalysis } from "../ai/service";
-import { getPendingQueue } from "../storage/repository";
+import { hasGeminiApiKey, getGeminiProvider } from "../ai/registry";
 import { buildAnalyzeIssue } from "./dashboard-helpers";
-import type { AiProviderOption, Profile } from "../types";
+import type { AiProviderOption, DailyEntry, Profile } from "../types";
 
 type AnalyzeGate =
   | { ok: true }
@@ -13,7 +11,6 @@ type AnalyzeGate =
       reason: "offline" | "missing-key" | "empty-food-log" | "incomplete-profile";
     };
 
-/** After this many ms, suggest switching models (no auto-abort). */
 const SUGGEST_SWITCH_AFTER_MS = 30_000;
 
 function friendlyModelLabel(providerId: string) {
@@ -50,9 +47,10 @@ export function useAnalysisFlow(args: {
   providerOptions: Ref<AiProviderOption[]>;
   currentFoodLog: Ref<string>;
   selectedDate: Ref<string>;
-  refreshState: (opts?: { skipReloadFoodLog?: boolean; preserveDirtyFields?: boolean }) => Promise<void>;
+  getEntryForDate: (date: string) => DailyEntry | undefined;
   saveFoodDraft: () => Promise<void>;
   saveProvider: (provider: string) => Promise<void>;
+  updateEntry: (date: string, updater: (entry: DailyEntry) => DailyEntry) => Promise<void>;
 }) {
   const isAnalyzing = ref(false);
   const suggestedProviderId = ref<string | null>(null);
@@ -65,74 +63,86 @@ export function useAnalysisFlow(args: {
   const activeRun = ref<Promise<void> | null>(null);
   let suggestTimer: number | null = null;
 
-  function getAnalyzeGate(_activeProvider: string, foodLogText: string): AnalyzeGate {
+  function getAnalyzeGate(foodLogText: string): AnalyzeGate {
     if (!args.profile.value?.age || !args.profile.value?.height) {
       return { ok: false, reason: "incomplete-profile" };
     }
-
     if (!foodLogText.trim()) {
       return { ok: false, reason: "empty-food-log" };
     }
-
     if (!navigator.onLine) {
       return { ok: false, reason: "offline" };
     }
-
     if (!hasGeminiApiKey()) {
       return { ok: false, reason: "missing-key" };
     }
-
     return { ok: true };
   }
 
   const analyzeIssue = computed(() =>
-    buildAnalyzeIssue(getAnalyzeGate(args.provider.value, args.currentFoodLog.value)),
+    buildAnalyzeIssue(getAnalyzeGate(args.currentFoodLog.value)),
   );
 
-  async function withBusyFeedback(action: () => Promise<void>) {
-    isAnalyzing.value = true;
+  async function analyzeWithProvider(providerId: string, signal?: AbortSignal) {
+    const date = args.selectedDate.value;
+    const entry = args.getEntryForDate(date);
+    const profile = args.profile.value;
+    if (!entry || !profile) {
+      return;
+    }
+
+    await args.updateEntry(date, (current) => ({
+      ...current,
+      aiStatus: "processing",
+      aiError: null,
+    }));
+
     try {
-      await Promise.all([action(), new Promise((resolve) => window.setTimeout(resolve, 650))]);
-    } finally {
-      isAnalyzing.value = false;
-    }
-  }
+      const result = await getGeminiProvider(providerId).analyzeDailyEntry(
+        {
+          date,
+          foodLogText: entry.foodLogText,
+          profile,
+          foodRules: profile.foodInstructions.trim()
+            ? [
+                {
+                  id: "default-food-instructions",
+                  label: "Saved instructions",
+                  instructionText: profile.foodInstructions,
+                  active: true,
+                  createdAt: new Date().toISOString(),
+                },
+              ]
+            : [],
+        },
+        signal,
+      );
 
-  async function flushPendingAnalysis(showBusy = false) {
-    const gate = getAnalyzeGate(args.provider.value, args.currentFoodLog.value);
-    if (!gate.ok && gate.reason !== "empty-food-log") {
-      return;
-    }
-
-    const queue = await getPendingQueue();
-    if (!queue.length) {
-      return;
-    }
-
-    const task = async () => {
-      await runPendingAnalysis();
-      await args.refreshState({ skipReloadFoodLog: true });
-    };
-
-    if (showBusy) {
-      await withBusyFeedback(task);
-      return;
-    }
-
-    isAnalyzing.value = true;
-    try {
-      await task();
-    } finally {
-      isAnalyzing.value = false;
+      await args.updateEntry(date, (current) => ({
+        ...current,
+        nutritionSnapshot: result,
+        aiStatus: "done",
+        aiError: null,
+        analysisStale: false,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown AI error";
+      await args.updateEntry(date, (current) => ({
+        ...current,
+        aiStatus: signal?.aborted ? "idle" : "failed",
+        aiError: signal?.aborted ? null : message,
+      }));
+      if (!signal?.aborted) {
+        throw error;
+      }
     }
   }
 
   async function analyzeCurrentDay() {
     await args.saveFoodDraft();
-    const gate = getAnalyzeGate(args.provider.value, args.currentFoodLog.value);
+    const gate = getAnalyzeGate(args.currentFoodLog.value);
 
     if (!gate.ok) {
-      await args.refreshState();
       return;
     }
 
@@ -143,6 +153,12 @@ export function useAnalysisFlow(args: {
     const controller = new AbortController();
     activeController.value = controller;
 
+    await args.updateEntry(args.selectedDate.value, (entry) => ({
+      ...entry,
+      aiStatus: "pending",
+      aiError: null,
+    }));
+
     if (suggestTimer) window.clearTimeout(suggestTimer);
     suggestTimer = window.setTimeout(() => {
       const suggestion = suggestedProviderFor(args.provider.value, args.providerOptions.value);
@@ -152,13 +168,9 @@ export function useAnalysisFlow(args: {
     }, SUGGEST_SWITCH_AFTER_MS);
 
     try {
-      // Queue and run with selected provider. No auto-fallback; user can opt-in after 30s.
-      await queueAnalysis(args.selectedDate.value, args.provider.value);
-      const run = runPendingAnalysis(controller.signal);
+      const run = analyzeWithProvider(args.provider.value, controller.signal);
       activeRun.value = run;
       await run;
-
-      await args.refreshState({ skipReloadFoodLog: true });
     } finally {
       if (suggestTimer) window.clearTimeout(suggestTimer);
       suggestTimer = null;
@@ -173,12 +185,11 @@ export function useAnalysisFlow(args: {
   async function acceptSuggestedModelSwitch() {
     const nextProvider = suggestedProviderId.value;
     if (!nextProvider) return;
+
     const controller = activeController.value;
     const run = activeRun.value;
-
     showModelSwitchPrompt.value = false;
 
-    // Abort in-flight request (if any) and wait for it to settle.
     if (controller) {
       controller.abort();
     }
@@ -186,16 +197,12 @@ export function useAnalysisFlow(args: {
       try {
         await run;
       } catch {
-        // Ignore; we'll restart immediately.
+        // Ignore aborted or failed prior run; retry below.
       }
     }
 
     await args.saveProvider(nextProvider);
-    // Clear any stuck queue items (including "processing"), then retry with suggested model.
-    await clearQueueForDate(args.selectedDate.value);
-    await queueAnalysis(args.selectedDate.value, nextProvider);
-    await runPendingAnalysis();
-    await args.refreshState({ skipReloadFoodLog: true });
+    await analyzeCurrentDay();
   }
 
   function dismissSuggestedModelSwitch() {
@@ -207,7 +214,6 @@ export function useAnalysisFlow(args: {
     showModelSwitchPrompt,
     suggestedModelLabel,
     analyzeIssue,
-    flushPendingAnalysis,
     analyzeCurrentDay,
     acceptSuggestedModelSwitch,
     dismissSuggestedModelSwitch,

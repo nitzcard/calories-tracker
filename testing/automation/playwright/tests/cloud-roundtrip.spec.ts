@@ -1,91 +1,48 @@
 import { expect, test } from "@playwright/test";
-import { clearAppStorage, isoDate, readPersistedAppState } from "./helpers";
+import { isoDate, readPersistedAppState, readRemoteUserBlob, resetRemoteUser } from "./helpers";
 
-type FakeBlobRow = {
-  username: string;
-  data: unknown;
-  updated_at: string;
-};
-
-test("@cloud mocked Supabase roundtrip persists and reloads remote data", async ({ page }) => {
+test("@cloud real Supabase roundtrip persists and reloads remote data", async ({ page }) => {
   const today = isoDate(0);
-  const remoteRows = new Map<string, FakeBlobRow>();
-  let writeCount = 0;
-
-  await page.route("**/rest/v1/user_blobs*", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const usernameFilter = url.searchParams.get("username");
-    const username = usernameFilter?.startsWith("eq.") ? decodeURIComponent(usernameFilter.slice(3)) : null;
-
-    if (request.method() === "GET") {
-      const row = username ? remoteRows.get(username) ?? null : null;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(row ? [{ data: row.data, updated_at: row.updated_at }] : []),
-      });
-      return;
-    }
-
-    if (request.method() === "POST") {
-      const payload = JSON.parse(request.postData() ?? "{}");
-      const row = Array.isArray(payload) ? payload[0] : payload;
-      const nextRow: FakeBlobRow = {
-        username: row.username,
-        data: row.data,
-        updated_at: row.updated_at,
-      };
-      remoteRows.set(nextRow.username, nextRow);
-      writeCount += 1;
-      await route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([]),
-    });
-  });
+  const username = `test_playwright-user-${Date.now()}`;
+  const password = "secret-pass";
+  await resetRemoteUser(username);
 
   await page.goto("/login", { waitUntil: "networkidle" });
   const cloudPanel = page.locator(".login-card");
   await expect(cloudPanel.locator('input[autocomplete="username"]')).toBeVisible();
-  await cloudPanel.locator('input[autocomplete="username"]').fill("playwright-user");
-  await cloudPanel.locator('input[autocomplete="current-password"]').fill("secret-pass");
-
+  await cloudPanel.locator('input[autocomplete="username"]').fill(username);
+  await cloudPanel.locator('input[autocomplete="current-password"]').fill(password);
+  await cloudPanel.locator('input[autocomplete="email"]').fill("playwright@example.com");
   await cloudPanel.getByRole("button", { name: "Login" }).click();
 
-  await expect.poll(() => writeCount).toBeGreaterThan(0);
   await expect(page.locator(".login-card")).toHaveCount(0);
-  await expect(page.locator("header .sync-status")).toContainText("playwright-user");
+  await expect(page.locator("header .sync-status")).toContainText(username);
 
   await page.locator("#dailyDeskPanel .weight-input").first().fill("81.3");
   await page.locator("#dailyDeskPanel .weight-input").first().blur();
   await page.locator("#dailyDeskPanel textarea").first().fill("cloud synced oats and yogurt");
   await page.locator("#dailyDeskPanel textarea").first().blur();
-  await page.locator("#dailyDeskPanel").getByRole("button", { name: "Save only" }).click();
-  await expect.poll(() => writeCount).toBeGreaterThan(1);
 
-  const savedRemote = remoteRows.get("playwright-user");
+  await expect
+    .poll(async () => readRemoteUserBlob(username), { timeout: 20_000 })
+    .not.toBeNull();
+
+  const savedRemote = await readRemoteUserBlob(username);
   expect(savedRemote).toBeTruthy();
   const remotePayload = savedRemote?.data as { kind?: string; box?: unknown; email?: string } | undefined;
   expect(remotePayload?.kind).toBe("encrypted-v1");
+  expect(remotePayload?.email).toBe("playwright@example.com");
 
-  await clearAppStorage(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator(".login-card")).toHaveCount(0);
+  await expect(page.locator(".sync-status")).toContainText(username);
 
   await expect
     .poll(async () => {
       const state = await readPersistedAppState(page);
       const entry = state.dailyEntries.find((item: { date: string }) => item.date === today);
       return entry?.foodLogText ?? "";
-    }, { timeout: 15000 })
+    }, { timeout: 15_000 })
     .toBe("cloud synced oats and yogurt");
 
   const restored = await readPersistedAppState(page);

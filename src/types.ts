@@ -7,7 +7,6 @@ export type GoalMode = "cut" | "leanMass" | "maingain";
 export type ActivityFactor = "sedentary" | "light" | "moderate" | "veryActive" | "extraActive";
 export type TdeeEquation =
   | "mifflinStJeor"
-  | "harrisBenedict"
   | "cunningham"
   | "observedTdee";
 
@@ -168,29 +167,6 @@ export interface DailyEntry {
   aiError: string | null;
   updatedAt: string;
   createdAt: string;
-}
-
-export interface DeletedDailyEntryTombstone {
-  date: string;
-  deletedAt: string;
-}
-
-export interface SyncQueueItem {
-  id?: number;
-  date: string;
-  status: Exclude<AiStatus, "idle">;
-  attempts: number;
-  enqueuedAt: string;
-  updatedAt: string;
-  provider: string;
-}
-
-export interface CloudSyncState {
-  revision: number;
-  lastSyncedRevision: number;
-  pendingScopes: string[];
-  lastRemoteFingerprint: string;
-  updatedAt: string;
 }
 
 export interface TdeeSnapshot {

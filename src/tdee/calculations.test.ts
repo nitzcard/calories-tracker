@@ -168,7 +168,6 @@ describe("buildTdeeSnapshot", () => {
 
     expect(snapshot.formulaBreakdown).toMatchObject({
       mifflinStJeor: null,
-      harrisBenedict: null,
       cunningham: null,
     });
     expect(snapshot.formulaTdeeAverage).toBeNull();
