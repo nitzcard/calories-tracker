@@ -6,6 +6,7 @@ type ParseMode = "nullable" | "positive" | "nonnegative";
 const props = withDefaults(
   defineProps<{
     value: number | null | undefined;
+    resetKey?: string | number;
     parseMode?: ParseMode;
     placeholder?: string;
     inputmode?: "text" | "search" | "email" | "numeric" | "tel" | "url" | "none" | "decimal";
@@ -43,10 +44,16 @@ const normalizedValue = computed(() => {
 });
 
 watch(
-  normalizedValue,
-  (next) => {
+  [normalizedValue, () => props.resetKey],
+  ([nextValue, nextResetKey], [, previousResetKey]) => {
+    if (nextResetKey !== previousResetKey) {
+      draft.value = nextValue;
+      isFocused.value = false;
+      return;
+    }
+
     if (!isFocused.value) {
-      draft.value = next;
+      draft.value = nextValue;
     }
   },
   { immediate: true },

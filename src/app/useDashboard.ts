@@ -884,20 +884,23 @@ export function useDashboard() {
 
   watch(
     selectedDate,
-    async (nextDate, previousDate) => {
+    (nextDate, previousDate) => {
       if (previousDate && previousDate !== nextDate) {
         const previousFoodLog = currentFoodLog.value;
         const previousWeight = currentWeight.value;
         autoSave.cancel("today.foodLog");
         autoSave.cancel("today.weight");
-        await persistFoodDraft("now", {
+        loadSelectedEntry();
+        // Save the previous day in the background so switching days stays instant.
+        void persistFoodDraft("now", {
           date: previousDate,
           foodLogText: previousFoodLog,
         });
-        await persistWeightDraft("now", {
+        void persistWeightDraft("now", {
           date: previousDate,
           rawWeight: previousWeight,
         });
+        return;
       }
       loadSelectedEntry();
     },

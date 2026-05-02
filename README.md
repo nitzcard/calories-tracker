@@ -6,7 +6,7 @@
 ## Deploy (Cloudflare Pages)
 
 Cloudflare deploy now runs from GitHub Actions after `testing` succeeds on `main`.
-If the Cloudflare Pages GitHub App is still connected, disable it or you may get duplicate deploys.
+If the Cloudflare Pages GitHub App is still connected, disable it. GitHub Actions should be the only deploy source, otherwise Pages can create its own preview or production deploys and skip the GH-driven flow.
 
 ### Required GitHub Secrets
 

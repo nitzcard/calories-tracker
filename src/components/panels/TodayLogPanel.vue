@@ -145,6 +145,7 @@ function shiftSelectedDate(days: number) {
 		                <DraftNumberInput
 		                  class="weight-input"
 		                  :value="currentWeight.trim() ? Number(currentWeight) : null"
+		                  :reset-key="selectedDate"
 		                  parse-mode="positive"
 		                  step="0.1"
 		                  min="0"
@@ -282,9 +283,10 @@ function shiftSelectedDate(days: number) {
 	        <FormField :label="t('todayWeight')" :helper="t('weightHelper')">
 	          <div class="unit-field">
 	            <FieldControl class="weight-control" :is-saving="isSavingWeight">
-	                <DraftNumberInput
+	                  <DraftNumberInput
 	                  class="weight-input"
 	                  :value="currentWeight.trim() ? Number(currentWeight) : null"
+	                  :reset-key="selectedDate"
 	                  parse-mode="positive"
 	                  step="0.1"
 	                  min="0"
