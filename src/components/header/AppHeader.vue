@@ -24,7 +24,7 @@ const { t } = useI18n();
 
 const syncIndicator = computed(() => {
   const normalized = props.cloudConfirmedUsername.trim();
-  return normalized || t("syncIndicatorCloudPending");
+  return normalized;
 });
 
 const showCloudIndicator = computed(() => props.cloudConfirmedUsername.trim());

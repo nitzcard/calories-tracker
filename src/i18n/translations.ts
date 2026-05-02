@@ -25,7 +25,6 @@ export const translations: Record<AppLocale, Record<string, string>> = {
     themeDark: "Dark",
     feedbackLabel: "Feedback",
     syncIndicatorCloud: "Cloud sync",
-    syncIndicatorCloudPending: "Sign in",
     apiKeys: "API keys",
     apiKeysHelper: "Use your own Gemini key. It stays private, and cloud sync keeps it encrypted.",
     backupTitle: "Backup",
