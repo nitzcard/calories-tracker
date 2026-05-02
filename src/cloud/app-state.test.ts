@@ -45,4 +45,21 @@ describe("normalizeCloudAppState", () => {
 
     expect(state.profile.tdeeEquation).toBe("mifflinStJeor");
   });
+
+  it("keeps string profile fields safe for callers that trim them", () => {
+    const state = normalizeCloudAppState({
+      profile: {
+        ...createDefaultProfile(),
+        email: null,
+        foodInstructions: null,
+        sex: null,
+        goalMode: null,
+      },
+    });
+
+    expect(state.profile.email).toBe("");
+    expect(state.profile.foodInstructions.trim()).toBe("");
+    expect(state.profile.sex).toBe("male");
+    expect(state.profile.goalMode).toBe("maingain");
+  });
 });

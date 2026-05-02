@@ -1,7 +1,7 @@
 import { DEFAULT_GEMINI_MODEL } from "../ai/gemini-config";
 import type { StoredAiKeys } from "../ai/credentials";
 import { normalizeStoredActivityFactor } from "../domain/activity-factor";
-import type { DailyEntry, FoodRule, Profile, TdeeEquation } from "../types";
+import type { BiologicalSex, DailyEntry, FoodRule, GoalMode, Profile, TdeeEquation } from "../types";
 
 export interface CloudAppState {
   schemaVersion: "2";
@@ -69,6 +69,24 @@ function normalizeTdeeEquation(value: unknown): TdeeEquation {
   return "mifflinStJeor";
 }
 
+function normalizeBiologicalSex(value: unknown): BiologicalSex {
+  if (value === "female" || value === "male" || value === "other") {
+    return value;
+  }
+  return "male";
+}
+
+function normalizeGoalMode(value: unknown): GoalMode {
+  if (value === "cut" || value === "leanMass" || value === "maingain") {
+    return value;
+  }
+  return "maingain";
+}
+
+function stringOrDefault(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
 function normalizeProfile(raw: unknown, fallbackLocale: Profile["locale"] = "en"): Profile {
   const record = toRecord(raw) ?? {};
   const defaults = createDefaultProfile(fallbackLocale);
@@ -78,18 +96,17 @@ function normalizeProfile(raw: unknown, fallbackLocale: Profile["locale"] = "en"
     ...defaults,
     ...record,
     id: "default",
-    email: typeof record.email === "string" ? record.email : "",
+    sex: normalizeBiologicalSex(record.sex),
+    email: stringOrDefault(record.email),
     age: typeof record.age === "number" ? record.age : null,
     height: typeof record.height === "number" ? record.height : null,
     estimatedWeight: typeof record.estimatedWeight === "number" ? record.estimatedWeight : null,
     targetWeight: typeof record.targetWeight === "number" ? record.targetWeight : null,
     bodyFat: typeof record.bodyFat === "number" ? record.bodyFat : null,
-    goalMode:
-      record.goalMode === "cut" || record.goalMode === "leanMass" || record.goalMode === "maingain"
-        ? record.goalMode
-        : defaults.goalMode,
+    goalMode: normalizeGoalMode(record.goalMode),
     tdeeEquation: normalizeTdeeEquation(record.tdeeEquation),
     activityFactor: normalizeStoredActivityFactor(record.activityFactor),
+    foodInstructions: stringOrDefault(record.foodInstructions),
     aiModel: typeof record.aiModel === "string" && record.aiModel.trim() ? record.aiModel : defaults.aiModel,
     locale,
     themePreference:
