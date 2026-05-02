@@ -20,4 +20,5 @@ If the Cloudflare Pages GitHub App is still connected, disable it or you may get
 - `CLOUDFLARE_PAGES_PROJECT_NAME`: Cloudflare Pages project name
 
 Build output is `dist`, and the deploy workflow is in [`.github/workflows/deploy-cloudflare.yml`](/Users/Nitzan/calorie-tracker/.github/workflows/deploy-cloudflare.yml:1).
+The workflow deploys `main` as the production branch, so the live site should stay on the project’s production `*.pages.dev` URL or custom domain instead of a `head.*` preview URL.
 If you set `CLOUDFLARE_PAGES_PROJECT_NAME` to `min-cal-tracker`, the Pages URL will be `https://min-cal-tracker.pages.dev` if that subdomain is available.
