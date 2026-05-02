@@ -19,6 +19,8 @@ export default defineConfig({
     timeout: 8_000,
   },
   fullyParallel: false,
+  globalSetup: "./global-setup",
+  globalTeardown: "./global-teardown",
   grepInvert: process.env.PLAYWRIGHT_RUN_CLOUD_TESTS === "false" ? /@cloud/ : undefined,
   reporter: isCI
     ? [

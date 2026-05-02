@@ -92,6 +92,10 @@ test("@inputs all persisted inputs save in cloud-only UI", async ({ page }) => {
   await page.goto("/settings", { waitUntil: "networkidle" });
   await expect(page.locator('input[type="password"]')).toHaveValue("gemini-test-key");
 
+  await expect
+    .poll(async () => (await readPersistedAppState(page)).profile?.locale ?? "", { timeout: 20_000 })
+    .toBe("he");
+
   const persisted = await readPersistedAppState(page);
   const todayEntry = persisted.dailyEntries.find((entry: { date: string }) => entry.date === today);
   const yesterdayEntry = persisted.dailyEntries.find((entry: { date: string }) => entry.date === yesterday);

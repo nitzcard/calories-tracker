@@ -1,8 +1,9 @@
-import type { Page } from "@playwright/test";
+import { test, type Page } from "@playwright/test";
 import { CLOUD_AUTH_STORAGE_KEY } from "../../../../src/cloud/auth-storage";
 import { decryptJsonWithPassphrase, encryptJsonWithPassphrase, type EncryptedSecretBoxV1 } from "../../../../src/cloud/crypto";
 import { createDefaultProfile, normalizeCloudAppState, type CloudAppState } from "../../../../src/cloud/app-state";
 import { getSupabaseConfig, type SupabaseConfig } from "../supabase";
+import { cleanupTestSupabaseRows } from "../supabase-cleanup";
 
 type SeedEntry = {
   date: string;
@@ -51,6 +52,14 @@ type CloudEncryptedEnvelopeV1 = {
 };
 
 let cachedSupabaseConfig: SupabaseConfig | null = null;
+
+test.afterEach(async () => {
+  if (!getSupabaseConfig()) {
+    return;
+  }
+
+  await cleanupTestSupabaseRows();
+});
 
 function normalizeUsername(value: string) {
   return value.trim().toLowerCase();
