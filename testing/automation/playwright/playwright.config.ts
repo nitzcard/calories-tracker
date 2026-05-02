@@ -4,6 +4,7 @@ declare const process: {
   env: Record<string, string | undefined> & {
     APP_URL?: string;
     CI?: string;
+    PLAYWRIGHT_RUN_CLOUD_TESTS?: string;
   };
 };
 
@@ -18,6 +19,7 @@ export default defineConfig({
     timeout: 8_000,
   },
   fullyParallel: false,
+  grepInvert: process.env.PLAYWRIGHT_RUN_CLOUD_TESTS === "false" ? /@cloud/ : undefined,
   reporter: isCI
     ? [
         ["list"],

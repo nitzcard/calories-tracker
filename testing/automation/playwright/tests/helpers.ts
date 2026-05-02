@@ -1,9 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
 import type { Page } from "@playwright/test";
 import { CLOUD_AUTH_STORAGE_KEY } from "../../../../src/cloud/auth-storage";
 import { decryptJsonWithPassphrase, encryptJsonWithPassphrase, type EncryptedSecretBoxV1 } from "../../../../src/cloud/crypto";
 import { createDefaultProfile, normalizeCloudAppState, type CloudAppState } from "../../../../src/cloud/app-state";
+import { getSupabaseConfig, type SupabaseConfig } from "../supabase";
 
 type SeedEntry = {
   date: string;
@@ -51,11 +50,6 @@ type CloudEncryptedEnvelopeV1 = {
   email?: string;
 };
 
-type SupabaseConfig = {
-  url: string;
-  anonKey: string;
-};
-
 let cachedSupabaseConfig: SupabaseConfig | null = null;
 
 function normalizeUsername(value: string) {
@@ -74,45 +68,14 @@ function cloudSecret(username: string, password: string) {
   return `${normalizeUsername(username)}::${password.trim()}`;
 }
 
-function parseDotEnvFile() {
-  const envPath = path.join(process.cwd(), ".env");
-  if (!fs.existsSync(envPath)) {
-    return {} as Record<string, string>;
-  }
-
-  const raw = fs.readFileSync(envPath, "utf8");
-  const values: Record<string, string> = {};
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) {
-      continue;
-    }
-    const key = trimmed.slice(0, separatorIndex).trim();
-    let value = trimmed.slice(separatorIndex + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    values[key] = value;
-  }
-
-  return values;
-}
-
 function loadSupabaseConfig(): SupabaseConfig {
   if (cachedSupabaseConfig) {
     return cachedSupabaseConfig;
   }
 
-  const dotEnv = parseDotEnvFile();
-  const url = process.env.VITE_SUPABASE_URL ?? dotEnv.VITE_SUPABASE_URL;
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY ?? dotEnv.VITE_SUPABASE_ANON_KEY;
+  const config = getSupabaseConfig();
+  const url = config?.url;
+  const anonKey = config?.anonKey;
   if (!url || !anonKey) {
     throw new Error("Missing Supabase config for Playwright. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
   }
