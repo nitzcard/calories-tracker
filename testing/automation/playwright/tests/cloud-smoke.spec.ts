@@ -42,27 +42,32 @@ test("@cloud supabase smoke writes and reads remote state directly", async () =>
   };
 
   await resetRemoteUser(username);
-  await writeRemoteUserState(username, password, state);
 
-  await expect
-    .poll(async () => readRemoteUserBlob(username), { timeout: 20_000 })
-    .not.toBeNull();
+  try {
+    await writeRemoteUserState(username, password, state);
 
-  const remote = await readRemoteUserState(username, password);
-  expect(remote).toMatchObject({
-    profile: {
-      email: "smoke@example.com",
-      age: 37,
-      height: 181,
-      estimatedWeight: 82,
-      targetWeight: 79,
-      bodyFat: 17,
-    },
-  });
-  expect(remote?.dailyEntries).toHaveLength(1);
-  expect(remote?.dailyEntries[0]).toMatchObject({
-    foodLogText: "supabase smoke test entry",
-    weight: 82.4,
-    manualCalories: 2190,
-  });
+    await expect
+      .poll(async () => readRemoteUserBlob(username), { timeout: 20_000 })
+      .not.toBeNull();
+
+    const remote = await readRemoteUserState(username, password);
+    expect(remote).toMatchObject({
+      profile: {
+        email: "smoke@example.com",
+        age: 37,
+        height: 181,
+        estimatedWeight: 82,
+        targetWeight: 79,
+        bodyFat: 17,
+      },
+    });
+    expect(remote?.dailyEntries).toHaveLength(1);
+    expect(remote?.dailyEntries[0]).toMatchObject({
+      foodLogText: "supabase smoke test entry",
+      weight: 82.4,
+      manualCalories: 2190,
+    });
+  } finally {
+    await resetRemoteUser(username);
+  }
 });
