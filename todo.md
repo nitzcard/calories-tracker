@@ -1,1 +1,0 @@
-1. syncing still have race condition, refactor it from the ground up. 
