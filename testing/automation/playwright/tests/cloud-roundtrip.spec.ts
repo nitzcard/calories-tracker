@@ -38,11 +38,15 @@ test("@cloud real Supabase roundtrip persists and reloads remote data", async ({
     await expect(page.locator(".sync-status")).toContainText(username);
 
     await expect
+      .poll(async () => readRemoteUserBlob(username), { timeout: 20_000 })
+      .not.toBeNull();
+
+    await expect
       .poll(async () => {
         const state = await readPersistedAppState(page);
         const entry = state.dailyEntries.find((item: { date: string }) => item.date === today);
         return entry?.foodLogText ?? "";
-      }, { timeout: 15_000 })
+      }, { timeout: 25_000 })
       .toBe("cloud synced oats and yogurt");
 
     const restored = await readPersistedAppState(page);

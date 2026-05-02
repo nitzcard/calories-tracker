@@ -57,7 +57,12 @@ on public.user_blobs
 for update
 using (true)
 with check (true);
+
+drop policy if exists "public delete" on public.user_blobs;
+create policy "public delete"
+on public.user_blobs
+for delete
+using (left(username, 5) = 'test_');
 ```
 
 That is intentionally permissive to match the “username only” requirement.
-

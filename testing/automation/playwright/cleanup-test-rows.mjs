@@ -48,7 +48,25 @@ const supabase = createClient(url, anonKey, {
   },
 });
 
-const { error } = await supabase.from("user_blobs").delete().like("username", "test_%");
+const { count: matchedCount, error: selectError } = await supabase
+  .from("user_blobs")
+  .select("username", { count: "exact", head: true })
+  .like("username", "test_%");
+if (selectError) {
+  throw new Error(`Failed to inspect test Supabase rows: ${selectError.message}`);
+}
+
+const { data, error } = await supabase
+  .from("user_blobs")
+  .delete()
+  .like("username", "test_%")
+  .select("username");
 if (error) {
   throw new Error(`Failed to clean test Supabase rows: ${error.message}`);
+}
+
+if ((matchedCount ?? 0) > 0 && (data?.length ?? 0) === 0) {
+  throw new Error(
+    "Cleanup matched test rows but deleted none. Supabase needs a DELETE policy for public.user_blobs.",
+  );
 }
