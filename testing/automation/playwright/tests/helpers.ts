@@ -185,6 +185,10 @@ async function upsertRemoteUserState(username: string, password: string, state: 
   );
 }
 
+export async function writeRemoteUserState(username: string, password: string, state: CloudAppState) {
+  await upsertRemoteUserState(username, password, state);
+}
+
 export async function resetRemoteUser(username: string) {
   const normalizedUsername = normalizeTestUsername(username);
   await supabaseRestFetch(
